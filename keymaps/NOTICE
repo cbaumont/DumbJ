@@ -1,0 +1,18 @@
+Vendored keymaps. These files are copied unmodified; do not edit them.
+All are licensed under the Apache License 2.0 (see LICENSE-APACHE-2.0).
+
+macos-for-all.xml
+  "macOS For All" keymap plugin, Copyright (c) Sam Tran
+  This software includes code from IntelliJ IDEA Community Edition,
+  Copyright (C) JetBrains s.r.o., https://www.jetbrains.com/idea/
+  Source: https://github.com/samvtran/jetbrains-macos-keybindings-for-all
+  File:   src/main/resources/keymaps/macOS For All.xml
+  Commit: 0e8783452a0d01cb65b39c6d59ade89b9da4e653
+
+idea-default.xml  (keymap "$default", parent of the other two)
+idea-macos.xml    (keymap "Mac OS X 10.5+", IntelliJ's "macOS" keymap)
+  IntelliJ IDEA Community Edition, Copyright (C) JetBrains s.r.o.
+  Source: https://github.com/JetBrains/intellij-community
+  Files:  platform/platform-resources/src/keymaps/$default.xml
+          platform/platform-resources/src/keymaps/Mac OS X 10.5+.xml
+  Commit: 39369fc9afeb46cfa68e197db4b8e834010f8966
