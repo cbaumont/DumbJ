@@ -1,0 +1,11 @@
+Bundled third-party assets. These files are copied unmodified.
+
+fonts/jetbrains-mono/
+  JetBrains Mono 2.304, Copyright 2020 The JetBrains Mono Project Authors
+  SIL Open Font License 1.1 (see fonts/jetbrains-mono/OFL.txt)
+  Source: https://github.com/JetBrains/JetBrainsMono/releases/tag/v2.304
+
+icons/lucide/
+  Lucide 1.73.0, Copyright (c) Lucide Icons and Contributors
+  ISC License (see icons/lucide/LICENSE)
+  Source: https://github.com/lucide-icons/lucide/tree/1.73.0/icons

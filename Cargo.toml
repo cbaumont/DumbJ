@@ -11,8 +11,13 @@ repository = "https://github.com/cbaumont/DumbJ"
 publish = false
 
 [workspace.dependencies]
+dumbj-actions = { path = "crates/dumbj-actions" }
+dumbj-settings = { path = "crates/dumbj-settings" }
 dumbj-syntax = { path = "crates/dumbj-syntax" }
 dumbj-text = { path = "crates/dumbj-text" }
+dumbj-ui = { path = "crates/dumbj-ui" }
+
+anyhow = "1"
 
 insta = "1.49"
 proptest = "1.12"
@@ -23,6 +28,8 @@ roxmltree = "0.21"
 serde = { version = "1", features = ["derive"] }
 thiserror = "2"
 toml = "1.2"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", default-features = false, features = ["ansi", "env-filter", "fmt"] }
 tree-sitter = "0.27"
 tree-sitter-java = "0.23"
 tree-sitter-kotlin-sg = "0.4"

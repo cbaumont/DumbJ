@@ -9,8 +9,14 @@ repository.workspace = true
 publish.workspace = true
 
 [dependencies]
+dumbj-actions.workspace = true
+dumbj-settings.workspace = true
+dumbj-syntax.workspace = true
+dumbj-text.workspace = true
 gpui.workspace = true
 gpui_platform.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
 
 [lints]
 workspace = true

@@ -1,1 +1,78 @@
-//! GPUI front end for DumbJ.
+//! GPUI front end for DumbJ. This is the only crate that depends on GPUI.
+
+mod assets;
+mod editor;
+mod editor_model;
+mod file_tree;
+mod keys;
+mod line_edit;
+mod text_input;
+mod theme;
+mod tree_model;
+mod workspace;
+
+use std::path::PathBuf;
+
+use dumbj_actions::builtin::{self, BuiltinError, Platform};
+use dumbj_settings::{Theme, ThemeError};
+use thiserror::Error;
+
+/// Why the UI could not start.
+#[derive(Debug, Error)]
+pub enum UiError {
+    #[error("the built-in theme is invalid: {0}")]
+    Theme(#[from] ThemeError),
+    #[error("the built-in keymap is invalid: {0}")]
+    Keymap(#[from] BuiltinError),
+}
+
+/// What to show at start-up.
+#[derive(Debug, Default)]
+pub struct RunOptions {
+    /// A folder to open as a project, or a file to open (its folder becomes the project).
+    pub path: Option<PathBuf>,
+    /// Measure frame times while scrolling through the opened file, log them and quit.
+    pub scroll_benchmark: bool,
+}
+
+/// Runs the application until its last window closes.
+pub fn run(options: RunOptions) -> Result<(), UiError> {
+    let theme = Theme::catppuccin_mocha()?;
+    let platform = Platform::current();
+    let bindings = builtin::default_bindings(platform)?;
+    tracing::debug!(
+        keymap = bindings.keymap_name(),
+        unmapped = bindings.unmapped_intellij_actions().len(),
+        "keymap loaded; IntelliJ actions without a DumbJ action are ignored"
+    );
+    let RunOptions {
+        path,
+        scroll_benchmark,
+    } = options;
+    let (folder, files) = path
+        .as_deref()
+        .map_or_else(Default::default, workspace::resolve_cli_path);
+
+    gpui_platform::application()
+        .with_assets(assets::Assets)
+        .run(move |cx| {
+            if let Err(error) = cx.text_system().add_fonts(assets::fonts()) {
+                tracing::error!(%error, "cannot load the bundled fonts");
+            }
+            cx.set_global(theme::ActiveTheme(theme));
+            cx.on_window_closed(|cx, _| {
+                if cx.windows().is_empty() {
+                    cx.quit();
+                }
+            })
+            .detach();
+            let open = workspace::OpenOptions {
+                folder,
+                files,
+                scroll_benchmark,
+            };
+            workspace::open_window(cx, bindings, platform.shortcut_style(), open);
+            cx.activate(true);
+        });
+    Ok(())
+}
