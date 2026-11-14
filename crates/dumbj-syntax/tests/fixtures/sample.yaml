@@ -1,0 +1,17 @@
+# CI pipeline
+name: build
+on:
+  push:
+    branches: [main, "release/*"]
+env:
+  RETRIES: 3
+  VERBOSE: true
+  EMPTY: null
+anchors:
+  base: &base
+    image: fedora:latest
+  job:
+    <<: *base
+    script: |
+      cargo build
+      cargo test

@@ -1,0 +1,23 @@
+[package]
+name = "dumbj-syntax"
+description = "DumbJ's tree-sitter layer: language detection, parsing and syntax highlighting. Headless."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+dumbj-text.workspace = true
+thiserror.workspace = true
+tree-sitter.workspace = true
+tree-sitter-java.workspace = true
+tree-sitter-kotlin-sg.workspace = true
+tree-sitter-yaml.workspace = true
+
+[dev-dependencies]
+insta.workspace = true
+
+[lints]
+workspace = true

@@ -11,6 +11,9 @@ repository = "https://github.com/cbaumont/DumbJ"
 publish = false
 
 [workspace.dependencies]
+dumbj-text = { path = "crates/dumbj-text" }
+
+insta = "1.49"
 proptest = "1.12"
 # Line breaks are LF only (a preceding CR is handled by dumbj-text), so that line numbers
 # agree with git, tree-sitter and LSP. Ropey's default also splits on lone CR, VT, FF, NEL, LS, PS.
@@ -19,6 +22,10 @@ roxmltree = "0.21"
 serde = { version = "1", features = ["derive"] }
 thiserror = "2"
 toml = "1.2"
+tree-sitter = "0.27"
+tree-sitter-java = "0.23"
+tree-sitter-kotlin-sg = "0.4"
+tree-sitter-yaml = "0.7"
 
 # Pinned exactly: GPUI's API moves fast. Upgrade deliberately. Only dumbj-ui may depend on it.
 gpui = { git = "https://github.com/zed-industries/zed", rev = "e8bc16acee5ae1937600d571d441c4b5d7b0d288" }
