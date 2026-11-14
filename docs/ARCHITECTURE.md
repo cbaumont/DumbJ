@@ -12,13 +12,13 @@ _TBD in M0._
 
 ## Decisions
 
-These override `docs/BRIEF.md` where they differ.
+Each entry gives the decision and why. Where a decision changes the spec, the details live in `docs/BRIEF.md` and the entry points to the section.
 
 ### 2026-11-14: Licence is GPL-3.0-or-later
-DumbJ is licensed GPL-3.0-or-later. Dependencies must be GPL-3-compatible, so cargo-deny's allow-list covers permissive licences (MIT, Apache-2.0, BSD, ISC, Zlib, MPL-2.0, Unicode) plus GPL-3/LGPL and excludes GPL-2.0-only. Consequence: the Mac App Store is off the table; macOS ships as a notarised DMG or via Homebrew.
+DumbJ is GPL-3.0-or-later (BRIEF §7). Why: it allows adapting small pieces of Zed's GPL code, and permissive dependencies remain usable. Cost: no Mac App Store.
 
 ### 2026-11-14: Zed code may be adapted in small pieces
-Because DumbJ is GPL-3, small adapted pieces of Zed code (an algorithm, a function) are allowed. Each carries a header comment naming the source file and revision. Zed crates (`editor`, `multi_buffer`, `language`, …) are never vendored wholesale: DumbJ must not turn into a Zed fork.
+Small attributed pieces only, never whole crates (BRIEF §3). Why: it saves effort on proven algorithms without DumbJ turning into a Zed fork.
 
 ### 2026-11-14: Own widgets and own editor on GPUI
 The component library (tool windows, tabs, tree, splitter, popups, diff view, gutter) and the editor (text layout, carets, IME, folding, inlays, inline threads) are written in-house on GPUI primitives. Longbridge's `gpui-component` (Apache-2.0) is a reading reference, not a dependency, so that only one fast-moving GPUI-coupled dependency has to stay in step with our pin.
@@ -45,10 +45,10 @@ The on-disk symbol/tags index uses SQLite via `rusqlite` (bundled). It is transa
 Diff sides, PR heads and bases are served by a read-only "revision filesystem" backed by `gix`, which reads git objects directly. The working tree is never checked out for review. Navigation from such a revision stays in it and opens read-only tabs with a revision badge. "Open working-tree version" is an explicit action.
 
 ### 2026-11-14: PR refs go in a private namespace
-Fetching a PR writes only `refs/dumbj/pr/<n>/{head,base}`, so the objects survive gc and the user's branch list stays clean. A "Prune review refs" action removes them.
+PR refs go under `refs/dumbj/pr/<n>/` (BRIEF §4.5). Why: the objects must survive gc without cluttering the user's branches the way local branches would, and FETCH_HEAD loses them on restart.
 
 ### 2026-11-14: IDEA-style autosave, undo only
-Edits autosave like IDEA does (on focus loss, tab switch and idle), with atomic writes (temp file, fsync, rename). There's no local-history snapshot; undo and git are the safety net. If a file changes on disk while it has unsaved edits, a reload/merge prompt appears. Library jars, past revisions and diff base sides are always read-only.
+Autosave like IDEA, with undo and git as the only safety net (BRIEF §2.5). Why: IDEA muscle memory matters more than guarding against stray keystrokes, and a local-history feature is out of scope for a reading tool.
 
 ### 2026-11-14: Dumb jump rule
 Go to Declaration jumps directly only when exactly one candidate is in the highest rank tier (scope-local > same file > explicit import > same package > same module > repo) and its kind matches the reference position. Otherwise the chooser opens, sorted by rank. A wildcard import with collisions, an extension function, or member access on an unknown receiver always gets the chooser. The accuracy benchmark measures this.
@@ -69,7 +69,4 @@ A single process hosts every open project, one window each, sharing the jar inde
 A manifest lists about 4 OSS JVM repos at fixed commits, shallow-cloned and cached in CI. Expected Go to Declaration targets live as TOML in this repo. Unit and snapshot tests use small hand-written fixture projects.
 
 ### 2026-11-14: M1 split into M1a and M1b
-- **M1a, the navigation core:** Kotlin grammar evaluation, the Gradle/Maven project model, tags index, Java and Kotlin scope and import resolution, Go to Declaration, Find/Show Usages (dumb), Search Everywhere, Go to File/Class/Symbol, File Structure, Back/Forward, and the accuracy benchmark.
-- **M1b, the rest of M1:** Java↔Kotlin interop edge cases, implementations and hierarchy with gutter icons, the call and type hierarchy, library source jars, Find in Files, bookmarks, Recent Files/Locations, extend/shrink selection, folding, sticky lines, scope-aware and usage highlighting, and the Tier 1 support files.
-
-There is a review stop after each.
+M1 ships as M1a (navigation core) then M1b (the rest), with a review stop after each (BRIEF §9). Why: as one milestone it is too large, and the navigation core is the part most likely to be wrong, so it gets reviewed first.
