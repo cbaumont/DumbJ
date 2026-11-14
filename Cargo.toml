@@ -1,0 +1,46 @@
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.100"
+license = "GPL-3.0-or-later"
+repository = "https://github.com/cbaumont/DumbJ"
+publish = false
+
+[workspace.dependencies]
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+missing_debug_implementations = "warn"
+unreachable_pub = "warn"
+
+[workspace.lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+dbg_macro = "deny"
+print_stdout = "deny"
+print_stderr = "deny"
+# Pedantic lints that are too noisy to be useful here:
+# every fallible fn would need an `# Errors` section, and our error enums are self-describing.
+missing_errors_doc = "allow"
+# flags any fn that can reach an index or slice, even provably in-bounds ones.
+missing_panics_doc = "allow"
+# `#[must_use]` on every getter is noise; the important ones are annotated by hand.
+must_use_candidate = "allow"
+# `dumbj_text::TextError` style names are clearer at call sites than `text::Error`.
+module_name_repetitions = "allow"
+
+[profile.dev.package."*"]
+# Fast dev builds: optimise dependencies, keep our own crates at opt-level 0.
+opt-level = 1
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = "debuginfo"
+split-debuginfo = "packed"

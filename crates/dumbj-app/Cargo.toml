@@ -1,0 +1,16 @@
+[package]
+name = "dumbj-app"
+description = "DumbJ: a code reading and code review editor"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "dumbj"
+path = "src/main.rs"
+
+[lints]
+workspace = true
