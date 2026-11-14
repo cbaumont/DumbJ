@@ -2,7 +2,10 @@
 //! No UI and no I/O; callers run [`parse`] on a background thread.
 
 mod highlight;
+mod java;
+mod kotlin;
 mod language;
+mod structure;
 
 use std::ops::ControlFlow;
 
@@ -12,6 +15,7 @@ use tree_sitter::{ParseOptions, Parser, Tree};
 
 pub use highlight::{HighlightKind, HighlightSpan};
 pub use language::Language;
+pub use structure::{FileFacts, Import, Symbol, SymbolKind};
 
 /// A failure in the syntax layer. These indicate a bug in a bundled grammar or query.
 #[derive(Debug, Error)]
