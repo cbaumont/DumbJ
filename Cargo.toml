@@ -12,6 +12,7 @@ publish = false
 
 [workspace.dependencies]
 dumbj-actions = { path = "crates/dumbj-actions" }
+dumbj-index = { path = "crates/dumbj-index" }
 dumbj-settings = { path = "crates/dumbj-settings" }
 dumbj-syntax = { path = "crates/dumbj-syntax" }
 dumbj-text = { path = "crates/dumbj-text" }
@@ -19,6 +20,7 @@ dumbj-ui = { path = "crates/dumbj-ui" }
 
 anyhow = "1"
 
+ignore = "0.4"
 insta = "1.49"
 proptest = "1.12"
 # Line breaks are LF only (a preceding CR is handled by dumbj-text), so that line numbers

@@ -1,0 +1,240 @@
+//! The in-memory symbol index: every file of a project with its declarations, and the
+//! lookup tables navigation needs.
+
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
+
+use dumbj_syntax::{FileFacts, Language, Symbol};
+
+/// Identifies a file within one [`Index`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct FileId(pub(crate) u32);
+
+/// Identifies a declaration within one [`Index`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct SymbolId {
+    pub file: FileId,
+    /// The position in the file's [`FileFacts::symbols`].
+    pub index: u32,
+}
+
+/// One file of the project.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IndexedFile {
+    /// The absolute path.
+    pub path: PathBuf,
+    /// The path relative to the project root, with `/` separators, for display.
+    pub relative: String,
+    /// `None` for files DumbJ has no grammar for; they are still listed for Go to File.
+    pub language: Option<Language>,
+    pub facts: FileFacts,
+}
+
+/// An immutable snapshot of a project's files and declarations.
+#[derive(Debug, Default)]
+pub struct Index {
+    files: Vec<IndexedFile>,
+    by_path: HashMap<PathBuf, FileId>,
+    by_name: HashMap<String, Vec<SymbolId>>,
+    by_package: HashMap<String, Vec<FileId>>,
+}
+
+fn to_u32(value: usize) -> u32 {
+    // An index holds far fewer than 2^32 files, and a file far fewer symbols.
+    u32::try_from(value).unwrap_or(u32::MAX)
+}
+
+impl Index {
+    /// Builds the lookup tables for `files`. Files are sorted by path so that IDs and
+    /// result orders do not depend on the order indexing threads finished in.
+    #[must_use]
+    pub fn new(mut files: Vec<IndexedFile>) -> Self {
+        files.sort_by(|a, b| a.path.cmp(&b.path));
+        files.dedup_by(|a, b| a.path == b.path);
+        let mut index = Self {
+            files,
+            ..Self::default()
+        };
+        for (position, file) in index.files.iter().enumerate() {
+            let id = FileId(to_u32(position));
+            index.by_path.insert(file.path.clone(), id);
+            if let Some(package) = &file.facts.package {
+                index
+                    .by_package
+                    .entry(package.clone())
+                    .or_default()
+                    .push(id);
+            }
+            for (symbol_index, symbol) in file.facts.symbols.iter().enumerate() {
+                let symbol_id = SymbolId {
+                    file: id,
+                    index: to_u32(symbol_index),
+                };
+                index
+                    .by_name
+                    .entry(symbol.name.clone())
+                    .or_default()
+                    .push(symbol_id);
+            }
+        }
+        index
+    }
+
+    /// A new snapshot with `file` added, or replacing the file at the same path.
+    #[must_use]
+    pub fn with_file(&self, file: IndexedFile) -> Self {
+        let mut files: Vec<IndexedFile> = self
+            .files
+            .iter()
+            .filter(|existing| existing.path != file.path)
+            .cloned()
+            .collect();
+        files.push(file);
+        Self::new(files)
+    }
+
+    /// A new snapshot without the file at `path`.
+    #[must_use]
+    pub fn without_file(&self, path: &Path) -> Self {
+        Self::new(
+            self.files
+                .iter()
+                .filter(|file| file.path != path)
+                .cloned()
+                .collect(),
+        )
+    }
+
+    #[must_use]
+    pub fn file_count(&self) -> usize {
+        self.files.len()
+    }
+
+    #[must_use]
+    pub fn symbol_count(&self) -> usize {
+        self.files.iter().map(|file| file.facts.symbols.len()).sum()
+    }
+
+    /// Every file with its ID, sorted by path.
+    pub fn files(&self) -> impl Iterator<Item = (FileId, &IndexedFile)> {
+        self.files
+            .iter()
+            .enumerate()
+            .map(|(position, file)| (FileId(to_u32(position)), file))
+    }
+
+    #[must_use]
+    pub fn file(&self, id: FileId) -> Option<&IndexedFile> {
+        self.files.get(id.0 as usize)
+    }
+
+    #[must_use]
+    pub fn file_by_path(&self, path: &Path) -> Option<FileId> {
+        self.by_path.get(path).copied()
+    }
+
+    #[must_use]
+    pub fn symbol(&self, id: SymbolId) -> Option<&Symbol> {
+        self.file(id.file)?.facts.symbols.get(id.index as usize)
+    }
+
+    /// Every declaration called `name`, in file then source order.
+    #[must_use]
+    pub fn symbols_named(&self, name: &str) -> &[SymbolId] {
+        self.by_name.get(name).map_or(&[], Vec::as_slice)
+    }
+
+    /// Every declaration in the index.
+    pub fn symbols(&self) -> impl Iterator<Item = (SymbolId, &Symbol)> {
+        self.files().flat_map(|(file, indexed)| {
+            indexed
+                .facts
+                .symbols
+                .iter()
+                .enumerate()
+                .map(move |(index, symbol)| {
+                    (
+                        SymbolId {
+                            file,
+                            index: to_u32(index),
+                        },
+                        symbol,
+                    )
+                })
+        })
+    }
+
+    /// The files that declare `package`.
+    #[must_use]
+    pub fn files_in_package(&self, package: &str) -> &[FileId] {
+        self.by_package.get(package).map_or(&[], Vec::as_slice)
+    }
+
+    /// The package of the file that declares `id`; empty for the default package.
+    #[must_use]
+    pub fn package_of(&self, id: SymbolId) -> &str {
+        self.file(id.file)
+            .and_then(|file| file.facts.package.as_deref())
+            .unwrap_or("")
+    }
+
+    /// The enclosing declaration of `id`.
+    #[must_use]
+    pub fn parent(&self, id: SymbolId) -> Option<SymbolId> {
+        let parent = self.symbol(id)?.parent?;
+        Some(SymbolId {
+            file: id.file,
+            index: to_u32(parent),
+        })
+    }
+
+    /// The declarations directly inside `id`.
+    pub fn members(&self, id: SymbolId) -> impl Iterator<Item = (SymbolId, &Symbol)> {
+        let symbols = self
+            .file(id.file)
+            .map_or(&[][..], |file| file.facts.symbols.as_slice());
+        symbols
+            .iter()
+            .enumerate()
+            .filter(move |(_, symbol)| symbol.parent == Some(id.index as usize))
+            .map(move |(index, symbol)| {
+                (
+                    SymbolId {
+                        file: id.file,
+                        index: to_u32(index),
+                    },
+                    symbol,
+                )
+            })
+    }
+
+    /// The name of `id` within its file: enclosing declarations joined with dots.
+    #[must_use]
+    pub fn qualified_name(&self, id: SymbolId) -> String {
+        self.file(id.file).map_or_else(String::new, |file| {
+            file.facts.qualified_name(id.index as usize)
+        })
+    }
+
+    /// The fully qualified name: package, enclosing declarations and the name.
+    #[must_use]
+    pub fn fqn(&self, id: SymbolId) -> String {
+        let (package, name) = (self.package_of(id), self.qualified_name(id));
+        if package.is_empty() {
+            name
+        } else {
+            format!("{package}.{name}")
+        }
+    }
+
+    /// The declarations whose fully qualified name is `fqn`.
+    #[must_use]
+    pub fn symbols_by_fqn(&self, fqn: &str) -> Vec<SymbolId> {
+        let name = fqn.rsplit('.').next().unwrap_or(fqn);
+        self.symbols_named(name)
+            .iter()
+            .copied()
+            .filter(|id| self.fqn(*id) == fqn)
+            .collect()
+    }
+}
