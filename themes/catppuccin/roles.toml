@@ -1,0 +1,61 @@
+# Maps DumbJ's semantic colour roles onto Catppuccin palette colours. Shared by every
+# flavour. Follows the Catppuccin style guide (https://github.com/catppuccin/catppuccin,
+# docs/style-guide.md) and the official editor ports.
+#
+# A value is a palette colour name, or { color = "<name>", alpha = <0..1> } for a
+# translucent overlay.
+
+[ui]
+background = "base"                 # editor and main pane
+panel-background = "mantle"         # tool windows, tab bar
+chrome-background = "crust"         # tool-window stripes, status bar
+popup-background = "mantle"
+input-background = "surface0"
+border = "surface0"
+popup-border = "surface1"
+text = "text"
+text-muted = "subtext1"                # subtext0 falls below 4.5:1 on Latte panels
+text-faint = "overlay1"
+accent = "mauve"
+hover = { color = "surface0", alpha = 0.6 }
+selected = "surface1"               # selected row in a focused list or tree
+selected-inactive = "surface0"
+folder-icon = "blue"
+file-icon = "overlay2"
+error = "red"
+warning = "yellow"
+success = "green"
+info = "blue"
+editor-line-number = "surface2"
+editor-line-number-active = "lavender"
+editor-current-line = { color = "text", alpha = 0.06 }
+editor-selection = { color = "overlay2", alpha = 0.3 }
+editor-caret = "rosewater"
+editor-search-match = { color = "sky", alpha = 0.3 }
+editor-search-match-current = { color = "peach", alpha = 0.55 }
+
+[syntax]
+comment = "overlay2"
+keyword = "mauve"
+string = "green"
+string-escape = "pink"
+regex = "pink"
+number = "peach"
+constant-builtin = "peach"
+constant = "peach"
+type = "yellow"
+type-builtin = "mauve"
+constructor = "yellow"
+function = "blue"
+function-builtin = "blue"
+variable = "text"
+variable-builtin = "red"
+parameter = "maroon"
+property = "blue"
+attribute = "yellow"
+namespace = "text"
+label = "sapphire"
+operator = "sky"
+punctuation-bracket = "overlay2"
+punctuation-delimiter = "overlay2"
+punctuation-special = "sky"

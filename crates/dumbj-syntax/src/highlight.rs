@@ -39,6 +39,33 @@ pub enum HighlightKind {
 }
 
 impl HighlightKind {
+    pub const ALL: &[Self] = &[
+        Self::Comment,
+        Self::Keyword,
+        Self::String,
+        Self::StringEscape,
+        Self::Regex,
+        Self::Number,
+        Self::ConstantBuiltin,
+        Self::Constant,
+        Self::Type,
+        Self::TypeBuiltin,
+        Self::Constructor,
+        Self::Function,
+        Self::FunctionBuiltin,
+        Self::Variable,
+        Self::VariableBuiltin,
+        Self::Parameter,
+        Self::Property,
+        Self::Attribute,
+        Self::Namespace,
+        Self::Label,
+        Self::Operator,
+        Self::PunctuationBracket,
+        Self::PunctuationDelimiter,
+        Self::PunctuationSpecial,
+    ];
+
     /// Maps a query capture name such as `function.method` to a kind, falling back to the
     /// name's dotted prefixes. Unknown names give `None`.
     fn from_capture(name: &str) -> Option<Self> {

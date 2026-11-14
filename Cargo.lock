@@ -1180,6 +1180,16 @@ name = "dumbj-app"
 version = "0.1.0"
 
 [[package]]
+name = "dumbj-settings"
+version = "0.1.0"
+dependencies = [
+ "dumbj-syntax",
+ "serde",
+ "thiserror 2.0.21",
+ "toml 1.2.1+spec-1.1.0",
+]
+
+[[package]]
 name = "dumbj-syntax"
 version = "0.1.0"
 dependencies = [

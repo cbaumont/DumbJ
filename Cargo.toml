@@ -11,6 +11,7 @@ repository = "https://github.com/cbaumont/DumbJ"
 publish = false
 
 [workspace.dependencies]
+dumbj-syntax = { path = "crates/dumbj-syntax" }
 dumbj-text = { path = "crates/dumbj-text" }
 
 insta = "1.49"
