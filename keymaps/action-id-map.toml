@@ -1,0 +1,22 @@
+# IntelliJ action ID -> DumbJ action ID.
+#
+# The keymap loader binds a DumbJ action to whatever shortcuts the resolved IntelliJ keymap
+# gives the IntelliJ action on the left. IntelliJ actions that are not listed here are
+# ignored and show up in the loader's debug report.
+#
+# Notes on IDs:
+# - OpenFile is IntelliJ's "Open..." action. It has no shortcut in any vendored keymap,
+#   so Open Folder is unbound by default.
+
+[actions]
+OpenFile = "project.open-folder"
+CloseContent = "tabs.close"
+NextTab = "tabs.next"
+PreviousTab = "tabs.previous"
+ActivateProjectToolWindow = "tool-window.project"
+HideAllWindows = "tool-window.hide-all"
+GotoLine = "editor.goto-line"
+Find = "editor.find"
+FindNext = "editor.find-next"
+FindPrevious = "editor.find-previous"
+EditorSelectWord = "editor.extend-selection"
