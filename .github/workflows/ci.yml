@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  check:
+    name: fmt, clippy, tests, deny, build
+    runs-on: ubuntu-latest
+    container: fedora:latest
+    steps:
+      - name: Install system dependencies
+        run: >
+          dnf install -y
+          git gcc gcc-c++ clang cmake mold curl
+          wayland-devel libxkbcommon-devel libxkbcommon-x11-devel libxcb-devel
+          vulkan-loader-devel fontconfig-devel freetype-devel alsa-lib-devel
+          openssl-devel libzstd-devel
+
+      - uses: actions/checkout@v4
+
+      - name: Install the pinned Rust toolchain
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain none
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+          "$HOME/.cargo/bin/rustup" show
+
+      - uses: Swatinem/rust-cache@v2
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest,cargo-deny
+
+      - name: Format
+        run: cargo fmt --all --check
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+
+      # Includes the check that docs/KEYMAP.md matches the vendored keymaps.
+      - name: Tests
+        run: cargo nextest run --workspace --locked
+
+      - name: Licences, advisories and sources
+        run: cargo deny check
+
+      - name: Build
+        run: cargo build --workspace --locked
