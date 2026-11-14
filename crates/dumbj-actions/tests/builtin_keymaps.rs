@@ -87,7 +87,7 @@ fn every_vendored_keymap_parses_cleanly() {
 #[test]
 fn every_action_is_mapped_from_an_intellij_id() {
     let map = builtin::action_id_map().unwrap();
-    for &action in Action::ALL {
+    for action in Action::all() {
         assert!(
             map.intellij_ids(action).next().is_some(),
             "{action} has no IntelliJ ID"
@@ -99,7 +99,7 @@ fn every_action_is_mapped_from_an_intellij_id() {
 fn every_m0_action_except_open_folder_is_bound_on_both_platforms() {
     for platform in [Platform::Linux, Platform::MacOs] {
         let bindings = builtin::default_bindings(platform).unwrap();
-        for &action in Action::ALL {
+        for action in Action::all() {
             let bound = bindings
                 .shortcuts(action)
                 .iter()

@@ -7,8 +7,10 @@ use std::fmt;
 pub enum Scope {
     /// Available anywhere in a project window.
     Window,
-    /// Needs a focused editor.
+    /// Needs an open editor.
     Editor,
+    /// Caret movement and editing in whatever has focus: an editor, a text field or a list.
+    Text,
 }
 
 /// Every command DumbJ can run.
@@ -25,81 +27,309 @@ pub enum Action {
     FindNext,
     FindPrevious,
     ExtendSelection,
+    MoveLeft,
+    MoveRight,
+    MoveUp,
+    MoveDown,
+    MoveLineStart,
+    MoveLineEnd,
+    MoveTextStart,
+    MoveTextEnd,
+    MovePageUp,
+    MovePageDown,
+    MoveWordLeft,
+    MoveWordRight,
+    SelectLeft,
+    SelectRight,
+    SelectUp,
+    SelectDown,
+    SelectLineStart,
+    SelectLineEnd,
+    SelectTextStart,
+    SelectTextEnd,
+    SelectPageUp,
+    SelectPageDown,
+    SelectWordLeft,
+    SelectWordRight,
+    SelectAll,
+    Copy,
+    Cut,
+    Paste,
+    Backspace,
+    Delete,
+    Enter,
+    Escape,
 }
+
+struct ActionInfo {
+    action: Action,
+    id: &'static str,
+    title: &'static str,
+    scope: Scope,
+}
+
+const fn info(action: Action, id: &'static str, title: &'static str, scope: Scope) -> ActionInfo {
+    ActionInfo {
+        action,
+        id,
+        title,
+        scope,
+    }
+}
+
+/// One row per action, in declaration order. A test checks the order.
+const REGISTRY: &[ActionInfo] = &[
+    info(
+        Action::OpenFolder,
+        "project.open-folder",
+        "Open Folder…",
+        Scope::Window,
+    ),
+    info(Action::CloseTab, "tabs.close", "Close Tab", Scope::Window),
+    info(
+        Action::NextTab,
+        "tabs.next",
+        "Select Next Tab",
+        Scope::Window,
+    ),
+    info(
+        Action::PreviousTab,
+        "tabs.previous",
+        "Select Previous Tab",
+        Scope::Window,
+    ),
+    info(
+        Action::ActivateProjectToolWindow,
+        "tool-window.project",
+        "Project Tool Window",
+        Scope::Window,
+    ),
+    info(
+        Action::HideAllToolWindows,
+        "tool-window.hide-all",
+        "Hide All Tool Windows",
+        Scope::Window,
+    ),
+    info(
+        Action::GotoLine,
+        "editor.goto-line",
+        "Go to Line:Column…",
+        Scope::Editor,
+    ),
+    info(Action::Find, "editor.find", "Find…", Scope::Editor),
+    info(
+        Action::FindNext,
+        "editor.find-next",
+        "Find Next",
+        Scope::Editor,
+    ),
+    info(
+        Action::FindPrevious,
+        "editor.find-previous",
+        "Find Previous",
+        Scope::Editor,
+    ),
+    info(
+        Action::ExtendSelection,
+        "editor.extend-selection",
+        "Extend Selection",
+        Scope::Editor,
+    ),
+    info(
+        Action::MoveLeft,
+        "text.move-left",
+        "Move Caret Left",
+        Scope::Text,
+    ),
+    info(
+        Action::MoveRight,
+        "text.move-right",
+        "Move Caret Right",
+        Scope::Text,
+    ),
+    info(Action::MoveUp, "text.move-up", "Move Caret Up", Scope::Text),
+    info(
+        Action::MoveDown,
+        "text.move-down",
+        "Move Caret Down",
+        Scope::Text,
+    ),
+    info(
+        Action::MoveLineStart,
+        "text.move-line-start",
+        "Move Caret to Line Start",
+        Scope::Text,
+    ),
+    info(
+        Action::MoveLineEnd,
+        "text.move-line-end",
+        "Move Caret to Line End",
+        Scope::Text,
+    ),
+    info(
+        Action::MoveTextStart,
+        "text.move-text-start",
+        "Move Caret to Text Start",
+        Scope::Text,
+    ),
+    info(
+        Action::MoveTextEnd,
+        "text.move-text-end",
+        "Move Caret to Text End",
+        Scope::Text,
+    ),
+    info(
+        Action::MovePageUp,
+        "text.move-page-up",
+        "Move Caret Page Up",
+        Scope::Text,
+    ),
+    info(
+        Action::MovePageDown,
+        "text.move-page-down",
+        "Move Caret Page Down",
+        Scope::Text,
+    ),
+    info(
+        Action::MoveWordLeft,
+        "text.move-word-left",
+        "Move Caret to Previous Word",
+        Scope::Text,
+    ),
+    info(
+        Action::MoveWordRight,
+        "text.move-word-right",
+        "Move Caret to Next Word",
+        Scope::Text,
+    ),
+    info(
+        Action::SelectLeft,
+        "text.select-left",
+        "Move Caret Left with Selection",
+        Scope::Text,
+    ),
+    info(
+        Action::SelectRight,
+        "text.select-right",
+        "Move Caret Right with Selection",
+        Scope::Text,
+    ),
+    info(
+        Action::SelectUp,
+        "text.select-up",
+        "Move Caret Up with Selection",
+        Scope::Text,
+    ),
+    info(
+        Action::SelectDown,
+        "text.select-down",
+        "Move Caret Down with Selection",
+        Scope::Text,
+    ),
+    info(
+        Action::SelectLineStart,
+        "text.select-line-start",
+        "Move Caret to Line Start with Selection",
+        Scope::Text,
+    ),
+    info(
+        Action::SelectLineEnd,
+        "text.select-line-end",
+        "Move Caret to Line End with Selection",
+        Scope::Text,
+    ),
+    info(
+        Action::SelectTextStart,
+        "text.select-text-start",
+        "Move Caret to Text Start with Selection",
+        Scope::Text,
+    ),
+    info(
+        Action::SelectTextEnd,
+        "text.select-text-end",
+        "Move Caret to Text End with Selection",
+        Scope::Text,
+    ),
+    info(
+        Action::SelectPageUp,
+        "text.select-page-up",
+        "Move Caret Page Up with Selection",
+        Scope::Text,
+    ),
+    info(
+        Action::SelectPageDown,
+        "text.select-page-down",
+        "Move Caret Page Down with Selection",
+        Scope::Text,
+    ),
+    info(
+        Action::SelectWordLeft,
+        "text.select-word-left",
+        "Move Caret to Previous Word with Selection",
+        Scope::Text,
+    ),
+    info(
+        Action::SelectWordRight,
+        "text.select-word-right",
+        "Move Caret to Next Word with Selection",
+        Scope::Text,
+    ),
+    info(
+        Action::SelectAll,
+        "text.select-all",
+        "Select All",
+        Scope::Text,
+    ),
+    info(Action::Copy, "text.copy", "Copy", Scope::Text),
+    info(Action::Cut, "text.cut", "Cut", Scope::Text),
+    info(Action::Paste, "text.paste", "Paste", Scope::Text),
+    info(
+        Action::Backspace,
+        "text.backspace",
+        "Backspace",
+        Scope::Text,
+    ),
+    info(Action::Delete, "text.delete", "Delete", Scope::Text),
+    info(Action::Enter, "text.enter", "Enter", Scope::Text),
+    info(Action::Escape, "text.escape", "Escape", Scope::Text),
+];
 
 impl Action {
     /// Every action, in the order menus and documentation list them.
-    pub const ALL: &[Self] = &[
-        Self::OpenFolder,
-        Self::CloseTab,
-        Self::NextTab,
-        Self::PreviousTab,
-        Self::ActivateProjectToolWindow,
-        Self::HideAllToolWindows,
-        Self::GotoLine,
-        Self::Find,
-        Self::FindNext,
-        Self::FindPrevious,
-        Self::ExtendSelection,
-    ];
+    pub fn all() -> impl Iterator<Item = Self> {
+        REGISTRY.iter().map(|info| info.action)
+    }
+
+    fn info(self) -> &'static ActionInfo {
+        // The registry has one row per variant in declaration order, so the discriminant
+        // is the row index. `registry_matches_the_enum` checks this.
+        &REGISTRY[self as usize]
+    }
 
     /// The stable DumbJ action ID, used in `action-id-map.toml` and user configuration.
     #[must_use]
     pub fn id(self) -> &'static str {
-        match self {
-            Self::OpenFolder => "project.open-folder",
-            Self::CloseTab => "tabs.close",
-            Self::NextTab => "tabs.next",
-            Self::PreviousTab => "tabs.previous",
-            Self::ActivateProjectToolWindow => "tool-window.project",
-            Self::HideAllToolWindows => "tool-window.hide-all",
-            Self::GotoLine => "editor.goto-line",
-            Self::Find => "editor.find",
-            Self::FindNext => "editor.find-next",
-            Self::FindPrevious => "editor.find-previous",
-            Self::ExtendSelection => "editor.extend-selection",
-        }
+        self.info().id
     }
 
     /// The name shown to the user.
     #[must_use]
     pub fn title(self) -> &'static str {
-        match self {
-            Self::OpenFolder => "Open Folder…",
-            Self::CloseTab => "Close Tab",
-            Self::NextTab => "Select Next Tab",
-            Self::PreviousTab => "Select Previous Tab",
-            Self::ActivateProjectToolWindow => "Project Tool Window",
-            Self::HideAllToolWindows => "Hide All Tool Windows",
-            Self::GotoLine => "Go to Line:Column…",
-            Self::Find => "Find…",
-            Self::FindNext => "Find Next",
-            Self::FindPrevious => "Find Previous",
-            Self::ExtendSelection => "Extend Selection",
-        }
+        self.info().title
     }
 
     #[must_use]
     pub fn scope(self) -> Scope {
-        match self {
-            Self::OpenFolder
-            | Self::CloseTab
-            | Self::NextTab
-            | Self::PreviousTab
-            | Self::ActivateProjectToolWindow
-            | Self::HideAllToolWindows => Scope::Window,
-            Self::GotoLine
-            | Self::Find
-            | Self::FindNext
-            | Self::FindPrevious
-            | Self::ExtendSelection => Scope::Editor,
-        }
+        self.info().scope
     }
 
     /// Looks an action up by its DumbJ ID.
     #[must_use]
     pub fn from_id(id: &str) -> Option<Self> {
-        Self::ALL.iter().copied().find(|action| action.id() == id)
+        REGISTRY
+            .iter()
+            .find(|info| info.id == id)
+            .map(|info| info.action)
     }
 }
 
@@ -116,10 +346,19 @@ mod tests {
     use super::*;
 
     #[test]
+    fn registry_matches_the_enum() {
+        for (index, info) in REGISTRY.iter().enumerate() {
+            assert_eq!(info.action as usize, index, "{} is out of order", info.id);
+        }
+        // The last variant must be the last row, so no variant is missing a row.
+        assert_eq!(Action::Escape as usize, REGISTRY.len() - 1);
+    }
+
+    #[test]
     fn ids_are_unique_and_round_trip() {
-        let ids: BTreeSet<_> = Action::ALL.iter().map(|action| action.id()).collect();
-        assert_eq!(ids.len(), Action::ALL.len());
-        for &action in Action::ALL {
+        let ids: BTreeSet<_> = Action::all().map(Action::id).collect();
+        assert_eq!(ids.len(), REGISTRY.len());
+        for action in Action::all() {
             assert_eq!(Action::from_id(action.id()), Some(action));
             assert_ne!(action.title(), "");
         }

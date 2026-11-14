@@ -35,7 +35,7 @@ pub fn render_keymap_markdown(linux: &Bindings, macos: &Bindings, map: &ActionId
         macos.keymap_name()
     );
     out.push_str("| Action | DumbJ ID | IntelliJ ID | Linux | macOS |\n|---|---|---|---|---|\n");
-    for &action in Action::ALL {
+    for action in Action::all() {
         let intellij: Vec<String> = map
             .intellij_ids(action)
             .map(|id| format!("`{id}`"))
