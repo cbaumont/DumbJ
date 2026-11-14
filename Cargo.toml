@@ -11,6 +11,9 @@ repository = "https://github.com/cbaumont/DumbJ"
 publish = false
 
 [workspace.dependencies]
+# Pinned exactly: GPUI's API moves fast. Upgrade deliberately. Only dumbj-ui may depend on it.
+gpui = { git = "https://github.com/zed-industries/zed", rev = "e8bc16acee5ae1937600d571d441c4b5d7b0d288" }
+gpui_platform = { git = "https://github.com/zed-industries/zed", rev = "e8bc16acee5ae1937600d571d441c4b5d7b0d288", features = ["wayland", "x11"] }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
