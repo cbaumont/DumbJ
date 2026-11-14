@@ -57,8 +57,10 @@ else
 fi
 sleep "${STARTUP_WAIT:-3}"
 if [ -n "${KEYS:-}" ]; then
+    # The first key after wtype installs its keymap is lost, so lead with a spare
+    # Shift tap.
     # shellcheck disable=SC2086  # KEYS is a list of wtype arguments
-    wtype $KEYS
+    wtype -M shift -m shift -s 200 $KEYS
     sleep 0.5
 fi
 grim "$output"
