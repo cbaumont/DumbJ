@@ -69,6 +69,9 @@ pub struct Symbol {
     pub supertypes: Vec<String>,
     /// The receiver type of a Kotlin extension function or property, as written.
     pub receiver: Option<String>,
+    /// The declared type of a field or property, or the return type of a function, without
+    /// type arguments. `None` when it is not written, is primitive or is `void`.
+    pub type_name: Option<String>,
 }
 
 /// One import statement.
@@ -160,6 +163,13 @@ pub(crate) struct Collector<'a> {
 }
 
 impl Collector<'_> {
+    /// Sets the declared type of the symbol at `index`.
+    pub(crate) fn set_type(&mut self, index: usize, type_name: Option<String>) {
+        if let Some(symbol) = self.facts.symbols.get_mut(index) {
+            symbol.type_name = type_name;
+        }
+    }
+
     /// Adds a symbol and returns its index.
     pub(crate) fn push(
         &mut self,
@@ -176,6 +186,7 @@ impl Collector<'_> {
             parent,
             supertypes: Vec::new(),
             receiver: None,
+            type_name: None,
         });
         self.facts.symbols.len() - 1
     }

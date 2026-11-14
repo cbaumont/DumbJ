@@ -8,25 +8,25 @@ import java.util.* -> None
 import com.example.Other as Alias -> Some("Alias")
 8:11 TypeAlias Names
 10:11 Property LIMIT
-12:12 Function shout on String
+12:12 Function shout on String -> String
 14:11 Interface Shape
-14:23 Method Shape.area
-14:43 Property Shape.name
+14:23 Method Shape.area -> Double
+14:43 Property Shape.name -> String
 16:14 Class Base : Shape, java.io.Serializable
-16:23 Property Base.id
+16:23 Property Base.id -> Int
 17:5 Companion Base.Companion
 17:34 Property Base.Companion.MAX
-17:47 Method Base.Companion.create
-18:18 Method Base.area
-19:9 Property Base.count
+17:47 Method Base.Companion.create -> Base
+18:18 Method Base.area -> Double
+19:9 Property Base.count -> Int
 21:11 Class Base.Nested
 22:12 Object Base.Single
 25:12 Enum Color
-25:22 Property Color.rgb
+25:22 Property Color.rgb -> Int
 25:34 EnumConstant Color.RED
 25:42 EnumConstant Color.GREEN
 25:56 Method Color.paint
 27:12 Class User
-27:21 Property User.name
-27:47 Property User.age
-28:9 Method User.greet
+27:21 Property User.name -> String
+27:47 Property User.age -> Int
+28:9 Method User.greet -> String

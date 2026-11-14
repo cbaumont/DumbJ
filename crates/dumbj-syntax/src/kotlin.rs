@@ -127,7 +127,10 @@ fn collect_type(
                     let is_property = child_of_kind(parameter, "binding_pattern_kind").is_some();
                     let name = child_of_kind(parameter, "simple_identifier");
                     if let Some(name) = name.filter(|_| is_property) {
-                        collector.push(SymbolKind::Property, parameter, name, Some(index));
+                        let property =
+                            collector.push(SymbolKind::Property, parameter, name, Some(index));
+                        let type_name = declared_type(&collector.source, parameter);
+                        collector.set_type(property, type_name);
                     }
                 }
             }
@@ -174,13 +177,18 @@ pub(crate) fn collect(collector: &mut Collector<'_>, node: Node<'_>, parent: Opt
                 };
                 let index = collector.push(kind, node, name, parent);
                 let receiver = receiver(collector, node);
+                // The return type is the type written directly in the declaration; the
+                // receiver's type sits inside `receiver_type` and is not picked up here.
+                let type_name = declared_type(&collector.source, node);
                 if let Some(symbol) = collector.facts.symbols.get_mut(index) {
                     symbol.receiver = receiver;
+                    symbol.type_name = type_name;
                 }
             }
         }
         "property_declaration" => {
             let receiver = receiver(collector, node);
+            let constructed = constructed_type(&collector.source, node);
             let declarations =
                 named_children(node)
                     .into_iter()
@@ -192,8 +200,11 @@ pub(crate) fn collect(collector: &mut Collector<'_>, node: Node<'_>, parent: Opt
             for declaration in declarations.collect::<Vec<_>>() {
                 if let Some(name) = child_of_kind(declaration, "simple_identifier") {
                     let index = collector.push(SymbolKind::Property, node, name, parent);
+                    let type_name = declared_type(&collector.source, declaration)
+                        .or_else(|| constructed.clone());
                     if let Some(symbol) = collector.facts.symbols.get_mut(index) {
                         symbol.receiver.clone_from(&receiver);
+                        symbol.type_name = type_name;
                     }
                 }
             }

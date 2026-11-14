@@ -10,10 +10,10 @@ import java.util.Collections.* static -> None
 8:14 Class Structure : Base, Runnable, java.io.Serializable
 9:30 Field Structure.MAX
 9:39 Field Structure.MIN
-10:26 Field Structure.names
+10:26 Field Structure.names -> List
 11:12 Constructor Structure.Structure
 12:27 Method Structure.run
-20:18 Method Structure.foo
+20:18 Method Structure.foo -> U
 21:15 Interface Structure.Shape
 21:30 Method Structure.Shape.area
 22:10 Enum Structure.Color

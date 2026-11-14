@@ -68,9 +68,13 @@ fn render(name: &str) -> String {
             .receiver
             .as_ref()
             .map_or_else(String::new, |r| format!(" on {r}"));
+        let type_name = symbol
+            .type_name
+            .as_ref()
+            .map_or_else(String::new, |t| format!(" -> {t}"));
         writeln!(
             out,
-            "{}:{} {:?} {}{supers}{receiver}",
+            "{}:{} {:?} {}{supers}{receiver}{type_name}",
             point.line.display_number(),
             point.column + 1,
             symbol.kind,

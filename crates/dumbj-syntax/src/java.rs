@@ -69,7 +69,9 @@ pub(crate) fn collect(collector: &mut Collector<'_>, node: Node<'_>, parent: Opt
         {
             for parameter in named_children(parameters) {
                 if let Some(name) = parameter.child_by_field_name("name") {
-                    collector.push(SymbolKind::Field, parameter, name, Some(index));
+                    let field = collector.push(SymbolKind::Field, parameter, name, Some(index));
+                    let type_name = declared_type(&collector.source, parameter, None);
+                    collector.set_type(field, type_name);
                 }
             }
         }
@@ -92,7 +94,9 @@ pub(crate) fn collect(collector: &mut Collector<'_>, node: Node<'_>, parent: Opt
         }
         "method_declaration" | "annotation_type_element_declaration" => {
             if let Some(name) = node.child_by_field_name("name") {
-                collector.push(SymbolKind::Method, node, name, parent);
+                let method = collector.push(SymbolKind::Method, node, name, parent);
+                let type_name = declared_type(&collector.source, node, None);
+                collector.set_type(method, type_name);
             }
         }
         "constructor_declaration" | "compact_constructor_declaration" => {
@@ -101,12 +105,12 @@ pub(crate) fn collect(collector: &mut Collector<'_>, node: Node<'_>, parent: Opt
             }
         }
         "field_declaration" | "constant_declaration" => {
+            let type_name = declared_type(&collector.source, node, None);
             for declarator in named_children(node) {
-                if let Some(name) = declarator
-                    .child_by_field_name("name")
-                    .filter(|_| declarator.kind() == "variable_declarator")
-                {
-                    collector.push(SymbolKind::Field, node, name, parent);
+                let name = declarator.child_by_field_name("name");
+                if let Some(name) = name.filter(|_| declarator.kind() == "variable_declarator") {
+                    let field = collector.push(SymbolKind::Field, node, name, parent);
+                    collector.set_type(field, type_name.clone());
                 }
             }
         }
