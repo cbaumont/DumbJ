@@ -112,7 +112,10 @@ struct PaintedLines {
 /// Scrolls through the file one step per frame and records how long each frame took.
 struct ScrollBenchmark {
     last_frame: Option<Instant>,
+    /// Time from one frame's layout to the next: what the user sees.
     frame_times: Vec<Duration>,
+    /// Time spent shaping and laying out the visible lines: DumbJ's own share of a frame.
+    layout_times: Vec<Duration>,
 }
 
 /// Lines scrolled per frame by the benchmark; fractional so every frame moves the text.
@@ -203,6 +206,7 @@ impl EditorView {
         self.benchmark = Some(ScrollBenchmark {
             last_frame: None,
             frame_times: Vec::new(),
+            layout_times: Vec::new(),
         });
     }
 
@@ -221,13 +225,16 @@ impl EditorView {
             return;
         }
         let mut times = std::mem::take(&mut benchmark.frame_times);
+        let mut layouts = std::mem::take(&mut benchmark.layout_times);
         times.sort_unstable();
-        let percentile = |p: usize| {
-            times
-                .get(times.len() * p / 100)
+        layouts.sort_unstable();
+        let at = |sorted: &[Duration], p: usize| {
+            sorted
+                .get(sorted.len() * p / 100)
                 .copied()
                 .unwrap_or_default()
         };
+        let percentile = |p: usize| at(&times, p);
         let total: Duration = times.iter().sum();
         #[expect(clippy::cast_precision_loss, reason = "a few hundred frames")]
         let fps = times.len() as f64 / total.as_secs_f64();
@@ -239,6 +246,9 @@ impl EditorView {
             p95 = ?percentile(95),
             p99 = ?percentile(99),
             max = ?times.last().copied().unwrap_or_default(),
+            layout_p50 = ?at(&layouts, 50),
+            layout_p99 = ?at(&layouts, 99),
+            layout_max = ?layouts.last().copied().unwrap_or_default(),
             "scroll benchmark"
         );
         self.benchmark = None;
@@ -603,6 +613,7 @@ impl EditorView {
         let gutter_width = GUTTER_PADDING_LEFT + digit_width * digits as f32 + GUTTER_PADDING_RIGHT;
         let text_left = bounds.left() + gutter_width + TEXT_PADDING_LEFT;
 
+        let layout_started = Instant::now();
         self.step_scroll_benchmark(window, cx);
         let visible_lines = f64::from(bounds.size.height / LINE_HEIGHT);
         let caret_point = self.model.caret_point();
@@ -787,6 +798,9 @@ impl EditorView {
             )
         });
 
+        if let Some(benchmark) = self.benchmark.as_mut() {
+            benchmark.layout_times.push(layout_started.elapsed());
+        }
         let lines = Arc::new(lines);
         self.painted = Some(PaintedLines {
             bounds,
