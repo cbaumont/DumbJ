@@ -5,7 +5,7 @@ A fast, native, keyboard-first **code reading and code review editor** with Inte
 Full spec: `docs/BRIEF.md`. Where it conflicts with the Decisions in `docs/ARCHITECTURE.md`, the Decisions win. Read the sections relevant to your current task, not the whole file every time.
 
 ## Current milestone
-M0: Spike and skeleton (see BRIEF §9), not started; awaiting go-ahead. Decisions from the 2026-11-14 design review are in `docs/ARCHITECTURE.md`. Stop after each milestone with a summary, run instructions, test status, known gaps and screenshots, then wait for approval.
+M0: Spike and skeleton (see BRIEF §9), **done, awaiting review**. Next is M1a (navigation core); do not start it without a go-ahead. Decisions are in `docs/ARCHITECTURE.md`. Stop after each milestone with a summary, run instructions, test status, known gaps and screenshots, then wait for approval.
 
 ## Core rules
 - **Java and Kotlin first** (BRIEF §5). They get IntelliJ-grade navigation, including Java↔Kotlin interop, Gradle/Maven project structure and library source jars. Other languages get highlighting and structure only until M6.
@@ -22,12 +22,15 @@ M0: Spike and skeleton (see BRIEF §9), not started; awaiting go-ahead. Decision
 - Fewer, finished features beat many half-working ones. A wrong navigation result is worse than none.
 
 ## Commands
-<!-- Fill in during M0 once the stack is chosen -->
-- Build: `TODO`
-- Run: `TODO`
-- Test: `TODO`
-- Lint/format: `TODO`
-- Regenerate KEYMAP.md: `TODO`
+Rust comes from rustup (`~/.cargo/bin` must be on `PATH`); the toolchain is pinned in `rust-toolchain.toml`. Linking needs `clang` and `mold`.
+- Build: `cargo build` (release: `cargo build --release`)
+- Run: `cargo run -- <folder-or-file>`; more logs with `DUMBJ_LOG=debug`
+- Test: `cargo nextest run`
+- Lint/format: `cargo fmt --all` · `cargo clippy --all-targets -- -D warnings` · `cargo deny check`
+- Regenerate KEYMAP.md: `DUMBJ_REGENERATE_KEYMAP=1 cargo nextest run -p dumbj-actions keymap_md_is_up_to_date`
+- Update highlight snapshots: `cargo insta test --accept -p dumbj-syntax`
+- Screenshot: `scripts/screenshot.sh out.png <path>` (headless sway; `SCALE`, `KEYS`, `X11=1`)
+- Scroll benchmark: `DUMBJ_SCROLL_BENCHMARK=1 cargo run --release -- <file>`
 
 ## Docs (only these are maintained by hand)
 - `docs/ARCHITECTURE.md`: crate map, threading, and a dated **Decisions** section.
