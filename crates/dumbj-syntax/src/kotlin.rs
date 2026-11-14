@@ -3,16 +3,17 @@
 
 use tree_sitter::Node;
 
+use crate::reference::{Binder, Qualifier, ReferenceRole, qualifier_from_text};
 use crate::structure::{
-    Collector, Import, SymbolKind, all_children, child_of_kind, named_children,
+    Collector, Import, Source, SymbolKind, all_children, child_of_kind, named_children,
 };
 
 /// The dotted name of a `user_type` without type arguments: `java.io.Serializable`.
-fn user_type_name(collector: &Collector<'_>, user_type: Node<'_>) -> String {
+fn user_type_name(source: &Source<'_>, user_type: Node<'_>) -> String {
     let parts: Vec<String> = named_children(user_type)
         .into_iter()
         .filter(|child| child.kind() == "type_identifier")
-        .map(|part| collector.source.text(part))
+        .map(|part| source.text(part))
         .collect();
     parts.join(".")
 }
@@ -67,7 +68,7 @@ fn class_kind(collector: &Collector<'_>, node: Node<'_>) -> SymbolKind {
 
 fn receiver(collector: &Collector<'_>, node: Node<'_>) -> Option<String> {
     let receiver = child_of_kind(node, "receiver_type")?;
-    find_user_type(receiver).map(|user_type| user_type_name(collector, user_type))
+    find_user_type(receiver).map(|user_type| user_type_name(&collector.source, user_type))
 }
 
 fn import(collector: &Collector<'_>, node: Node<'_>) -> Option<Import> {
@@ -113,7 +114,7 @@ fn collect_type(
         .into_iter()
         .filter(|child| child.kind() == "delegation_specifier")
         .filter_map(find_user_type)
-        .map(|user_type| user_type_name(collector, user_type))
+        .map(|user_type| user_type_name(&collector.source, user_type))
         .collect();
     if let Some(symbol) = collector.facts.symbols.get_mut(index) {
         symbol.supertypes = supers;
@@ -223,5 +224,203 @@ pub(crate) fn collect(collector: &mut Collector<'_>, node: Node<'_>, parent: Opt
             }
         }
         _ => {}
+    }
+}
+
+/// The declared type of a parameter or variable node, without type arguments.
+fn declared_type(source: &Source<'_>, declaration: Node<'_>) -> Option<String> {
+    named_children(declaration)
+        .into_iter()
+        .filter(|child| matches!(child.kind(), "user_type" | "nullable_type"))
+        .find_map(find_user_type)
+        .map(|user_type| user_type_name(source, user_type))
+}
+
+/// For `val x = Foo(...)`: the constructor name, taken as the type when none is written.
+/// Only a capitalised bare callee counts, so `val x = compute()` stays unknown.
+fn constructed_type(source: &Source<'_>, property: Node<'_>) -> Option<String> {
+    let initialiser = named_children(property).into_iter().last()?;
+    let callee =
+        (initialiser.kind() == "call_expression").then(|| initialiser.named_child(0))??;
+    let name = (callee.kind() == "simple_identifier").then(|| source.text(callee))?;
+    name.starts_with(char::is_uppercase).then_some(name)
+}
+
+/// The names declared by a `variable_declaration` or `multi_variable_declaration`.
+fn variable_binders<'t>(
+    source: &Source<'_>,
+    node: Node<'t>,
+    fallback_type: Option<&String>,
+) -> Vec<Binder<'t>> {
+    let declarations = match node.kind() {
+        "variable_declaration" => vec![node],
+        "multi_variable_declaration" => named_children(node),
+        _ => Vec::new(),
+    };
+    let single = declarations.len() == 1;
+    declarations
+        .into_iter()
+        .filter_map(|declaration| {
+            let name = child_of_kind(declaration, "simple_identifier")?;
+            let type_name = declared_type(source, declaration)
+                .or_else(|| fallback_type.filter(|_| single).cloned());
+            Some(Binder { name, type_name })
+        })
+        .collect()
+}
+
+/// The names `child` introduces into `scope` for code that comes after it.
+pub(crate) fn binders<'t>(
+    source: &Source<'_>,
+    scope: Node<'t>,
+    child: Node<'t>,
+    want_type: bool,
+) -> Vec<Binder<'t>> {
+    let parameter = |parameter: Node<'t>| {
+        child_of_kind(parameter, "simple_identifier").map(|name| Binder {
+            name,
+            type_name: declared_type(source, parameter),
+        })
+    };
+    if want_type {
+        return if child.kind() == "type_parameters" {
+            named_children(child)
+                .into_iter()
+                .filter_map(|parameter| child_of_kind(parameter, "type_identifier"))
+                .map(|name| Binder {
+                    name,
+                    type_name: None,
+                })
+                .collect()
+        } else {
+            Vec::new()
+        };
+    }
+    match (scope.kind(), child.kind()) {
+        ("statements", "property_declaration") => {
+            let constructed = constructed_type(source, child);
+            named_children(child)
+                .into_iter()
+                .flat_map(|part| variable_binders(source, part, constructed.as_ref()))
+                .collect()
+        }
+        // A local function can be called by the code after it.
+        ("statements", "function_declaration") => child_of_kind(child, "simple_identifier")
+            .map(|name| Binder {
+                name,
+                type_name: None,
+            })
+            .into_iter()
+            .collect(),
+        // Function parameters, and constructor parameters, which are visible in
+        // initialisers and `init` blocks.
+        (_, "function_value_parameters") | ("class_declaration", "primary_constructor") => {
+            named_children(child)
+                .into_iter()
+                .filter_map(parameter)
+                .collect()
+        }
+        (_, "lambda_parameters") => named_children(child)
+            .into_iter()
+            .flat_map(|part| variable_binders(source, part, None))
+            .collect(),
+        ("for_statement", "variable_declaration" | "multi_variable_declaration") => {
+            variable_binders(source, child, None)
+        }
+        ("when_expression", "when_subject") => named_children(child)
+            .into_iter()
+            .flat_map(|part| variable_binders(source, part, None))
+            .collect(),
+        ("catch_block", "simple_identifier") => {
+            vec![Binder {
+                name: child,
+                type_name: declared_type(source, scope),
+            }]
+        }
+        ("setter", "parameter_with_optional_type") => parameter(child).into_iter().collect(),
+        _ => Vec::new(),
+    }
+}
+
+/// The role, qualifier and import flag of an identifier node.
+pub(crate) fn classify(
+    source: &Source<'_>,
+    node: Node<'_>,
+) -> (ReferenceRole, Option<Qualifier>, bool) {
+    let Some(parent) = node.parent() else {
+        return (ReferenceRole::Value, None, false);
+    };
+    let is_first = parent
+        .named_child(0)
+        .is_some_and(|first| first.id() == node.id());
+    // The dotted parts written before `node` inside `parent`, e.g. `java.io` in a type.
+    let preceding = || {
+        let before = source
+            .buffer
+            .text(
+                dumbj_text::ByteOffset(parent.start_byte())
+                    ..dumbj_text::ByteOffset(node.start_byte()),
+            )
+            .unwrap_or_default();
+        let before: String = before.split_whitespace().collect();
+        let before = before.trim_end_matches('.').to_owned();
+        (!before.is_empty()).then(|| qualifier_from_text(&before))
+    };
+    match parent.kind() {
+        "navigation_suffix" => {
+            let Some(navigation) = parent.parent() else {
+                return (ReferenceRole::Member, None, false);
+            };
+            let qualifier = navigation
+                .named_child(0)
+                .map(|receiver| match receiver.kind() {
+                    "this_expression" => Qualifier::This,
+                    "super_expression" => Qualifier::Super,
+                    _ => qualifier_from_text(&source.text(receiver)),
+                });
+            let is_callee = navigation.parent().is_some_and(|call| {
+                call.kind() == "call_expression"
+                    && call
+                        .named_child(0)
+                        .is_some_and(|callee| callee.id() == navigation.id())
+            });
+            let role = if is_callee {
+                ReferenceRole::Call
+            } else {
+                ReferenceRole::Member
+            };
+            (role, qualifier, false)
+        }
+        "call_expression" if is_first => (ReferenceRole::Call, None, false),
+        "user_type" => (ReferenceRole::Type, preceding(), false),
+        "identifier" => match parent.parent().map(|grandparent| grandparent.kind()) {
+            Some("import_header") => (ReferenceRole::Type, preceding(), true),
+            _ => (ReferenceRole::Declaration, None, false),
+        },
+        // `Foo::bar`
+        "callable_reference" if node.kind() == "simple_identifier" => {
+            let qualifier = child_of_kind(parent, "type_identifier")
+                .map(|owner| qualifier_from_text(&source.text(owner)));
+            (ReferenceRole::Call, qualifier, false)
+        }
+        "function_declaration"
+        | "variable_declaration"
+        | "parameter"
+        | "class_parameter"
+        | "enum_entry"
+        | "catch_block"
+        | "parameter_with_optional_type"
+            if node.kind() == "simple_identifier" =>
+        {
+            (ReferenceRole::Declaration, None, false)
+        }
+        "class_declaration" | "object_declaration" | "companion_object" | "type_alias"
+        | "type_parameter" | "import_alias"
+            if is_first =>
+        {
+            (ReferenceRole::Declaration, None, false)
+        }
+        _ if node.kind() == "type_identifier" => (ReferenceRole::Type, None, false),
+        _ => (ReferenceRole::Value, None, false),
     }
 }
