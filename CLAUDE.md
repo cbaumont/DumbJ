@@ -18,6 +18,7 @@ M0: Spike and skeleton (see BRIEF §9), not started; awaiting go-ahead. Decision
 - **Licence: GPL-3.0-or-later.** Zed code may be adapted only in small, attributed pieces (BRIEF §3, §7).
 - **`ui` depends on core crates, never the reverse.** Core crates must be testable headless.
 - **Rust standards (BRIEF §8.1):** workspace lints, no `unwrap`/`expect`/`panic` in library crates, `thiserror` in libraries and `anyhow` in the app, `tracing` not `println!`, no `unsafe` without a `// SAFETY:` comment, newtypes for offsets, and `cargo deny` + `nextest` in CI.
+- **Commit in small, incremental chunks.** Commit as you go, not at the end of a milestone. Each commit is one logical change that builds and passes fmt, clippy and tests, is small enough to review in one sitting, and never mixes refactoring with feature work. Commit messages say what changed and why, and justify any new dependency.
 - Fewer, finished features beat many half-working ones. A wrong navigation result is worse than none.
 
 ## Commands
