@@ -1,0 +1,19 @@
+[package]
+name = "dumbj-text"
+description = "DumbJ's text model: a rope buffer with typed offsets, edits and plain-text search. Headless."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+ropey.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
+
+[lints]
+workspace = true
