@@ -5,7 +5,7 @@ A fast, native, keyboard-first **code reading and code review editor** with Inte
 Full spec: `docs/BRIEF.md`. Where it conflicts with the Decisions in `docs/ARCHITECTURE.md`, the Decisions win. Read the sections relevant to your current task, not the whole file every time.
 
 ## Current milestone
-M0: Spike and skeleton (see BRIEF §9), **done, awaiting review**. Next is M1a (navigation core); do not start it without a go-ahead. Decisions are in `docs/ARCHITECTURE.md`. Stop after each milestone with a summary, run instructions, test status, known gaps and screenshots, then wait for approval.
+M1a: navigation core (see BRIEF §9), **in progress**. M0 was approved on 2026-11-14. Editing lands in M1b. Decisions are in `docs/ARCHITECTURE.md`. Stop after each milestone with a summary, run instructions, test status, known gaps and screenshots, then wait for approval.
 
 ## Core rules
 - **Java and Kotlin first** (BRIEF §5). They get IntelliJ-grade navigation, including Java↔Kotlin interop, Gradle/Maven project structure and library source jars. Other languages get highlighting and structure only until M6.

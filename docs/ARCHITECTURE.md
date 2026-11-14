@@ -1,6 +1,6 @@
 # DumbJ architecture
 
-Status: M0 (spike and skeleton) done, awaiting review.
+Status: M0 approved on 2026-11-14. M1a (navigation core) in progress.
 
 ## Crate map
 
@@ -96,14 +96,14 @@ A manifest lists about 4 OSS JVM repos at fixed commits, shallow-cloned and cach
 ### 2026-11-14: M1 split into M1a and M1b
 M1 ships as M1a (navigation core) then M1b (the rest), with a review stop after each (BRIEF §9). Why: as one milestone it is too large, and the navigation core is the part most likely to be wrong, so it gets reviewed first.
 
-### 2026-11-14: GPUI spike result: pass, IME on GNOME still to be confirmed by hand
+### 2026-11-14: GPUI spike result: pass
 Measured on Fedora 45 with the M0 window, not a throwaway prototype.
 - **Scrolling a 100k-line Java file:** on the GNOME Wayland session, debug build: median frame 10.0 ms, p95 10.3 ms, which is the display's refresh interval. DumbJ's own layout cost per frame is 0.2 ms median, 0.9 ms p99 in a release build. Pass. Re-measure with `DUMBJ_SCROLL_BENCHMARK=1 dumbj <file>`.
 - **Fractional scaling:** crisp at 1.25× and 1.5× under headless sway (`wp_fractional_scale_v1`). Mutter's fractional scaling is a manual check. Pass.
 - **X11:** renders and takes input through Xwayland. Pass.
 - **Keymap capture:** GPUI delivers modifier-only changes (double Shift is detected by our dispatcher), plain key-downs for chords, and every modifier combination tried (Ctrl+Shift+], Alt+1, Ctrl+Shift+F12, Alt+Shift+G, Alt+Up, Ctrl+Alt+Shift+8). Pass, with the layout caveat below.
 - **Popup and docked panel in IDEA's look:** Go to Line popup and Project tool window built from GPUI primitives. Pass.
-- **IME:** text fields implement GPUI's input handler (`zwp_text_input_v3` on Wayland, XIM on X11), and committed text and pre-edit are handled. It has **not** been exercised with IBus on GNOME yet; that is a manual check and a hard blocker if it fails.
+- **IME:** text fields implement GPUI's input handler (`zwp_text_input_v3` on Wayland, XIM on X11) and handle committed text and pre-edit. The owner confirmed it works with IBus on GNOME Wayland. Pass.
 
 ### 2026-11-14: GPUI pinned to the Zed v1.28.1 commit
 `gpui` and `gpui_platform` come from `github.com/zed-industries/zed` at `e8bc16ac…` (tag v1.28.1). The crates.io release (0.2.2) no longer builds: its `xattr 0.2.3` dependency needs a constant that current `libc` removed. A release tag is the most-tested revision available.
@@ -121,7 +121,7 @@ BRIEF §6.1 and the plugin README give Ctrl+Alt+G, but the plugin's XML lists `F
 Arrow keys, Home/End, selection, clipboard, Enter and Escape are registered actions (`Scope::Text`) bound from `EditorLeft`, `$Copy` and so on, rather than hard-coded in widgets. The focused component (editor, text field, tree) interprets them.
 
 ### 2026-11-14: The M0 editor is read-only
-The editor has a caret, selection, search and navigation but does not accept typing. Why: BRIEF §2.5 requires edits to come with undo and atomic autosave, and half of that would be worse than none. BRIEF §9 does not assign editing to a milestone; the owner needs to place it. IME is proven in the Find and Go to Line fields.
+The editor has a caret, selection, search and navigation but does not accept typing. Why: BRIEF §2.5 requires edits to come with undo and atomic autosave, and half of that would be worse than none. IME is proven in the Find and Go to Line fields.
 
 ### 2026-11-14: Kotlin grammar is tree-sitter-kotlin-sg, provisionally
 The fwcd grammar as maintained by ast-grep. It ships highlight and tags queries; `tree-sitter-kotlin-ng` ships none. M1a's grammar evaluation makes the final call. Highlight queries are vendored into `crates/dumbj-syntax/queries/` and already tuned for Kotlin.
@@ -131,3 +131,6 @@ The fwcd grammar as maintained by ast-grep. It ships highlight and tags queries;
 
 ### 2026-11-14: cargo-deny tolerates unmaintained crates that GPUI pulls in
 `unmaintained = "workspace"`: an unmaintained-crate advisory fails CI only for our direct dependencies. Vulnerability advisories and yanked crates always fail. Git sources are allowed only from `zed-industries` and `gfx-rs`.
+
+### 2026-11-14: Editing lands in M1b
+Typing, undo/redo with grouping, atomic autosave and the reload prompt for files changed on disk are part of M1b (the owner left the placement open). Why: M1b already carries editor-surface work, and M2's "rollback changed lines" needs a modifiable buffer. Multi-caret, comment toggle and move/duplicate line follow in M1b if it stays reviewable, otherwise they are split out.
