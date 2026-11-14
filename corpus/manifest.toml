@@ -1,0 +1,27 @@
+# The dumb-mode accuracy and grammar-evaluation corpus: open-source JVM repositories at
+# fixed commits. `scripts/fetch-corpus.sh` shallow-clones them into
+# $XDG_CACHE_HOME/dumbj/corpus/<name>. Expected navigation targets live next to this file.
+
+[[repo]]
+name = "petclinic-microservices"
+url = "https://github.com/spring-petclinic/spring-petclinic-microservices"
+commit = "e8b747ab522721076cacb5cf688eb8a54ba8c5c9"
+description = "multi-module Spring Boot project (Java, Maven)"
+
+[[repo]]
+name = "kotlinx-coroutines"
+url = "https://github.com/Kotlin/kotlinx.coroutines"
+commit = "ead082131ceb45b8e4fda027c74471103c1cd09f"
+description = "coroutine-heavy Kotlin library (Gradle, multiplatform)"
+
+[[repo]]
+name = "nowinandroid"
+url = "https://github.com/android/nowinandroid"
+commit = "2982e63cb691ad49cd009aab43dc206fee6699c2"
+description = "Android app (Kotlin, Gradle multi-module)"
+
+[[repo]]
+name = "moshi"
+url = "https://github.com/square/moshi"
+commit = "889013ec2edb8d8034902662a1dc8c4f3b3f8111"
+description = "mixed Java and Kotlin library (Gradle)"

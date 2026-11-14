@@ -123,8 +123,15 @@ Arrow keys, Home/End, selection, clipboard, Enter and Escape are registered acti
 ### 2026-11-14: The M0 editor is read-only
 The editor has a caret, selection, search and navigation but does not accept typing. Why: BRIEF §2.5 requires edits to come with undo and atomic autosave, and half of that would be worse than none. IME is proven in the Find and Go to Line fields.
 
-### 2026-11-14: Kotlin grammar is tree-sitter-kotlin-sg, provisionally
-The fwcd grammar as maintained by ast-grep. It ships highlight and tags queries; `tree-sitter-kotlin-ng` ships none. M1a's grammar evaluation makes the final call. Highlight queries are vendored into `crates/dumbj-syntax/queries/` and already tuned for Kotlin.
+### 2026-11-14: Kotlin grammar is tree-sitter-kotlin-sg
+Evaluated in M1a on 1,531 Kotlin files (5.9 MB) from kotlinx.coroutines, Now in Android and Moshi with `examples/kotlin_grammar_eval.rs`:
+
+| Grammar | Files with errors | Bytes inside ERROR nodes | Speed |
+|---|---|---|---|
+| `tree-sitter-kotlin-sg` 0.4 (fwcd grammar, ast-grep fork) | 26 (1.7%) | 0.29% | 4.6 MB/s |
+| `tree-sitter-kotlin-ng` 1.1 (tree-sitter-grammars) | 21 (1.4%) | 1.70% | 3.6 MB/s |
+
+`-sg` wins: its errors stay local, while `-ng` loses whole class bodies (`Channel.kt`, `JsonReader.kt`). `-sg` also ships highlight and tags queries. Its known gap is an annotated function type as a parameter type (`content: @Composable () -> Unit`), common in Compose code; a test pins it so we notice when upstream fixes it, and symbol extraction must tolerate ERROR nodes. The two grammars export the same C symbol, so only one can be linked: `-ng` sits behind the `kotlin-ng-eval` feature for re-running the comparison. Highlight queries are vendored into `crates/dumbj-syntax/queries/` and tuned.
 
 ### 2026-11-14: Only LF ends a line
 `ropey` is built without its Unicode line-break set, and `dumbj-text` treats a CR before LF as part of the break. Why: line numbers must agree with git, tree-sitter and LSP.

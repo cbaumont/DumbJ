@@ -104,6 +104,25 @@ fn broken_source_still_highlights() {
     assert!(spans.len() > 3);
 }
 
+/// A known gap in the Kotlin grammar (ARCHITECTURE, Kotlin grammar decision). When this
+/// test fails the grammar has been fixed upstream: delete it and update the decision.
+#[test]
+fn kotlin_annotated_function_type_parameter_is_a_known_grammar_gap() {
+    let source = "fun Button(text: @Composable () -> Unit, enabled: Boolean) {}\nfun after() {}\n";
+    let buffer = Buffer::new(source);
+    let tree = parse(Language::Kotlin, &buffer, || false).unwrap().unwrap();
+    assert!(
+        tree.has_errors(),
+        "the grammar now parses annotated function types"
+    );
+    // The damage stays local: the following declaration is still highlighted.
+    let spans = tree
+        .highlights(&buffer, ByteOffset::ZERO..buffer.len())
+        .unwrap();
+    let after = source.find("after").unwrap();
+    assert!(spans.iter().any(|span| span.range.start.get() == after));
+}
+
 #[test]
 fn parsing_can_be_cancelled() {
     let source = "class A { void f() { int x = 1; } }\n".repeat(20_000);
