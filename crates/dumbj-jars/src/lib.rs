@@ -29,7 +29,6 @@ pub struct SourceJar {
     pub version: String,
 }
 
-/// Gradle's and Maven's local caches.
 #[must_use]
 pub fn default_roots() -> Vec<PathBuf> {
     let Some(home) = std::env::var_os("HOME").map(PathBuf::from) else {
@@ -60,7 +59,6 @@ fn coordinates(path: &Path) -> Option<(String, String)> {
     }
 }
 
-/// Every source jar under `roots`. Returns `None` when cancelled.
 #[must_use]
 pub fn discover(roots: &[PathBuf], cancelled: &AtomicBool) -> Option<Vec<SourceJar>> {
     let mut found = Vec::new();
@@ -197,7 +195,6 @@ pub fn virtual_path(jar: &Path, entry: &str) -> PathBuf {
     PathBuf::from(format!("{}{SEPARATOR}{entry}", jar.display()))
 }
 
-/// Splits `lib.jar!/okio/Buffer.kt` into the jar and the entry.
 #[must_use]
 pub fn split_virtual_path(path: &Path) -> Option<(PathBuf, String)> {
     let text = path.to_str()?;
