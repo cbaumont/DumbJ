@@ -11,9 +11,9 @@ M1b phases, in this order (each a series of small commits):
 1. *(done)* **Hierarchy:** Go to Implementation(s), Go to Super Method, overriding/implementing gutter icons, Type Hierarchy, dumb Call Hierarchy.
 2. *(done)* **Java↔Kotlin interop:** properties ↔ `getX`/`isX`/`setX`, `FileKt` facades and `@file:JvmName`, `Companion` and `@JvmStatic`/`@JvmField`/`@JvmName`/`@JvmOverloads`, `INSTANCE`; usages across the boundary. Add benchmark cases.
 3. *(done; JDK `src.zip` still missing)* **Library source jars:** the global source-jar class index, read-only viewing inside the jar, "no sources available".
-4. **Editor surface:** folding, sticky lines, Extend/Shrink selection, usage highlighting, scope-aware highlighting.
+4. *(done)* **Editor surface:** folding, sticky lines, Extend/Shrink selection, usage highlighting, scope-aware highlighting.
 5. **Navigation extras:** Find in Files, Recent Files / Recent Locations, Bookmarks.
-6. *(done except `libs.versions.toml` navigation)* **Tier 1 support files (BRIEF §5.2):** grammars, highlighting and structure; `libs.versions.toml` navigation.
+6. *(done)* **Tier 1 support files (BRIEF §5.2):** grammars, highlighting and structure; `libs.versions.toml` navigation.
 7. **Editing** (ARCHITECTURE "Editing lands in M1b"): typing, undo/redo, atomic autosave, reload prompt, index refresh on change.
 
 Accuracy benchmark (2026-11-15): 287 cases, 84.3% correct, 0 wrong. Run `scripts/fetch-corpus.sh`, then `cargo run --release -p dumbj-index --example accuracy`; it also runs nightly (`.github/workflows/accuracy.yml`), failing on any wrong jump. Known causes of the remaining choosers, for after the review: lambda parameter types (`it`), indexing (`a[i].b`), smart casts, scope functions (`apply { }`), and Java `Class` arguments not matching a Kotlin `Type` parameter.
