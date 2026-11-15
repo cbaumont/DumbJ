@@ -1,5 +1,3 @@
-//! Loader for IntelliJ-format keymap XML, with `parent` inheritance.
-//!
 //! The semantics follow IntelliJ's `KeymapImpl.readExternal`: an `<action>` element replaces
 //! every shortcut the parent chain defines for that action (an empty element clears them),
 //! and when a file lists the same action twice the later entry wins. IntelliJ's built-in
@@ -11,7 +9,6 @@ use thiserror::Error;
 
 use crate::keystroke::{KeyStroke, Shortcut, parse_double_modifier};
 
-/// Why a keymap could not be loaded or resolved.
 #[derive(Debug, Error)]
 pub enum KeymapError {
     #[error("keymap XML is not well formed: {0}")]
@@ -30,7 +27,6 @@ pub enum KeymapError {
     ParentCycle(String),
 }
 
-/// One parsed keymap file, before inheritance is applied.
 #[derive(Debug, Clone)]
 pub struct KeymapFile {
     name: String,
@@ -41,8 +37,6 @@ pub struct KeymapFile {
 }
 
 impl KeymapFile {
-    /// Parses one IntelliJ keymap XML document.
-    ///
     /// Shortcuts that cannot be understood are skipped, as IntelliJ does, and reported
     /// through [`KeymapFile::warnings`].
     pub fn parse(xml: &str) -> Result<Self, KeymapError> {
@@ -105,7 +99,6 @@ impl KeymapFile {
         self.parent.as_deref()
     }
 
-    /// Shortcuts and elements that were skipped while parsing.
     #[must_use]
     pub fn warnings(&self) -> &[String] {
         &self.warnings
@@ -166,7 +159,6 @@ fn swap_ctrl_and_meta(shortcut: &mut Shortcut) {
     }
 }
 
-/// A keymap with inheritance applied: every IntelliJ action ID that has at least one shortcut.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ResolvedKeymap {
     name: String,
@@ -195,7 +187,6 @@ impl ResolvedKeymap {
     }
 }
 
-/// A set of keymap files that can refer to each other as parents.
 #[derive(Debug, Clone, Default)]
 pub struct KeymapLibrary {
     files: BTreeMap<String, KeymapFile>,
@@ -207,12 +198,10 @@ impl KeymapLibrary {
         Self::default()
     }
 
-    /// Adds a keymap, replacing any loaded keymap of the same name.
     pub fn add(&mut self, file: KeymapFile) {
         self.files.insert(file.name.clone(), file);
     }
 
-    /// Parses `xml` and adds it. Returns the keymap's name.
     pub fn add_xml(&mut self, xml: &str) -> Result<String, KeymapError> {
         let file = KeymapFile::parse(xml)?;
         let name = file.name.clone();

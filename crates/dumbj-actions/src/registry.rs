@@ -1,19 +1,13 @@
-//! The registry of DumbJ actions. Menus, Find Action and the keymap all read from it.
-
 use std::fmt;
 
-/// Where an action applies. This is the action's "when" clause.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Scope {
-    /// Available anywhere in a project window.
     Window,
-    /// Needs an open editor.
     Editor,
     /// Caret movement and editing in whatever has focus: an editor, a text field or a list.
     Text,
 }
 
-/// Every command DumbJ can run.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Action {
     OpenFolder,
@@ -380,13 +374,11 @@ impl Action {
         &REGISTRY[self as usize]
     }
 
-    /// The stable DumbJ action ID, used in `action-id-map.toml` and user configuration.
     #[must_use]
     pub fn id(self) -> &'static str {
         self.info().id
     }
 
-    /// The name shown to the user.
     #[must_use]
     pub fn title(self) -> &'static str {
         self.info().title
@@ -397,7 +389,6 @@ impl Action {
         self.info().scope
     }
 
-    /// Looks an action up by its DumbJ ID.
     #[must_use]
     pub fn from_id(id: &str) -> Option<Self> {
         REGISTRY

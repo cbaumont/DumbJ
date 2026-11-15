@@ -1,6 +1,3 @@
-//! Checks the vendored keymaps end to end: known bindings, the action ID map and
-//! `docs/KEYMAP.md`.
-
 #![expect(
     clippy::unwrap_used,
     reason = "integration test: a panic is the failure report"
@@ -153,7 +150,6 @@ fn default_linux_bindings_dispatch() {
         dispatcher.mouse_down(click("ctrl button1"), |_| false),
         None
     );
-    // Double Shift: Search Everywhere fires on the second release.
     let now = std::time::Instant::now();
     let shift = Modifiers::only(Modifier::Shift);
     let fired: Vec<_> = [shift, Modifiers::NONE, shift, Modifiers::NONE]

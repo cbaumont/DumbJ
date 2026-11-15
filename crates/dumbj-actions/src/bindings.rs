@@ -1,5 +1,3 @@
-//! Maps a resolved IntelliJ keymap onto DumbJ actions through `action-id-map.toml`.
-
 use std::collections::BTreeMap;
 
 use serde::Deserialize;
@@ -9,7 +7,6 @@ use crate::keymap::ResolvedKeymap;
 use crate::keystroke::Shortcut;
 use crate::registry::Action;
 
-/// Why an action ID map could not be loaded.
 #[derive(Debug, Error)]
 pub enum ActionMapError {
     #[error("action ID map is not valid TOML: {0}")]
@@ -24,7 +21,6 @@ struct ActionMapFile {
     actions: BTreeMap<String, String>,
 }
 
-/// The explicit table from IntelliJ action IDs to DumbJ actions.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ActionIdMap {
     by_intellij_id: BTreeMap<String, Action>,
@@ -45,7 +41,6 @@ impl ActionIdMap {
         Ok(Self { by_intellij_id })
     }
 
-    /// The DumbJ action an IntelliJ action ID maps to.
     #[must_use]
     pub fn action(&self, intellij_id: &str) -> Option<Action> {
         self.by_intellij_id.get(intellij_id).copied()
@@ -60,7 +55,6 @@ impl ActionIdMap {
     }
 }
 
-/// The shortcuts of every DumbJ action under one keymap.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Bindings {
     keymap_name: String,
@@ -69,7 +63,6 @@ pub struct Bindings {
 }
 
 impl Bindings {
-    /// Binds each DumbJ action to the shortcuts its IntelliJ counterpart has in `keymap`.
     #[must_use]
     pub fn new(keymap: &ResolvedKeymap, map: &ActionIdMap) -> Self {
         let mut by_action: BTreeMap<Action, Vec<Shortcut>> = BTreeMap::new();
@@ -94,7 +87,6 @@ impl Bindings {
         }
     }
 
-    /// The name of the keymap these bindings came from.
     #[must_use]
     pub fn keymap_name(&self) -> &str {
         &self.keymap_name
@@ -106,7 +98,6 @@ impl Bindings {
         self.by_action.get(&action).map_or(&[], Vec::as_slice)
     }
 
-    /// Every bound action with its shortcuts.
     pub fn iter(&self) -> impl Iterator<Item = (Action, &[Shortcut])> {
         self.by_action
             .iter()

@@ -1,6 +1,3 @@
-//! Turns raw key events into actions: single strokes, two-stroke chords and double-tapped
-//! modifiers (double Shift). Toolkit independent, so it can be tested headless.
-
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
@@ -11,10 +8,8 @@ use crate::registry::Action;
 /// The longest gap allowed between each press and release of a double-tapped modifier.
 const DOUBLE_TAP_STEP: Duration = Duration::from_millis(400);
 
-/// What a key press resolved to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Dispatch {
-    /// Run this action. The key press is consumed.
     Action(Action),
     /// The stroke starts a two-stroke chord; waiting for the second stroke. Consumed.
     Pending,
@@ -32,8 +27,6 @@ enum TapState {
     SecondDown(Modifier, Instant),
 }
 
-/// A state machine that matches key events against a set of [`Bindings`].
-///
 /// Several actions may share a shortcut, as in IntelliJ. The caller supplies an `enabled`
 /// predicate and the first enabled action in registry order wins.
 #[derive(Debug)]
@@ -92,13 +85,11 @@ impl KeyDispatcher {
         }
     }
 
-    /// Whether the first stroke of a chord has been pressed and the second is awaited.
     #[must_use]
     pub fn is_chord_pending(&self) -> bool {
         self.pending_chord.is_some()
     }
 
-    /// Feeds one non-modifier key press.
     pub fn key_down(&mut self, stroke: KeyStroke, enabled: impl Fn(Action) -> bool) -> Dispatch {
         self.tap = TapState::Idle;
         let first_enabled =
@@ -126,7 +117,6 @@ impl KeyDispatcher {
         Dispatch::Unhandled
     }
 
-    /// Feeds a mouse button press. Returns the first enabled action bound to it.
     pub fn mouse_down(
         &mut self,
         stroke: MouseStroke,
@@ -178,7 +168,6 @@ impl KeyDispatcher {
     }
 }
 
-/// The modifier that is held, if exactly one is.
 fn lone_modifier(modifiers: Modifiers) -> Option<Modifier> {
     [
         Modifier::Ctrl,
@@ -232,7 +221,6 @@ mod tests {
         true
     }
 
-    /// Feeds modifier states spaced `gap_ms` apart and returns what each produced.
     fn taps(d: &mut KeyDispatcher, gap_ms: u64, states: &[Modifiers]) -> Vec<Option<Action>> {
         let start = Instant::now();
         states
@@ -290,7 +278,6 @@ mod tests {
             taps(&mut d, 100, &[SHIFT, none, SHIFT, none]),
             [None, None, None, Some(Action::GotoLine)]
         );
-        // And again straight away: the state machine has reset.
         assert_eq!(
             taps(&mut d, 100, &[SHIFT, none, SHIFT, none])[3],
             Some(Action::GotoLine)
@@ -330,7 +317,6 @@ mod tests {
         assert_eq!(d.modifiers_changed(SHIFT, start, all), None);
         assert_eq!(d.modifiers_changed(none, start, all), None);
         assert_eq!(d.modifiers_changed(SHIFT, start, all), None);
-        // Typing a capital letter in the middle cancels the gesture.
         assert_eq!(d.key_down(stroke("shift A"), all), Dispatch::Unhandled);
         assert_eq!(d.modifiers_changed(none, start, all), None);
 

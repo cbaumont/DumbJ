@@ -1,12 +1,8 @@
-//! Key strokes and shortcuts, parsed from the AWT syntax used by IntelliJ keymap XML
-//! (`"control shift OPEN_BRACKET"`).
-
 use std::fmt;
 use std::str::FromStr;
 
 use thiserror::Error;
 
-/// A single modifier key.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Modifier {
     Ctrl,
@@ -16,7 +12,6 @@ pub enum Modifier {
     Meta,
 }
 
-/// The set of modifiers held during a key stroke.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]
 #[expect(
     clippy::struct_excessive_bools,
@@ -37,7 +32,6 @@ impl Modifiers {
         meta: false,
     };
 
-    /// The modifier set that contains only `modifier`.
     #[must_use]
     pub fn only(modifier: Modifier) -> Self {
         let mut modifiers = Self::NONE;
@@ -60,7 +54,6 @@ impl Modifiers {
     }
 }
 
-/// A non-modifier key, independent of any UI toolkit.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Key {
     /// A letter (lower case), digit or punctuation key on the main block.
@@ -184,16 +177,12 @@ impl fmt::Display for Key {
     }
 }
 
-/// Which platform's conventions to use when showing a shortcut to the user.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ShortcutStyle {
-    /// `Ctrl+Shift+]`
     Linux,
-    /// `⇧⌘]`
     MacOs,
 }
 
-/// One key press with its modifiers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct KeyStroke {
     pub modifiers: Modifiers,
@@ -206,7 +195,6 @@ impl KeyStroke {
         Self { modifiers, key }
     }
 
-    /// Formats the stroke the way the given platform writes shortcuts.
     #[must_use]
     pub fn display(self, style: ShortcutStyle) -> String {
         let Modifiers {
@@ -243,7 +231,6 @@ impl KeyStroke {
     }
 }
 
-/// Why a key stroke string could not be parsed.
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum KeyStrokeParseError {
     #[error("key stroke is empty")]
@@ -264,7 +251,6 @@ fn parse_modifier(token: &str) -> Option<Modifier> {
     }
 }
 
-/// Splits an AWT key stroke string into its leading modifiers and the final key token.
 fn split_awt(text: &str) -> Result<(Modifiers, &str), KeyStrokeParseError> {
     let mut tokens: Vec<&str> = text
         .split_ascii_whitespace()
@@ -284,7 +270,6 @@ fn split_awt(text: &str) -> Result<(Modifiers, &str), KeyStrokeParseError> {
 impl FromStr for KeyStroke {
     type Err = KeyStrokeParseError;
 
-    /// Parses AWT syntax: zero or more modifiers followed by a virtual-key name.
     fn from_str(text: &str) -> Result<Self, Self::Err> {
         let (modifiers, key) = split_awt(text)?;
         match Key::from_awt(key) {
@@ -309,7 +294,6 @@ pub(crate) fn parse_double_modifier(text: &str) -> Option<Modifier> {
     (modifiers == Modifiers::only(modifier)).then_some(modifier)
 }
 
-/// A mouse button press with its modifiers, e.g. Ctrl+click.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct MouseStroke {
     pub modifiers: Modifiers,
@@ -320,7 +304,6 @@ pub struct MouseStroke {
 }
 
 impl MouseStroke {
-    /// Formats the stroke the way the given platform writes shortcuts.
     #[must_use]
     pub fn display(self, style: ShortcutStyle) -> String {
         let button = match (self.button, self.clicks) {
@@ -332,7 +315,6 @@ impl MouseStroke {
             (5, _) => "Mouse Forward".to_owned(),
             (other, _) => format!("Button {other}"),
         };
-        // Reuse the key formatting for the modifier prefix.
         let prefix = KeyStroke::new(self.modifiers, Key::Space).display(style);
         let prefix = prefix.trim_end_matches("Space");
         format!("{prefix}{button}")
@@ -368,17 +350,13 @@ impl FromStr for MouseStroke {
     }
 }
 
-/// A way to trigger an action.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Shortcut {
-    /// One key stroke, or a two-stroke chord.
     Keyboard {
         first: KeyStroke,
         second: Option<KeyStroke>,
     },
-    /// A modifier pressed twice in quick succession, e.g. double Shift.
     DoubleModifier(Modifier),
-    /// A mouse button with modifiers, e.g. Ctrl+click.
     Mouse(MouseStroke),
     /// A shortcut kind DumbJ does not dispatch (touch gestures and other key gestures).
     /// Holds the raw keymap text so reports can show it.
@@ -386,7 +364,6 @@ pub enum Shortcut {
 }
 
 impl Shortcut {
-    /// A single-stroke keyboard shortcut.
     #[must_use]
     pub fn key(stroke: KeyStroke) -> Self {
         Self::Keyboard {

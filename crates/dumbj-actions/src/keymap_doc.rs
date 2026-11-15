@@ -1,5 +1,3 @@
-//! Generates `docs/KEYMAP.md` from the resolved default keymaps.
-
 use std::fmt::Write as _;
 
 use crate::bindings::{ActionIdMap, Bindings};
@@ -20,14 +18,12 @@ fn shortcuts_cell(bindings: &Bindings, action: Action, style: ShortcutStyle) -> 
     }
 }
 
-/// Renders the Markdown table of every DumbJ action with its Linux and macOS shortcuts.
 #[must_use]
 pub fn render_keymap_markdown(linux: &Bindings, macos: &Bindings, map: &ActionIdMap) -> String {
     let mut out = String::from(
         "# DumbJ keymap\n\n\
          <!-- Generated from keymaps/ by dumbj-actions. Do not edit by hand. -->\n\n",
     );
-    // Writing to a String cannot fail.
     let _ = writeln!(
         out,
         "Linux uses the `{}` keymap and macOS uses IntelliJ's `{}` keymap.\n",
