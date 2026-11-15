@@ -1,0 +1,18 @@
+---
+source: crates/dumbj-syntax/tests/structure.rs
+expression: "render(\"sample.yaml\")"
+---
+package None
+2:1 Key name
+3:1 Key on
+4:3 Key on.push
+5:5 Key on.push.branches
+6:1 Key env
+7:3 Key env.RETRIES
+8:3 Key env.VERBOSE
+9:3 Key env.EMPTY
+10:1 Key anchors
+11:3 Key anchors.base
+12:5 Key anchors.base.image
+13:3 Key anchors.job
+15:5 Key anchors.job.script

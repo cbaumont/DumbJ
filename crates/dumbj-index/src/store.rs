@@ -14,7 +14,7 @@ use rusqlite::{Connection, params};
 use crate::index::IndexedFile;
 
 /// Bumped whenever the schema or the meaning of a column changes.
-const SCHEMA_VERSION: i64 = 7;
+const SCHEMA_VERSION: i64 = 8;
 
 const SCHEMA: &str = "
 CREATE TABLE files (

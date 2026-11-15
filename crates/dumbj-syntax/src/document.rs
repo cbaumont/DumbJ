@@ -222,3 +222,48 @@ fn xml_element(
         xml_element(collector, child, depth + 1, entry.or(parent));
     }
 }
+
+/// How deep nested YAML mappings are followed; guards the recursion against absurd input.
+const MAX_YAML_DEPTH: usize = 24;
+
+/// Reports the keys of the block mappings of a YAML file, nested the way the mappings
+/// are. Keys inside sequences and flow mappings (`{a: 1}`) are not listed, nor are merge
+/// keys (`<<`).
+pub(crate) fn yaml(collector: &mut Collector<'_>, root: Node<'_>) {
+    for document in named_children(root) {
+        if document.kind() == "document" {
+            yaml_node(collector, document, None, 0);
+        }
+    }
+}
+
+/// Finds the block mappings at or below `node` (through the wrappers a document and a
+/// value put around them) and reports their pairs.
+fn yaml_node(collector: &mut Collector<'_>, node: Node<'_>, parent: Option<usize>, depth: usize) {
+    if depth > MAX_YAML_DEPTH {
+        return;
+    }
+    for child in named_children(node) {
+        match child.kind() {
+            "block_node" => yaml_node(collector, child, parent, depth),
+            "block_mapping" => {
+                for pair in named_children(child) {
+                    if pair.kind() != "block_mapping_pair" {
+                        continue;
+                    }
+                    let Some(key) = pair.child_by_field_name("key") else {
+                        continue;
+                    };
+                    if collector.source.text(key) == "<<" {
+                        continue;
+                    }
+                    let entry = collector.push(SymbolKind::Key, pair, key, parent);
+                    if let Some(value) = pair.child_by_field_name("value") {
+                        yaml_node(collector, value, Some(entry), depth + 1);
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+}

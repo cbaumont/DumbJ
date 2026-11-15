@@ -85,7 +85,7 @@ impl Language {
     pub fn has_structure(self) -> bool {
         matches!(
             self,
-            Self::Java | Self::Kotlin | Self::Markdown | Self::Toml | Self::Xml
+            Self::Java | Self::Kotlin | Self::Markdown | Self::Toml | Self::Xml | Self::Yaml
         )
     }
 

@@ -131,6 +131,11 @@ fn xml_structure() {
 }
 
 #[test]
+fn yaml_structure() {
+    insta::assert_snapshot!(render("sample.yaml"));
+}
+
+#[test]
 fn declarations_survive_syntax_errors() {
     let (_, facts) = facts_of(
         Language::Java,
@@ -190,8 +195,12 @@ fn kotlin_class_kinds() {
 }
 
 #[test]
-fn yaml_and_empty_files_have_no_symbols() {
-    assert_eq!(facts_of(Language::Yaml, "a: 1\n").1, FileFacts::default());
+fn empty_files_and_languages_without_an_outline_have_no_symbols() {
+    assert_eq!(
+        facts_of(Language::Json, "{\"a\": 1}").1,
+        FileFacts::default()
+    );
+    assert_eq!(facts_of(Language::Yaml, "").1, FileFacts::default());
     assert_eq!(facts_of(Language::Java, "").1, FileFacts::default());
     assert_eq!(facts_of(Language::Kotlin, "").1, FileFacts::default());
 }

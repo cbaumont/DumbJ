@@ -378,8 +378,8 @@ impl SyntaxTree {
             Language::Markdown => crate::document::markdown(&mut collector, root),
             Language::Toml => crate::document::toml(&mut collector, root),
             Language::Xml => crate::document::xml(&mut collector, root),
-            Language::Yaml
-            | Language::Properties
+            Language::Yaml => crate::document::yaml(&mut collector, root),
+            Language::Properties
             | Language::Json
             | Language::Groovy
             | Language::Shell
