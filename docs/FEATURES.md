@@ -10,7 +10,7 @@
 - [~] Status bar — breadcrumb, line:col, language
 - [~] Project tool window — tree; no git status colours
 - [ ] Structure tool window
-- [ ] Find tool window
+- [~] Find tool window — Find Usages results only
 - [ ] Git tool window
 - [ ] Review tool window
 - [ ] Bookmarks tool window
@@ -43,16 +43,16 @@
 - [ ] Replace in file
 
 ## 4.3 Navigation
-- [ ] Search Everywhere
-- [ ] Go to File / Class / Symbol
+- [x] Search Everywhere
+- [x] Go to File / Class / Symbol
 - [x] Go to Line:Column
 - [ ] Find Action
-- [ ] Go to Declaration / Type Declaration / Implementation / Super Method / Test
-- [ ] Find Usages / Show Usages
+- [~] Go to Declaration / Type Declaration / Implementation / Super Method / Test — Go to Declaration only (Ctrl+B, Ctrl+click)
+- [x] Find Usages / Show Usages
 - [ ] Quick Definition / Quick Documentation
-- [ ] File Structure popup
+- [x] File Structure popup
 - [ ] Call Hierarchy / Type Hierarchy
-- [ ] Navigate Back / Forward
+- [x] Navigate Back / Forward
 - [ ] Recent Files / Recent Locations / Last Edit Location / Switcher
 - [ ] Find in Files / Replace in Files
 - [ ] Bookmarks
@@ -60,15 +60,15 @@
 - [ ] Navigation bar jump
 
 ## 4.3.1 Dumb and smart navigation
-- [ ] Scope-aware resolution
-- [ ] Import following (Java, Kotlin)
-- [ ] Candidate ranking and chooser
-- [ ] Member access heuristics
-- [ ] Dumb Find Usages
+- [x] Scope-aware resolution
+- [x] Import following (Java, Kotlin)
+- [x] Candidate ranking and chooser
+- [~] Member access heuristics — lambda parameter types, indexing (`a[i].b`), smart casts and scope functions stay guesses
+- [x] Dumb Find Usages
 - [ ] Dumb implementations / hierarchy
-- [ ] Exact / best-guess labelling
+- [~] Exact / best-guess labelling — chooser headed "best guess", usages marked "maybe"; no label on a direct jump
 - [ ] Language-server lifecycle
-- [ ] Accuracy benchmark
+- [x] Accuracy benchmark — 264 cases, nightly in CI
 
 ## 4.4 Version control and local review
 - [ ] Git log tool window
@@ -100,33 +100,33 @@
 
 ## 6.2 Actions (IntelliJ ID)
 Search & go to
-- [ ] SearchEverywhere
+- [x] SearchEverywhere
 - [ ] GotoAction
-- [ ] GotoClass
-- [ ] GotoFile
-- [ ] GotoSymbol
+- [x] GotoClass
+- [x] GotoFile
+- [x] GotoSymbol
 - [x] GotoLine
 - [ ] RecentFiles
 - [ ] RecentLocations
 - [ ] Switcher
 
 Code navigation
-- [ ] GotoDeclaration
+- [x] GotoDeclaration
 - [ ] GotoTypeDeclaration
 - [ ] GotoImplementation
 - [ ] GotoSuperMethod
 - [ ] GotoTest
-- [ ] FindUsages
-- [ ] ShowUsages
+- [x] FindUsages
+- [x] ShowUsages
 - [ ] HighlightUsagesInFile
 - [ ] QuickImplementations
 - [ ] QuickJavaDoc
 - [ ] ParameterInfo
-- [ ] FileStructurePopup
+- [x] FileStructurePopup
 - [ ] TypeHierarchy
 - [ ] CallHierarchy
-- [ ] Back
-- [ ] Forward
+- [x] Back
+- [x] Forward
 - [ ] JumpToLastChange
 - [ ] ShowNavBar
 - [ ] SelectIn
@@ -171,7 +171,7 @@ Windows & tabs
 - [x] PreviousTab
 - [x] NextTab
 - [x] ActivateProjectToolWindow
-- [ ] ActivateFindToolWindow
+- [~] ActivateFindToolWindow — available once Find Usages has produced results
 - [ ] ActivateStructureToolWindow
 - [ ] ActivateVersionControlToolWindow
 - [ ] ActivateBookmarksToolWindow

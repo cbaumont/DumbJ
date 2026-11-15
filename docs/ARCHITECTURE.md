@@ -1,6 +1,6 @@
 # DumbJ architecture
 
-Status: M0 approved on 2026-11-14. M1a (navigation core) in progress.
+Status: M0 approved on 2026-11-14. M1a (navigation core) implemented, awaiting review.
 
 ## Crate map
 
@@ -9,13 +9,14 @@ All crates live in `crates/`. Only `dumbj-ui` depends on GPUI; everything else i
 | Crate | Role | Depends on |
 |---|---|---|
 | `dumbj-text` | Rope `Buffer`, typed positions (`ByteOffset`, `LineIndex`, `Point`), edits, literal search | none |
-| `dumbj-syntax` | tree-sitter: language detection, cancellable parsing, range-limited highlighting; query files in `queries/` | text |
+| `dumbj-syntax` | tree-sitter: language detection, cancellable parsing, range-limited highlighting; query files in `queries/`. Also declaration extraction (`FileFacts`, `Symbol`: kind, supertypes, extension receiver, declared type, parameters, expect/actual), reference classification, local scope resolution and a small expression model (`Qualifier`: calls with arguments, member reads, casts, literals, lambdas) for Java and Kotlin | text |
+| `dumbj-index` | Dumb navigation, headless: immutable `Index` snapshot (files, symbols, lookup by name, FQN and package), parallel cancellable indexer, SQLite cache of per-file facts, project model (modules and source roots), Go to Declaration (`resolve`), Find Usages (`usages`), fuzzy search for Search Everywhere, Go to Class/File/Symbol and File Structure (`search`, `fuzzy`). Examples: `accuracy` (benchmark runner), `index_stats` | syntax, text; `ignore`, `rusqlite` |
 | `dumbj-actions` | Action registry, IntelliJ keymap XML loader, action ID map, key dispatcher, `KEYMAP.md` generator | none |
 | `dumbj-settings` | Themes as data (palette + role mapping); user settings later | syntax |
-| `dumbj-ui` | GPUI front end: workspace window, file tree, tabs, editor view, text input, popups | all of the above |
+| `dumbj-ui` | GPUI front end: workspace window, file tree, tabs, editor view, text input, popups, chooser, Find tool window | all of the above |
 | `dumbj-app` | The `dumbj` binary: CLI, logging, starts the UI | ui |
 
-Planned, not created yet: `dumbj-index`, `dumbj-lsp`, `dumbj-search`, `dumbj-vcs`, `dumbj-review`, `dumbj-platform`.
+Planned, not created yet: `dumbj-lsp`, `dumbj-search`, `dumbj-vcs`, `dumbj-review`, `dumbj-platform`.
 
 Data that ships in the binary lives at the repo root: `keymaps/` (vendored XML + `action-id-map.toml`), `themes/` (Catppuccin palettes + `roles.toml`), `assets/` (JetBrains Mono, Lucide icons). Each has a NOTICE or LICENSE naming its source and revision.
 
@@ -26,6 +27,10 @@ Inside `dumbj-ui`, logic that needs no GPUI types sits in plain modules (`editor
 - **Keys.** GPUI key event → `keys::stroke_from_gpui` → `KeyDispatcher` (single strokes, chords, double-tapped modifiers) → first *enabled* `Action` → `Workspace::perform`, which routes by focus (popup field, find field, tree, editor). Unhandled keys continue to the focused text field's IME handler. Bindings come only from the resolved keymap: vendored XML → parent inheritance → `action-id-map.toml` → `Bindings`.
 - **Opening a file.** `EditorView::open` spawns a background task: read → `Buffer` → `dumbj_syntax::parse`. The view shows "Loading…" until it completes.
 - **Painting the editor.** Each frame shapes only the visible lines. Highlight spans come from one tree-sitter query over the visible range plus a margin, cached per buffer version.
+- **Indexing.** Opening a folder makes `Workspace::start_indexing` spawn a background task that walks the project (honouring `.gitignore`), parses source files in parallel and builds an `Index`. File facts come from the SQLite cache in `$XDG_CACHE_HOME/dumbj/` when a file's path, mtime and size are unchanged; the cache is rebuilt if corrupt or written by another schema version, and indexing continues without it if it cannot be opened. The status bar shows "Indexing… N files", then "dumb". The finished `Index` is stored in the workspace as an `Arc`; until then the navigation actions are disabled. The index is a snapshot taken once per opened project; it is not updated when files change.
+- **Go to Declaration.** Ctrl+B or Ctrl+click → the editor takes the reference at the caret from its syntax tree → `dumbj_index::resolve` ranks candidates → `Decision::Jump` navigates and records the jump for Back/Forward; `Choose` opens a chooser popup headed "best guess"; `NotFound` does nothing. On a declaration the action shows its usages instead.
+- **Search popups.** Search Everywhere (with All, Classes, Files and Symbols tabs), Go to Class, Go to File, Go to Symbol and File Structure share one popup. Each keystroke starts a fuzzy match over the `Index` snapshot on the background executor; a newer query cancels the older one.
+- **Find Usages.** The target at the caret → `find_usages` scans the indexed files in the background, checks each identifier with the same resolver as Go to Declaration and labels it sure or maybe. Find Usages lists the results in the Find tool window, Show Usages in a popup; "maybe" results are marked.
 - **Search.** The find field emits `TextChanged` → the editor searches a rope snapshot in the background → matches are painted and the status shows `current/total`.
 
 ## Threading model
@@ -33,7 +38,8 @@ Inside `dumbj-ui`, logic that needs no GPUI types sits in plain modules (`editor
 - **UI thread:** GPUI's main thread. It only handles events, layout and paint. Per-frame work is bounded by the viewport (about 0.2 ms of layout for a 100k-line file in a release build).
 - **Background executor:** GPUI's thread pool, reached with `cx.background_spawn`. File reads, parsing, directory listing and search run there and report back with `entity.update`.
 - **Cancellation:** background work polls an `AtomicBool` (set when the view is dropped or the query changes); `parse` and `find_all` take a `cancelled` callback. Results from a superseded search are discarded.
-- No second async runtime. The job system with priorities (BRIEF §8) arrives with the index in M1a; until then tasks are per view.
+- **Index work** runs on the background executor. The indexer walks and parses with the `ignore` crate's parallel walker inside one background task; Find Usages and the search popups each run one background task per query. Each task has an `AtomicBool` that is set when its handle is dropped (indexing) or when a newer query supersedes it (usages, search); the indexer and `find_usages` poll it and return `None` when cancelled. Go to Declaration resolves one reference against the immutable `Index` directly on the UI thread, because it is a single lookup.
+- No second async runtime. The job system with priorities (BRIEF §8) does not exist yet: M1a uses one task per operation with its own cancel flag, as above.
 
 ## Decisions
 
@@ -76,7 +82,7 @@ PR refs go under `refs/dumbj/pr/<n>/` (BRIEF §4.5). Why: the objects must survi
 Autosave like IDEA, with undo and git as the only safety net (BRIEF §2.5). Why: IDEA muscle memory matters more than guarding against stray keystrokes, and a local-history feature is out of scope for a reading tool.
 
 ### 2026-11-14: Dumb jump rule
-Go to Declaration jumps directly only when exactly one candidate is in the highest rank tier (scope-local > same file > explicit import > same package > same module > repo) and its kind matches the reference position. Otherwise the chooser opens, sorted by rank. A wildcard import with collisions, an extension function, or member access on an unknown receiver always gets the chooser. The accuracy benchmark measures this.
+Go to Declaration jumps directly only when exactly one candidate is in the highest rank tier (scope-local > same file > explicit import > same package > same module > repo) and its kind matches the reference position. Otherwise the chooser opens, sorted by rank. A wildcard import with collisions, an extension function, or member access on an unknown receiver always gets the chooser. The accuracy benchmark measures this. The 2026-11-15 entry "Refined dumb jump rule" supersedes the extension-function sentence.
 
 ### 2026-11-14: Library sources via a global source-jar class index
 Every `*-sources.jar` under `~/.gradle/caches/modules-2/` and `~/.m2/repository/` is indexed lazily by package and class name, and cached by jar path and mtime. Versions named in build files or `libs.versions.toml` are preferred, then the newest. When several versions match, the result is labelled best guess and shows the version.
@@ -141,3 +147,23 @@ Evaluated in M1a on 1,531 Kotlin files (5.9 MB) from kotlinx.coroutines, Now in 
 
 ### 2026-11-14: Editing lands in M1b
 Typing, undo/redo with grouping, atomic autosave and the reload prompt for files changed on disk are part of M1b (the owner left the placement open). Why: M1b already carries editor-surface work, and M2's "rollback changed lines" needs a modifiable buffer. Multi-caret, comment toggle and move/duplicate line follow in M1b if it stays reviewable, otherwise they are split out.
+
+### 2026-11-15: Refined dumb jump rule
+Go to Declaration still ranks candidates into tiers (local, scope, same file, explicit import, same package, wildcard import, same module, repo) and jumps only when exactly one candidate is in the best tier and nothing in the lookup was a guess; otherwise it opens a chooser. What changed is how often the lookup counts as a guess. This supersedes the 2026-11-14 sentence that an extension function always gets the chooser.
+- A receiver that is a call result has the callee's return type; a local without a written type has the type of its initialiser; a type parameter is not a type.
+- A Kotlin extension jumps directly when the receiver's type is known and the file can see the extension (imported or same package), and stays a guess otherwise. Its extension receiver acts as an implicit `this`. A member beats an extension of the same name.
+- An interface gives way to a same-named factory function.
+- Receivers of unknown type stay guesses. That includes `Any` and `Object` (smart casts) and lambda parameters without a written type.
+Why: the strict rule produced choosers where a human sees one obvious target, and the benchmark showed that the cases above can be decided safely.
+
+### 2026-11-15: Overloads are picked conservatively
+Overloads and Kotlin constructors are narrowed by the call's arguments: count, named arguments, defaults, `vararg` and a trailing lambda. Types remove a candidate only where a mismatch is certain, because library types are invisible to the index and a guess about them would produce wrong jumps. Among the survivors, a single overload whose parameter types equal the argument types wins; anything else stays a chooser. Why: a wrong jump is worse than a chooser (CLAUDE.md), and dropping the true overload because a library type looked different is the likeliest way to get one.
+
+### 2026-11-15: Kotlin expect and actual are one target, paired by path
+An `expect` declaration and its `actual`s count as one target; the `actual` in the source set the reference is written in wins, otherwise the `expect`. Declarations are paired by qualified name, extension receiver and parameter types, and the source set is found by the path the `actual` shares with the `expect` (`select_platform` in `resolve.rs`), not by evaluating the build's source-set configuration. Why: the project model never runs Gradle (BRIEF §5.1), and the directory names (`commonMain`, `jvmMain`) carry the information needed.
+
+### 2026-11-15: Accuracy benchmark result
+264 hand-checked cases over the four pinned repositories: 222 correct (84.1%), 38 chooser containing the target (14.4%), 4 missed (1.5%), 0 wrong jumps. Java: 78 cases, 92.3% correct. Kotlin: 186 cases, 80.6% correct. The day started at 69.7% correct with one wrong jump. The main remaining causes of choosers are the types of lambda parameters (`it`, `{ x -> }`), then indexing (`a[i].b`), smart casts and scope functions (`apply { }`). One miss is a grammar gap: a parse error hides an `object` declaration in a Compose file. Run it with `scripts/fetch-corpus.sh` then `cargo run --release -p dumbj-index --example accuracy`.
+
+### 2026-11-15: The nightly benchmark fails on any wrong jump
+`.github/workflows/accuracy.yml` runs the benchmark nightly and on demand, caches the corpus by the hash of `corpus/manifest.toml`, and fails on a malformed case or on any wrong jump. It does not fail on a lower percentage. Why: the jump rule says a wrong jump is worse than none, so one is a regression, while the correct and chooser counts are expected to move as the engine improves.
