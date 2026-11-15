@@ -8,8 +8,8 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
 
 use dumbj_jars::{
-    JarIndex, default_roots, discover, locate, read_entry, read_virtual, split_virtual_path,
-    virtual_path,
+    JarIndex, SourceJar, default_roots, discover, locate, named_by_build, read_entry, read_virtual,
+    split_virtual_path, virtual_path,
 };
 use dumbj_syntax::Language;
 
@@ -61,6 +61,25 @@ fn discovers_indexes_and_reads_gradle_and_maven_jars() {
         &[("okio/Buffer.kt", BUFFER_KT)],
     );
     write_jar(
+        &gradle.join(
+            "org.jetbrains.kotlinx/coroutines-jvm/1.9.0/f00/coroutines-jvm-1.9.0-sources.jar",
+        ),
+        &[
+            (
+                "commonMain/Await.kt",
+                "package kotlinx.coroutines\n\nfun await() {}\n",
+            ),
+            (
+                "commonMain/kotlin/Job.kt",
+                "package kotlinx.coroutines\n\ninterface Job\n",
+            ),
+            (
+                "jvmMain/kotlin/Job.kt",
+                "package kotlinx.coroutines\n\ninterface Job\n",
+            ),
+        ],
+    );
+    write_jar(
         &maven.join("org/example/lib/1.0/lib-1.0-sources.jar"),
         &[(
             "org/example/Thing.java",
@@ -75,7 +94,15 @@ fn discovers_indexes_and_reads_gradle_and_maven_jars() {
         .map(|jar| format!("{} {}", jar.artifact, jar.version))
         .collect();
     seen.sort();
-    assert_eq!(seen, ["lib 1.0", "okio 3.10.2", "okio 3.9.0"]);
+    assert_eq!(
+        seen,
+        [
+            "coroutines-jvm 1.9.0",
+            "lib 1.0",
+            "okio 3.10.2",
+            "okio 3.9.0"
+        ]
+    );
 
     let index = JarIndex::build(jars, &AtomicBool::new(false)).unwrap();
     let found = index.find("okio.Buffer");
@@ -88,6 +115,17 @@ fn discovers_indexes_and_reads_gradle_and_maven_jars() {
     assert_eq!(index.find("okio.package-info"), []);
     assert_eq!(index.find("org.example.Thing").len(), 1);
 
+    assert_eq!(
+        index.find("kotlinx.coroutines.Await")[0].entry,
+        "commonMain/Await.kt",
+        "a source set without package directories: the package line decides"
+    );
+    let job = index.find("kotlinx.coroutines.Job");
+    assert_eq!(job.len(), 1, "one entry per jar");
+    assert_eq!(
+        job[0].entry, "jvmMain/kotlin/Job.kt",
+        "the JVM source set first"
+    );
     let newest = &found[0];
     let path = newest.virtual_path();
     assert_eq!(
@@ -133,4 +171,29 @@ fn default_roots_are_the_gradle_and_maven_caches() {
             .any(|root| root.ends_with(".gradle/caches/modules-2/files-2.1"))
     );
     assert!(roots.iter().any(|root| root.ends_with(".m2/repository")));
+}
+
+#[test]
+fn build_files_pick_the_version() {
+    let jar = |version: &str| SourceJar {
+        path: PathBuf::from(format!(
+            "/g/org.jetbrains.kotlin/kotlin-stdlib/{version}/h/kotlin-stdlib-{version}-sources.jar"
+        )),
+        artifact: "kotlin-stdlib".to_owned(),
+        version: version.to_owned(),
+    };
+    let toml = "[versions]\nkotlin = \"2.3.21\"\n[libraries]\nx = { module = \"org.jetbrains.kotlin:kotlin-reflect\", version.ref = \"kotlin\" }\n";
+    assert!(
+        named_by_build(&jar("2.3.21"), toml),
+        "by group and quoted version"
+    );
+    assert!(!named_by_build(&jar("2.4.10"), toml));
+    assert!(named_by_build(
+        &jar("1.9.0"),
+        "implementation(\"x:kotlin-stdlib:1.9.0\")"
+    ));
+    assert!(!named_by_build(
+        &jar("2.3.21"),
+        "version = \"2.3.21\" of something else"
+    ));
 }

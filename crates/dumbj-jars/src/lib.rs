@@ -90,17 +90,41 @@ fn open(jar: &Path) -> Result<zip::ZipArchive<File>, JarError> {
     zip::ZipArchive::new(file).map_err(|error| JarError::Zip(jar.to_path_buf(), error))
 }
 
-/// The fully qualified name a source entry declares by convention: `okio/Buffer.kt` is
-/// `okio.Buffer`.
-fn class_of_entry(entry: &str) -> Option<String> {
+/// Multiplatform source jars put each source set in its own top directory, and may leave
+/// the package directories out: `commonMain/Await.kt` is in `kotlinx.coroutines`.
+fn source_set_of(entry: &str) -> Option<(&str, &str)> {
+    let (first, rest) = entry.split_once('/')?;
+    first.ends_with("Main").then_some((first, rest))
+}
+
+fn stem_of(entry: &str) -> Option<&str> {
     let stem = entry
         .strip_suffix(".java")
         .or_else(|| entry.strip_suffix(".kt"))?;
     let name = stem.rsplit('/').next()?;
-    if name.contains('-') || name == "package-info" || name == "module-info" {
-        return None;
-    }
-    Some(stem.replace('/', "."))
+    let ignored = name.contains('-') || name == "package-info" || name == "module-info";
+    (!ignored).then_some(stem)
+}
+
+/// The class a file is named after, from its `package` line.
+fn class_from_source(head: &str, stem: &str) -> Option<String> {
+    let name = stem.rsplit('/').next()?;
+    let package = head.lines().find_map(|line| {
+        let rest = line.trim().strip_prefix("package ")?;
+        Some(rest.trim_end_matches(';').trim().to_owned())
+    });
+    Some(match package {
+        Some(package) if !package.is_empty() => format!("{package}.{name}"),
+        _ => name.to_owned(),
+    })
+}
+
+fn read_head(archive: &mut zip::ZipArchive<File>, entry: &str) -> Option<String> {
+    const HEAD: u64 = 4096;
+    let file = archive.by_name(entry).ok()?;
+    let mut bytes = Vec::new();
+    file.take(HEAD).read_to_end(&mut bytes).ok()?;
+    Some(String::from_utf8_lossy(&bytes).into_owned())
 }
 
 /// Numeric parts compare as numbers, so 1.10 is newer than 1.9.
@@ -153,12 +177,23 @@ impl JarIndex {
                     continue;
                 }
             };
-            for entry in archive.file_names().filter_map(Result::ok) {
-                if let Some(class) = class_of_entry(&entry) {
-                    classes
-                        .entry(class)
-                        .or_default()
-                        .push((position, entry.into_owned()));
+            let mut archive = archive;
+            let entries: Vec<String> = archive
+                .file_names()
+                .filter_map(Result::ok)
+                .map(std::borrow::Cow::into_owned)
+                .collect();
+            for entry in entries {
+                let Some(stem) = stem_of(&entry) else {
+                    continue;
+                };
+                let class = match source_set_of(stem) {
+                    Some((_, rest)) => read_head(&mut archive, &entry)
+                        .and_then(|head| class_from_source(&head, rest)),
+                    None => Some(stem.replace('/', ".")),
+                };
+                if let Some(class) = class {
+                    classes.entry(class).or_default().push((position, entry));
                 }
             }
         }
@@ -185,9 +220,41 @@ impl JarIndex {
                 })
             })
             .collect();
-        found.sort_by_key(|source| std::cmp::Reverse(version_key(&source.jar.version)));
+        // One entry per jar: the JVM source set's over common code.
+        found.sort_by_key(|source| {
+            let common = source_set_of(&source.entry).is_some_and(|(set, _)| set != "jvmMain");
+            (
+                std::cmp::Reverse(version_key(&source.jar.version)),
+                source.jar.path.clone(),
+                common,
+            )
+        });
+        found.dedup_by(|later, earlier| later.jar.path == earlier.jar.path);
         found
     }
+}
+
+/// Whether the project's build files (`build_text`, all of them concatenated) name this
+/// jar's version for its artifact or group.
+#[must_use]
+pub fn named_by_build(jar: &SourceJar, build_text: &str) -> bool {
+    let version = &jar.version;
+    let pinned = [
+        format!("\"{version}\""),
+        format!(":{version}\""),
+        format!("<version>{version}</version>"),
+    ]
+    .iter()
+    .any(|form| build_text.contains(form.as_str()));
+    let group = jar
+        .path
+        .ancestors()
+        .filter_map(|dir| dir.file_name()?.to_str())
+        .skip(1)
+        .find(|name| name.contains('.') && *name != version.as_str());
+    pinned
+        && (build_text.contains(&jar.artifact)
+            || group.is_some_and(|group| build_text.contains(group)))
 }
 
 #[must_use]
