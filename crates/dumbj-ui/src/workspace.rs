@@ -17,11 +17,13 @@ use crate::keys::{modifiers_from_gpui, stroke_from_gpui};
 use crate::text_input::{TextChanged, TextInput};
 use crate::theme;
 
+mod hierarchy;
 mod navigation;
 mod search_popup;
 mod usages;
 
 use dumbj_index::SearchScope;
+use hierarchy::HierarchyWindow;
 use navigation::{Chooser, Indexing, NavigationHistory};
 use search_popup::{SearchMode, SearchPopup};
 use usages::FindWindow;
@@ -54,8 +56,15 @@ enum ToolWindowState {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
+enum PendingFocus {
+    Results,
+    Hierarchy,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
 enum FocusArea {
     FindWindow,
+    HierarchyWindow,
     Chooser,
     Search,
     GotoLine,
@@ -87,10 +96,11 @@ pub(crate) struct Workspace {
     search: Option<SearchPopup>,
     find_window: Option<FindWindow>,
     find_window_focus: FocusHandle,
-    /// Stops a usage search that a newer one replaces.
+    hierarchy_window: Option<HierarchyWindow>,
+    hierarchy_window_focus: FocusHandle,
     usages_cancel: std::sync::Arc<std::sync::atomic::AtomicBool>,
-    /// Set when results arrive: the next render moves focus to them.
-    focus_results: bool,
+    /// Results that arrived since the last render; it moves focus to them.
+    pending_focus: Option<PendingFocus>,
     /// A one-off notice in the status bar, cleared by the next action.
     status_message: Option<String>,
     subscriptions: Vec<Subscription>,
@@ -179,8 +189,11 @@ impl Workspace {
             search: None,
             find_window: None,
             find_window_focus: cx.focus_handle(),
+            hierarchy_window: None,
+            hierarchy_window_focus: cx.focus_handle(),
+
             usages_cancel: std::sync::Arc::default(),
-            focus_results: false,
+            pending_focus: None,
             status_message: None,
             subscriptions: vec![on_find_changed, on_search_changed],
         }
@@ -217,6 +230,10 @@ impl Workspace {
             FocusArea::Find
         } else if find_window_shown && self.find_window_focus.is_focused(window) {
             FocusArea::FindWindow
+        } else if self.hierarchy_window.as_ref().is_some_and(|h| h.visible)
+            && self.hierarchy_window_focus.is_focused(window)
+        {
+            FocusArea::HierarchyWindow
         } else if tree_focused {
             FocusArea::Tree
         } else if editor_focused {
@@ -416,11 +433,15 @@ impl Workspace {
             | Action::GotoFile
             | Action::GotoSymbol => self.index.is_some() && !other_popup,
             Action::FileStructure => has_editor && self.index.is_some() && !other_popup,
-            Action::FindUsages | Action::ShowUsages => {
-                has_editor && self.index.is_some() && !popup_open
-            }
+            Action::FindUsages
+            | Action::ShowUsages
+            | Action::GotoDeclaration
+            | Action::GotoImplementation
+            | Action::GotoSuperMethod
+            | Action::TypeHierarchy
+            | Action::CallHierarchy => has_editor && self.index.is_some() && !popup_open,
             Action::ActivateFindToolWindow => self.find_window.is_some() && !popup_open,
-            Action::GotoDeclaration => has_editor && self.index.is_some() && !popup_open,
+            Action::ActivateHierarchyToolWindow => self.hierarchy_window.is_some() && !popup_open,
             Action::Back => self.history.can_go_back() && !popup_open,
             Action::Forward => self.history.can_go_forward() && !popup_open,
             Action::FindNext | Action::FindPrevious => {
@@ -464,6 +485,11 @@ impl Workspace {
             Action::FindUsages => self.find_usages(false, cx),
             Action::ShowUsages => self.find_usages(true, cx),
             Action::ActivateFindToolWindow => self.toggle_find_window(window, cx),
+            Action::GotoImplementation => self.goto_implementation(window, cx),
+            Action::GotoSuperMethod => self.goto_super_method(window, cx),
+            Action::TypeHierarchy => self.type_hierarchy(cx),
+            Action::CallHierarchy => self.call_hierarchy(cx),
+            Action::ActivateHierarchyToolWindow => self.toggle_hierarchy_window(window, cx),
             Action::GotoDeclaration => self.goto_declaration(window, cx),
             Action::Back => self.go_back(window, cx),
             Action::Forward => self.go_forward(window, cx),
@@ -514,12 +540,21 @@ impl Workspace {
 
     fn hide_all_tool_windows(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let hiding = self.project_window == ToolWindowState::Visible
-            || self.find_window.as_ref().is_some_and(|find| find.visible);
-        if let Some(find) = self.find_window.as_mut() {
-            if hiding && find.visible {
-                (find.visible, find.hidden_by_hide_all) = (false, true);
-            } else if !hiding && find.hidden_by_hide_all {
-                (find.visible, find.hidden_by_hide_all) = (true, false);
+            || self.find_window.as_ref().is_some_and(|find| find.visible)
+            || self.hierarchy_window.as_ref().is_some_and(|h| h.visible);
+        let bottom = [
+            self.find_window
+                .as_mut()
+                .map(|w| (&mut w.visible, &mut w.hidden_by_hide_all)),
+            self.hierarchy_window
+                .as_mut()
+                .map(|w| (&mut w.visible, &mut w.hidden_by_hide_all)),
+        ];
+        for (visible, hidden_by_hide_all) in bottom.into_iter().flatten() {
+            if hiding && *visible {
+                (*visible, *hidden_by_hide_all) = (false, true);
+            } else if !hiding && *hidden_by_hide_all {
+                (*visible, *hidden_by_hide_all) = (true, false);
             }
         }
         match (self.project_window, hiding) {
@@ -571,6 +606,7 @@ impl Workspace {
     fn perform_in_focus(&mut self, action: Action, window: &mut Window, cx: &mut Context<Self>) {
         match self.focus_area(window, cx) {
             FocusArea::FindWindow => self.find_window_action(action, window, cx),
+            FocusArea::HierarchyWindow => self.hierarchy_window_action(action, window, cx),
             FocusArea::Chooser => self.chooser_action(action, window, cx),
             FocusArea::Search => self.search_action(action, window, cx),
             FocusArea::GotoLine => match action {
@@ -1133,11 +1169,19 @@ impl Render for Workspace {
             .as_ref()
             .filter(|find| find.visible)
             .map(|find| self.render_find_window(find, window, cx).into_any_element());
-        if std::mem::take(&mut self.focus_results) {
-            let focus = if self.chooser.is_some() {
-                self.focus.clone()
-            } else {
-                self.find_window_focus.clone()
+        let hierarchy_window = self
+            .hierarchy_window
+            .as_ref()
+            .filter(|h| h.visible)
+            .map(|h| {
+                self.render_hierarchy_window(h, window, cx)
+                    .into_any_element()
+            });
+        if let Some(pending) = self.pending_focus.take() {
+            let focus = match pending {
+                PendingFocus::Hierarchy => self.hierarchy_window_focus.clone(),
+                PendingFocus::Results if self.chooser.is_some() => self.focus.clone(),
+                PendingFocus::Results => self.find_window_focus.clone(),
             };
             window.focus(&focus, cx);
         }
@@ -1154,6 +1198,7 @@ impl Render for Workspace {
                 .flex()
                 .flex_col()
                 .child(main)
+                .children(hierarchy_window)
                 .children(find_window),
         );
         let popup = match (&self.chooser, &self.search) {

@@ -148,7 +148,7 @@ impl Workspace {
                         hidden_by_hide_all: false,
                     });
                 }
-                this.focus_results = true;
+                this.pending_focus = Some(super::PendingFocus::Results);
                 cx.notify();
             });
         })

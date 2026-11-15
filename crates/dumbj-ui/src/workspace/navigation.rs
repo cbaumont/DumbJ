@@ -6,7 +6,7 @@ use std::time::Duration;
 use dumbj_actions::{Action, MouseStroke};
 use dumbj_index::{
     Decision, Index, IndexStore, Resolution, Target, cache_path, index_project,
-    index_project_cached,
+    index_project_cached, warm_hierarchy,
 };
 use dumbj_settings::UiRole;
 use dumbj_text::ByteOffset;
@@ -129,7 +129,7 @@ impl Workspace {
                         .and_then(|path| {
                             IndexStore::open(&path).map_err(|error| error.to_string())
                         });
-                    match store {
+                    let index = match store {
                         Ok(mut store) => {
                             index_project_cached(&root, &mut store, &cancelled, report)
                         }
@@ -137,7 +137,11 @@ impl Workspace {
                             tracing::warn!(%reason, "index cache unavailable; indexing without it");
                             index_project(&root, &cancelled, report)
                         }
+                    };
+                    if let Some(index) = &index {
+                        warm_hierarchy(index);
                     }
+                    index
                 })
                 .await;
             let _ = this.update(cx, |this, cx| {
