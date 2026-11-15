@@ -349,6 +349,16 @@ impl<'a> Resolver<'a> {
     }
 }
 
+/// What stands before the dot of a qualified reference, as far as the index can tell.
+enum Receiver {
+    /// Values of these indexed types.
+    Types(Vec<SymbolId>),
+    /// A value whose declared type is not in the index: a library type such as `List`.
+    External(String),
+    /// Nothing is known about it (a call result, an untyped local).
+    Unknown,
+}
+
 /// One resolution in progress: the reference site plus the resolver.
 struct Lookup<'a> {
     site: Site<'a>,
@@ -369,18 +379,48 @@ impl Lookup<'_> {
         })
     }
 
-    /// The types a single-name qualifier denotes: the type of a local or field called
-    /// `name`, or the type `name` itself. `None` when it cannot be determined.
-    fn owners_of_name(&self, name: &str) -> Option<Vec<SymbolId>> {
+    /// What a declared type name denotes, resolved by `resolve`.
+    fn receiver_of_type(
+        type_name: Option<&String>,
+        resolve: impl Fn(&str) -> Vec<SymbolId>,
+    ) -> Receiver {
+        match type_name {
+            None => Receiver::Unknown,
+            Some(type_name) => {
+                let types = resolve(type_name);
+                if types.is_empty() {
+                    Receiver::External(type_name.clone())
+                } else {
+                    Receiver::Types(types)
+                }
+            }
+        }
+    }
+
+    /// The receiver a symbol's declared type denotes, resolved where the symbol is written.
+    fn receiver_of_symbol(&self, symbol: SymbolId) -> Receiver {
+        let type_name = self
+            .resolver
+            .symbol(symbol)
+            .and_then(|symbol| symbol.type_name.as_ref());
+        Self::receiver_of_type(type_name, |name| {
+            self.resolver
+                .types_named(symbol, Some(&name.to_owned()))
+                .unwrap_or_default()
+        })
+    }
+
+    /// What a single-name qualifier denotes: the type of a local or field called `name`,
+    /// or the type `name` itself.
+    fn receiver_of_name(&self, name: &str) -> Receiver {
         let Site {
             tree, buffer, file, ..
         } = self.site;
         let at = self.reference.range.start;
         if let Some(local) = tree.resolve_local(buffer, at, name, ReferenceRole::Value) {
-            let types =
-                self.resolver
-                    .resolve_type(file, &self.enclosing, local.type_name.as_ref()?);
-            return (!types.is_empty()).then_some(types);
+            return Self::receiver_of_type(local.type_name.as_ref(), |type_name| {
+                self.resolver.resolve_type(file, &self.enclosing, type_name)
+            });
         }
         // A field or property of an enclosing type (or of one of its supertypes).
         let field = self
@@ -392,12 +432,11 @@ impl Lookup<'_> {
             })
             .find(|id| !self.resolver.is_type(*id));
         if let Some(field) = field {
-            let type_name = self.resolver.symbol(field)?.type_name.as_ref();
-            return self.resolver.types_named(field, type_name);
+            return self.receiver_of_symbol(field);
         }
         let types = self.resolver.resolve_type(file, &self.enclosing, name);
         if !types.is_empty() {
-            return Some(types);
+            return Receiver::Types(types);
         }
         // A Kotlin top-level property.
         let property = self
@@ -412,49 +451,64 @@ impl Lookup<'_> {
                         .resolver
                         .symbol(*id)
                         .is_some_and(|s| s.kind == SymbolKind::Property)
-            })?;
-        self.resolver
-            .types_named(property, self.resolver.symbol(property)?.type_name.as_ref())
+            });
+        property.map_or(Receiver::Unknown, |property| {
+            self.receiver_of_symbol(property)
+        })
     }
 
-    /// The types the qualifier of the reference denotes; `None` when unknown.
-    fn owners(&self, qualifier: &Qualifier) -> Option<Vec<SymbolId>> {
-        match qualifier {
-            Qualifier::This => (!self.enclosing.is_empty()).then(|| self.enclosing.clone()),
-            Qualifier::Super => {
-                let supers = self.resolver.supertypes(*self.enclosing.first()?);
-                (!supers.is_empty()).then_some(supers)
+    /// What the qualifier of the reference denotes.
+    fn receiver(&self, qualifier: &Qualifier) -> Receiver {
+        let types = |types: Vec<SymbolId>| {
+            if types.is_empty() {
+                Receiver::Unknown
+            } else {
+                Receiver::Types(types)
             }
-            Qualifier::Name(name) => self.owners_of_name(name),
+        };
+        match qualifier {
+            Qualifier::This => types(self.enclosing.clone()),
+            Qualifier::Super => types(
+                self.enclosing
+                    .first()
+                    .map_or_else(Vec::new, |own| self.resolver.supertypes(*own)),
+            ),
+            Qualifier::Name(name) => self.receiver_of_name(name),
             Qualifier::Path(path) => {
                 // A fully qualified or nested type name, e.g. `com.shop.core.Money`.
-                let types = self
+                let named = self
                     .resolver
                     .resolve_type(self.site.file, &self.enclosing, path);
-                if !types.is_empty() {
-                    return Some(types);
+                if !named.is_empty() {
+                    return Receiver::Types(named);
                 }
                 // Otherwise a chain of member accesses: `a.b.c`.
                 let mut parts = path.split('.');
-                let mut owners = self.owners_of_name(parts.next()?)?;
+                let mut receiver = parts
+                    .next()
+                    .map_or(Receiver::Unknown, |first| self.receiver_of_name(first));
                 for part in parts {
+                    let Receiver::Types(owners) = &receiver else {
+                        break;
+                    };
                     let member = owners
                         .iter()
                         .flat_map(|owner| {
                             self.resolver
                                 .members_named(*owner, part, ReferenceRole::Member)
                         })
-                        .next()?;
-                    owners = if self.resolver.is_type(member) {
-                        vec![member]
-                    } else {
-                        let type_name = self.resolver.symbol(member)?.type_name.as_ref();
-                        self.resolver.types_named(member, type_name)?
+                        .next();
+                    receiver = match member {
+                        None => Receiver::Unknown,
+                        Some(member) if self.resolver.is_type(member) => {
+                            Receiver::Types(vec![member])
+                        }
+                        Some(member) => self.receiver_of_symbol(member),
                     };
                 }
-                Some(owners)
+                receiver
             }
-            Qualifier::Other => None,
+            Qualifier::Other => Receiver::Unknown,
         }
     }
 
@@ -619,24 +673,9 @@ impl Lookup<'_> {
                 .collect();
             return self.finish(ranked, true);
         }
-        if let Some(owners) = self.owners(qualifier) {
-            let members: Vec<SymbolId> = owners
-                .iter()
-                .flat_map(|owner| self.resolver.members_named(*owner, &name, role))
-                .collect();
-            if !members.is_empty() {
-                let ranked = members.into_iter().map(|id| (id, Tier::Scope)).collect();
-                return self.finish(ranked, true);
-            }
-            // Not a member: perhaps a Kotlin extension on the receiver's type.
-            let owner_names: HashSet<&str> = owners
-                .iter()
-                .flat_map(|owner| self.resolver.with_supertypes(*owner))
-                .filter_map(|id| self.resolver.symbol(id))
-                .map(|symbol| symbol.name.as_str())
-                .collect();
-            let extensions: Vec<(SymbolId, Tier)> = self
-                .named_candidates()
+        // Kotlin extensions declared on a type with one of these simple names.
+        let extensions_on = |receiver_names: &HashSet<&str>| -> Vec<(SymbolId, Tier)> {
+            self.named_candidates()
                 .into_iter()
                 .filter(|id| {
                     let receiver = self
@@ -644,14 +683,43 @@ impl Lookup<'_> {
                         .symbol(*id)
                         .and_then(|s| s.receiver.as_deref());
                     receiver.is_some_and(|receiver| {
-                        owner_names.contains(receiver.rsplit('.').next().unwrap_or(receiver))
+                        receiver_names.contains(receiver.rsplit('.').next().unwrap_or(receiver))
                     })
                 })
                 .map(|id| (id, self.resolver.tier(file, &self.enclosing, id, false)))
-                .collect();
-            if !extensions.is_empty() {
+                .collect()
+        };
+        match self.receiver(qualifier) {
+            Receiver::Types(owners) => {
+                let members: Vec<SymbolId> = owners
+                    .iter()
+                    .flat_map(|owner| self.resolver.members_named(*owner, &name, role))
+                    .collect();
+                if !members.is_empty() {
+                    let ranked = members.into_iter().map(|id| (id, Tier::Scope)).collect();
+                    return self.finish(ranked, true);
+                }
+                // Not a member: perhaps a Kotlin extension on the receiver's type.
+                let owner_names: HashSet<&str> = owners
+                    .iter()
+                    .flat_map(|owner| self.resolver.with_supertypes(*owner))
+                    .filter_map(|id| self.resolver.symbol(id))
+                    .map(|symbol| symbol.name.as_str())
+                    .collect();
+                let extensions = extensions_on(&owner_names);
+                if !extensions.is_empty() {
+                    return self.finish(extensions, false);
+                }
+                // Otherwise it may be inherited from a library supertype: fall through.
+            }
+            // The receiver's type is written but is not in the project (a library type).
+            // Its members are not ours; only an extension on that type can match.
+            Receiver::External(type_name) => {
+                let simple = type_name.rsplit('.').next().unwrap_or(&type_name);
+                let extensions = extensions_on(&HashSet::from([simple]));
                 return self.finish(extensions, false);
             }
+            Receiver::Unknown => {}
         }
         // Unknown receiver: every member or extension with this name is a guess.
         let ranked = self
