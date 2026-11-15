@@ -26,15 +26,15 @@
 - [x] Large files scroll smoothly (100k lines)
 - [~] Degraded mode — no highlighting over 20 MB, long lines cut; no notice shown
 - [~] Tree-sitter highlighting — Java, Kotlin, Groovy, YAML, XML, JSON, TOML, .properties, Markdown (block level only), shell, Dockerfile, SQL
-- [ ] Scope-aware highlighting (locals)
+- [~] Scope-aware highlighting (locals) — parameters and their uses; locals keep the default colour
 - [ ] Semantic tokens (LSP)
-- [~] Gutter — line numbers, implements/overrides icons
+- [~] Gutter — line numbers, fold markers, implements/overrides icons
 - [ ] Inlay hints
 - [ ] Inline blame / Annotate
-- [ ] Sticky lines
+- [x] Sticky lines
 - [ ] Indent guides, bracket matching, whitespace, right margin, soft wrap
-- [ ] Code folding
-- [ ] Highlight usages at caret
+- [~] Code folding — no "fold all comments" action
+- [x] Highlight usages at caret
 - [~] Scrollbar — draggable thumb; no marks
 - [ ] Hover popups
 - [ ] Editing — editor is read-only (see ARCHITECTURE decision)
@@ -149,8 +149,8 @@ Bookmarks
 - [ ] GotoBookmark0…9
 
 Selection & editing
-- [~] EditorSelectWord — word level only
-- [ ] EditorUnSelectWord
+- [x] EditorSelectWord
+- [x] EditorUnSelectWord
 - [ ] SelectNextOccurrence
 - [ ] UnselectPreviousOccurrence
 - [ ] SelectAllOccurrences
@@ -163,8 +163,8 @@ Selection & editing
 - [ ] EditorDeleteLine
 - [ ] MoveStatementUp / MoveStatementDown
 - [ ] MoveLineUp / MoveLineDown
-- [ ] ExpandRegion / CollapseRegion
-- [ ] ExpandAllRegions / CollapseAllRegions
+- [x] ExpandRegion / CollapseRegion
+- [x] ExpandAllRegions / CollapseAllRegions
 
 Windows & tabs
 - [x] CloseContent
