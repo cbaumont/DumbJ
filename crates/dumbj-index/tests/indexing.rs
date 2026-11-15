@@ -19,8 +19,10 @@ fn indexes_sources_and_skips_ignored_files() {
         files,
         [
             ".gitignore",
+            "app/build.gradle.kts",
             "app/src/main/java/com/shop/app/Cart.java",
             "app/src/main/kotlin/com/shop/app/Checkout.kt",
+            "core/build.gradle.kts",
             "core/src/main/java/com/shop/core/Money.java",
             "core/src/main/java/com/shop/core/Priced.java",
             "core/src/main/java/com/shop/util/Money.java",
@@ -109,4 +111,46 @@ fn reports_progress_and_can_be_cancelled() {
     .unwrap();
     assert_eq!(done.load(Ordering::Relaxed), index.file_count());
     assert!(index_project(&shop_root(), &AtomicBool::new(true), |_| {}).is_none());
+}
+
+#[test]
+fn discovers_modules_and_source_roots() {
+    let index = shop_index();
+    let modules: Vec<String> = index
+        .project()
+        .modules()
+        .iter()
+        .map(|module| {
+            let roots: Vec<&str> = module
+                .source_roots
+                .iter()
+                .map(|root| root.path.as_str())
+                .collect();
+            format!("{} [{}] {}", module.name, module.dir, roots.join(" "))
+        })
+        .collect();
+    assert_eq!(
+        modules,
+        [
+            ": [] ",
+            ":app [app] app/src/main/java app/src/main/kotlin",
+            ":core [core] core/src/main/java core/src/main/kotlin",
+        ],
+        "names come from settings.gradle.kts, roots from package declarations"
+    );
+    let cart = index
+        .file_by_path(&shop_root().join("app/src/main/java/com/shop/app/Cart.java"))
+        .unwrap();
+    let money = index
+        .file_by_path(&shop_root().join("core/src/main/java/com/shop/core/Money.java"))
+        .unwrap();
+    assert_ne!(index.module_of(cart), index.module_of(money));
+    assert_eq!(
+        index
+            .project()
+            .module(index.module_of(cart).unwrap())
+            .unwrap()
+            .name,
+        ":app"
+    );
 }

@@ -71,7 +71,7 @@ fn go_to_file() {
         "a slash matches the path"
     );
     assert_eq!(
-        names(&index, "gradle", SearchScope::Files),
+        names(&index, "settings", SearchScope::Files),
         ["settings.gradle.kts"]
     );
     assert_eq!(names(&index, "git", SearchScope::Files), [".gitignore"]);

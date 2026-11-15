@@ -6,6 +6,8 @@ use std::path::{Path, PathBuf};
 
 use dumbj_syntax::{FileFacts, Language, Symbol};
 
+use crate::project::{ModuleId, ProjectModel};
+
 /// Identifies a file within one [`Index`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct FileId(pub(crate) u32);
@@ -37,6 +39,9 @@ pub struct Index {
     by_path: HashMap<PathBuf, FileId>,
     by_name: HashMap<String, Vec<SymbolId>>,
     by_package: HashMap<String, Vec<FileId>>,
+    project: ProjectModel,
+    /// The module of each file, parallel to `files`.
+    modules: Vec<Option<ModuleId>>,
 }
 
 fn to_u32(value: usize) -> u32 {
@@ -51,8 +56,15 @@ impl Index {
     pub fn new(mut files: Vec<IndexedFile>) -> Self {
         files.sort_by(|a, b| a.path.cmp(&b.path));
         files.dedup_by(|a, b| a.path == b.path);
+        let project = ProjectModel::discover(&files);
+        let modules = files
+            .iter()
+            .map(|file| project.module_of_path(&file.relative))
+            .collect();
         let mut index = Self {
             files,
+            project,
+            modules,
             ..Self::default()
         };
         for (position, file) in index.files.iter().enumerate() {
@@ -103,6 +115,18 @@ impl Index {
                 .cloned()
                 .collect(),
         )
+    }
+
+    /// The project's modules and source roots.
+    #[must_use]
+    pub fn project(&self) -> &ProjectModel {
+        &self.project
+    }
+
+    /// The module `file` belongs to.
+    #[must_use]
+    pub fn module_of(&self, file: FileId) -> Option<ModuleId> {
+        self.modules.get(file.0 as usize).copied().flatten()
     }
 
     #[must_use]

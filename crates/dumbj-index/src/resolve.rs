@@ -30,6 +30,8 @@ pub enum Tier {
     SamePackage,
     /// Covered by a wildcard import.
     WildcardImport,
+    /// In the same module (Gradle project or Maven module).
+    SameModule,
     /// Anywhere else in the project.
     Repo,
 }
@@ -198,6 +200,10 @@ impl<'a> Resolver<'a> {
             .any(|import| import.wildcard && import.path == container)
         {
             return Tier::WildcardImport;
+        }
+        let module = self.index.module_of(file);
+        if module.is_some() && module == self.index.module_of(candidate.file) {
+            return Tier::SameModule;
         }
         Tier::Repo
     }
