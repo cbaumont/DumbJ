@@ -321,7 +321,8 @@ impl SyntaxTree {
             | Language::Toml
             | Language::Groovy
             | Language::Markdown
-            | Language::Shell => {}
+            | Language::Shell
+            | Language::Dockerfile => {}
         }
         collector.facts
     }

@@ -20,6 +20,7 @@ pub enum Language {
     Groovy,
     Markdown,
     Shell,
+    Dockerfile,
 }
 
 impl Language {
@@ -34,6 +35,7 @@ impl Language {
         Self::Groovy,
         Self::Markdown,
         Self::Shell,
+        Self::Dockerfile,
     ];
 
     /// Picks the language from a file's name, or else its extension. Only the path is
@@ -51,6 +53,7 @@ impl Language {
             "yaml" | "yml" => Some(Self::Yaml),
             // Maven's pom.xml and Android's layouts are XML; so are IDE project files.
             "xml" | "xsd" | "xsl" | "xslt" | "svg" | "wsdl" | "pom" | "fxml" => Some(Self::Xml),
+            "dockerfile" => Some(Self::Dockerfile),
             "properties" => Some(Self::Properties),
             "json" | "jsonc" | "geojson" | "webmanifest" => Some(Self::Json),
             "toml" => Some(Self::Toml),
@@ -66,6 +69,9 @@ impl Language {
         match name {
             // The Gradle and Maven wrapper scripts have a `#!/bin/sh` line, no extension.
             "gradlew" | "mvnw" => Some(Self::Shell),
+            // `Dockerfile`, `Dockerfile.dev`, `Containerfile`; `app.dockerfile` is by extension.
+            "Dockerfile" | "Containerfile" => Some(Self::Dockerfile),
+            _ if name.starts_with("Dockerfile.") => Some(Self::Dockerfile),
             _ => None,
         }
     }
@@ -84,6 +90,7 @@ impl Language {
             Self::Groovy => "Groovy",
             Self::Markdown => "Markdown",
             Self::Shell => "Shell",
+            Self::Dockerfile => "Dockerfile",
         }
     }
 
@@ -102,6 +109,7 @@ impl Language {
             Self::Groovy => "groovy",
             Self::Markdown => "markdown",
             Self::Shell => "shell",
+            Self::Dockerfile => "dockerfile",
         }
     }
 
@@ -129,6 +137,7 @@ impl Language {
             Self::Groovy => dekobon_tree_sitter_groovy::LANGUAGE.into(),
             Self::Markdown => tree_sitter_md::LANGUAGE.into(),
             Self::Shell => tree_sitter_bash::LANGUAGE.into(),
+            Self::Dockerfile => tree_sitter_dockerfile_updated::language(),
         }
     }
 
@@ -144,6 +153,7 @@ impl Language {
             Self::Groovy => include_str!("../queries/groovy/highlights.scm"),
             Self::Markdown => include_str!("../queries/markdown/highlights.scm"),
             Self::Shell => include_str!("../queries/shell/highlights.scm"),
+            Self::Dockerfile => include_str!("../queries/dockerfile/highlights.scm"),
         }
     }
 
@@ -179,6 +189,10 @@ mod tests {
         assert_eq!(detect("pom.xml"), Some(Language::Xml));
         assert_eq!(detect("README.md"), Some(Language::Markdown));
         assert_eq!(detect("gradlew"), Some(Language::Shell));
+        assert_eq!(detect("Dockerfile"), Some(Language::Dockerfile));
+        assert_eq!(detect("Dockerfile.dev"), Some(Language::Dockerfile));
+        assert_eq!(detect("app.dockerfile"), Some(Language::Dockerfile));
+        assert_eq!(detect("Dockerfiles"), None);
         assert_eq!(detect("Makefile"), None);
     }
 

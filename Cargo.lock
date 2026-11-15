@@ -1239,6 +1239,7 @@ dependencies = [
  "thiserror 2.0.21",
  "tree-sitter",
  "tree-sitter-bash",
+ "tree-sitter-dockerfile-updated",
  "tree-sitter-java",
  "tree-sitter-json",
  "tree-sitter-kotlin-ng",
@@ -5423,6 +5424,16 @@ checksum = "9e5ec769279cc91b561d3df0d8a5deb26b0ad40d183127f409494d6d8fc53062"
 dependencies = [
  "cc",
  "tree-sitter-language",
+]
+
+[[package]]
+name = "tree-sitter-dockerfile-updated"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5e61eb704364be179ab9be89e2891c8e77c0041eca5891a5c04164a21f6df7a0"
+dependencies = [
+ "cc",
+ "tree-sitter",
 ]
 
 [[package]]
