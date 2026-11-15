@@ -1,7 +1,7 @@
 use dumbj_text::{Buffer, ByteOffset, ByteRange};
 use tree_sitter::{Node, QueryCursor, StreamingIterator as _};
 
-use crate::{SyntaxError, SyntaxTree};
+use crate::{Language, ReferenceRole, SyntaxError, SyntaxTree};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum HighlightKind {
@@ -186,6 +186,7 @@ impl SyntaxTree {
                 });
             }
         }
+        captures.extend(self.parameter_captures(buffer, range_start, range_end));
         // Outer nodes first; for the same node, later patterns last so they end up on top.
         captures.sort_by(|a, b| {
             (a.start, std::cmp::Reverse(a.end), a.pattern).cmp(&(
@@ -195,6 +196,92 @@ impl SyntaxTree {
             ))
         });
         Ok(flatten(&captures, range_start, range_end))
+    }
+}
+
+fn kind_of(node: Option<Node<'_>>) -> Option<&str> {
+    node.map(|node| node.kind())
+}
+
+fn is_parameter(node: Node<'_>) -> bool {
+    let parent = node.parent();
+    let kind = kind_of;
+    matches!(
+        kind(parent),
+        Some(
+            "formal_parameter"
+                | "inferred_parameters"
+                | "parameter"
+                | "parameter_with_optional_type"
+        )
+    ) || (kind(parent) == Some("class_parameter")
+        && parent.is_some_and(|parameter| {
+            let mut cursor = parameter.walk();
+            !parameter
+                .named_children(&mut cursor)
+                .any(|child| child.kind() == "binding_pattern_kind")
+        }))
+        || (kind(parent) == Some("lambda_expression")
+            && parent
+                .and_then(|p| p.child_by_field_name("parameters"))
+                .map(|p| p.id())
+                == Some(node.id()))
+        || (kind(parent) == Some("variable_declarator")
+            && kind(parent.and_then(|p| p.parent())) == Some("spread_parameter"))
+        || (kind(parent) == Some("variable_declaration")
+            && kind(parent.and_then(|p| p.parent())) == Some("lambda_parameters"))
+}
+
+impl SyntaxTree {
+    /// Parameters and every use of them, which highlight queries alone cannot tell
+    /// apart from other names.
+    fn parameter_captures(&self, buffer: &Buffer, start: usize, end: usize) -> Vec<Capture> {
+        if !matches!(self.language(), Language::Java | Language::Kotlin) {
+            return Vec::new();
+        }
+        let root = self.tree().root_node();
+        let mut found = Vec::new();
+        let mut cursor = root.walk();
+        loop {
+            let node = cursor.node();
+            let overlaps = node.start_byte() < end && node.end_byte() > start;
+            if overlaps
+                && matches!(node.kind(), "identifier" | "simple_identifier")
+                && let Some(kind) = self.parameter_kind(buffer, node)
+            {
+                found.push(Capture {
+                    start: node.start_byte(),
+                    end: node.end_byte(),
+                    pattern: usize::MAX,
+                    kind: Some(kind),
+                });
+            }
+            if overlaps && cursor.goto_first_child() {
+                continue;
+            }
+            while !cursor.goto_next_sibling() {
+                if !cursor.goto_parent() {
+                    return found;
+                }
+            }
+        }
+    }
+
+    fn parameter_kind(&self, buffer: &Buffer, node: Node<'_>) -> Option<HighlightKind> {
+        if is_parameter(node) {
+            return Some(HighlightKind::Parameter);
+        }
+        let offset = ByteOffset(node.start_byte());
+        let reference = self.reference_at(buffer, offset)?;
+        if reference.qualifier.is_some() || reference.role == ReferenceRole::Type {
+            return None;
+        }
+        let local = self.resolve_local(buffer, offset, &reference.name, reference.role)?;
+        let definition = self.tree().root_node().named_descendant_for_byte_range(
+            local.name_range.start.get(),
+            local.name_range.end.get(),
+        )?;
+        is_parameter(definition).then_some(HighlightKind::Parameter)
     }
 }
 
