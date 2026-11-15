@@ -8,15 +8,15 @@ Full spec: `docs/BRIEF.md`. Where it conflicts with the Decisions in `docs/ARCHI
 M1b: the rest of M1 (see BRIEF §9), **in progress**. M1a was approved on 2026-11-15 (the nightly accuracy workflow has not yet had a successful run on GitHub: check it). M0 was approved on 2026-11-14. Decisions are in `docs/ARCHITECTURE.md`. Stop after each milestone with a summary, run instructions, test status, known gaps and screenshots, then wait for approval.
 
 M1b phases, in this order (each a series of small commits):
-1. **Hierarchy:** Go to Implementation(s), Go to Super Method, overriding/implementing gutter icons, Type Hierarchy, dumb Call Hierarchy.
-2. **Java↔Kotlin interop:** properties ↔ `getX`/`isX`/`setX`, `FileKt` facades and `@file:JvmName`, `Companion` and `@JvmStatic`/`@JvmField`/`@JvmName`/`@JvmOverloads`, `INSTANCE`; usages across the boundary. Add benchmark cases.
-3. **Library source jars:** the global source-jar class index, read-only viewing inside the jar, "no sources available".
+1. *(done)* **Hierarchy:** Go to Implementation(s), Go to Super Method, overriding/implementing gutter icons, Type Hierarchy, dumb Call Hierarchy.
+2. *(done)* **Java↔Kotlin interop:** properties ↔ `getX`/`isX`/`setX`, `FileKt` facades and `@file:JvmName`, `Companion` and `@JvmStatic`/`@JvmField`/`@JvmName`/`@JvmOverloads`, `INSTANCE`; usages across the boundary. Add benchmark cases.
+3. *(done; JDK `src.zip` still missing)* **Library source jars:** the global source-jar class index, read-only viewing inside the jar, "no sources available".
 4. **Editor surface:** folding, sticky lines, Extend/Shrink selection, usage highlighting, scope-aware highlighting.
 5. **Navigation extras:** Find in Files, Recent Files / Recent Locations, Bookmarks.
-6. **Tier 1 support files (BRIEF §5.2):** grammars, highlighting and structure; `libs.versions.toml` navigation.
+6. *(done except `libs.versions.toml` navigation)* **Tier 1 support files (BRIEF §5.2):** grammars, highlighting and structure; `libs.versions.toml` navigation.
 7. **Editing** (ARCHITECTURE "Editing lands in M1b"): typing, undo/redo, atomic autosave, reload prompt, index refresh on change.
 
-Accuracy benchmark (2026-11-15): 264 cases, 84.1% correct, 14.4% chooser, 1.5% missed, 0 wrong. Run `scripts/fetch-corpus.sh`, then `cargo run --release -p dumbj-index --example accuracy`; it also runs nightly (`.github/workflows/accuracy.yml`), failing on any wrong jump. Known causes of the remaining choosers, for after the review: lambda parameter types (`it`), indexing (`a[i].b`), smart casts, scope functions (`apply { }`), and Java `Class` arguments not matching a Kotlin `Type` parameter.
+Accuracy benchmark (2026-11-15): 287 cases, 84.3% correct, 0 wrong. Run `scripts/fetch-corpus.sh`, then `cargo run --release -p dumbj-index --example accuracy`; it also runs nightly (`.github/workflows/accuracy.yml`), failing on any wrong jump. Known causes of the remaining choosers, for after the review: lambda parameter types (`it`), indexing (`a[i].b`), smart casts, scope functions (`apply { }`), and Java `Class` arguments not matching a Kotlin `Type` parameter.
 
 Working notes: the owner wants self-contained work delegated to subagents on cheaper models to limit spend. Gate every commit on `cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo nextest run`, chained with `&&`. For screenshots, `wtype` sends F7 as `q`: drive Find Usages through Ctrl+B on a declaration instead of Alt+F7.
 

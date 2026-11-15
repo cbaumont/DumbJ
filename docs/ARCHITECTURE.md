@@ -76,8 +76,7 @@ PR refs go under `refs/dumbj/pr/<n>/` (BRIEF §4.5). Why: the objects must survi
 Autosave like IDEA, with undo and git as the only safety net (BRIEF §2.5). Why: IDEA muscle memory matters more than guarding against stray keystrokes, and a local-history feature is out of scope for a reading tool.
 
 ### 2026-11-14: Library sources via a global source-jar class index
-Every `*-sources.jar` under `~/.gradle/caches/modules-2/` and `~/.m2/repository/` is indexed lazily by package and class name, and cached by jar path and mtime. Versions named in build files or `libs.versions.toml` are preferred, then the newest. When several versions match, the result is labelled best guess and shows the version.
-
+Every `*-sources.jar` under `~/.gradle/caches/modules-2/` and `~/.m2/repository/` is indexed by class name and read in place through `lib.jar!/pkg/File.kt` paths, never extracted. The version the build files pin (`libs.versions.toml`, `build.gradle(.kts)`, `pom.xml`) opens directly; otherwise a chooser lists the versions. Amended 2026-11-15: the index lives in memory, not on disk, because listing 209 jars' entries takes 0.2 s in the background at start-up. Multiplatform jars without package directories are named from each file's `package` line. The JDK's `src.zip` is not indexed yet.
 ### 2026-11-14: HTTP is blocking ureq, no tokio
 The review crate makes GitHub calls with blocking `ureq` (rustls) on background threads driven by GPUI's executor. No async runtime is added.
 
