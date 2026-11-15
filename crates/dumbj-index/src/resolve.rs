@@ -281,6 +281,26 @@ impl<'a> Resolver<'a> {
         role: ReferenceRole,
         applicable: &dyn Fn(SymbolId) -> bool,
     ) -> Vec<SymbolId> {
+        let found = self.members_named_as(owner, name, role, applicable);
+        if !found.is_empty() {
+            return found;
+        }
+        accessor_alternatives(name, role, self.language)
+            .into_iter()
+            .map(|(alternative, role)| {
+                self.members_named_as(owner, &alternative, role, &any_member)
+            })
+            .find(|found| !found.is_empty())
+            .unwrap_or_default()
+    }
+
+    fn members_named_as(
+        &self,
+        owner: SymbolId,
+        name: &str,
+        role: ReferenceRole,
+        applicable: &dyn Fn(SymbolId) -> bool,
+    ) -> Vec<SymbolId> {
         let fits =
             |symbol: &Symbol| symbol.name == name && kind_fits(symbol.kind, role, self.language);
         let mut nearest = Vec::new();
@@ -344,6 +364,102 @@ fn any_member(_: SymbolId) -> bool {
     true
 }
 
+fn capitalise(name: &str) -> String {
+    let mut chars = name.chars();
+    chars.next().map_or_else(String::new, |first| {
+        first.to_uppercase().chain(chars).collect()
+    })
+}
+
+fn decapitalise(name: &str) -> String {
+    let mut chars = name.chars();
+    chars.next().map_or_else(String::new, |first| {
+        first.to_lowercase().chain(chars).collect()
+    })
+}
+
+/// `getX` without its prefix, when the rest starts with an upper-case letter.
+fn strip_accessor<'n>(name: &'n str, prefix: &str) -> Option<&'n str> {
+    name.strip_prefix(prefix)
+        .filter(|rest| rest.starts_with(char::is_uppercase))
+}
+
+/// The names a Kotlin property and its Java accessors go by, other than `name`: Java
+/// `getName()`/`setName()` for `name`, `isOpen()` for `isOpen`, and back.
+fn accessor_alternatives(
+    name: &str,
+    role: ReferenceRole,
+    language: Language,
+) -> Vec<(String, ReferenceRole)> {
+    match (language, role) {
+        (Language::Java, ReferenceRole::Call) => {
+            if strip_accessor(name, "is").is_some() {
+                vec![(name.to_owned(), ReferenceRole::Member)]
+            } else if let Some(rest) =
+                strip_accessor(name, "get").or_else(|| strip_accessor(name, "set"))
+            {
+                let mut found = vec![(decapitalise(rest), ReferenceRole::Member)];
+                if name.starts_with("set") {
+                    found.push((format!("is{rest}"), ReferenceRole::Member));
+                }
+                found
+            } else {
+                Vec::new()
+            }
+        }
+        (Language::Kotlin, ReferenceRole::Member | ReferenceRole::Value) => {
+            if strip_accessor(name, "is").is_some() {
+                vec![(name.to_owned(), ReferenceRole::Call)]
+            } else {
+                vec![(format!("get{}", capitalise(name)), ReferenceRole::Call)]
+            }
+        }
+        _ => Vec::new(),
+    }
+}
+
+/// The other names Find Usages must look for to see the accessors of a property, or the
+/// property behind an accessor.
+pub(crate) fn accessor_aliases(name: &str, kind: SymbolKind) -> Vec<String> {
+    match kind {
+        SymbolKind::Property | SymbolKind::Field => {
+            if let Some(rest) = strip_accessor(name, "is") {
+                vec![format!("set{rest}")]
+            } else {
+                let capitalised = capitalise(name);
+                vec![format!("get{capitalised}"), format!("set{capitalised}")]
+            }
+        }
+        SymbolKind::Method => {
+            if strip_accessor(name, "is").is_some() {
+                Vec::new()
+            } else {
+                strip_accessor(name, "get")
+                    .or_else(|| strip_accessor(name, "set"))
+                    .map_or_else(Vec::new, |rest| vec![decapitalise(rest)])
+            }
+        }
+        _ => Vec::new(),
+    }
+}
+
+/// The JVM class name of a Kotlin file's top-level declarations: `ShippingKt` for
+/// `Shipping.kt`, unless `@file:JvmName` says otherwise.
+fn facade_name(file: &crate::index::IndexedFile) -> Option<String> {
+    let stem = file.path.file_stem()?.to_str()?;
+    let identifier: String = stem
+        .chars()
+        .map(|c| {
+            if c.is_alphanumeric() || c == '_' {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect();
+    Some(format!("{}Kt", capitalise(&identifier)))
+}
+
 /// Built-in types that convert into each other: text, numbers (Java `char` widens), booleans.
 fn scalar_group(name: &str) -> Option<u8> {
     match name {
@@ -369,6 +485,8 @@ enum Fit {
 #[derive(PartialEq, Eq)]
 enum Receiver {
     Function,
+    /// The facade class of Kotlin top-level declarations in these files.
+    Facade(Vec<crate::index::FileId>),
     Types(Vec<SymbolId>),
     External(String),
     Unknown,
@@ -511,6 +629,10 @@ impl Lookup<'_> {
         if !types.is_empty() {
             return Receiver::Types(types);
         }
+        let facades = self.facade_files(name);
+        if !facades.is_empty() {
+            return Receiver::Facade(facades);
+        }
         let property = self
             .site
             .index
@@ -530,9 +652,18 @@ impl Lookup<'_> {
     }
 
     fn receiver_of_member(&self, receiver: &Receiver, name: &str) -> Receiver {
+        if let Receiver::Facade(files) = receiver {
+            return self
+                .top_level_in(files, name, ReferenceRole::Member)
+                .first()
+                .map_or(Receiver::Unknown, |id| self.receiver_of_symbol(*id));
+        }
         let Receiver::Types(owners) = receiver else {
             return Receiver::Unknown;
         };
+        if name == "INSTANCE" && self.all_objects(owners) {
+            return Receiver::Types(owners.clone());
+        }
         let member = owners
             .iter()
             .flat_map(|owner| {
@@ -712,7 +843,7 @@ impl Lookup<'_> {
             |ids: &[SymbolId]| ids.iter().any(|id| kind(id) == Some(SymbolKind::TypeAlias));
         let unless = |ruled_out: bool| if ruled_out { Fit::No } else { Fit::Maybe };
         match argument {
-            Receiver::Unknown => Fit::Maybe,
+            Receiver::Unknown | Receiver::Facade(_) => Fit::Maybe,
             Receiver::Function if declared.is_empty() => unless(scalar_group(simple).is_some()),
             // A lambda converts to an interface or function type alias, not a class.
             Receiver::Function => unless(declared.iter().all(|id| {
@@ -866,6 +997,84 @@ impl Lookup<'_> {
             }
         }
         found.ranked = fits.into_iter().map(|(id, tier, _)| (id, tier)).collect();
+    }
+
+    fn all_objects(&self, types: &[SymbolId]) -> bool {
+        !types.is_empty()
+            && types.iter().all(|id| {
+                self.resolver
+                    .symbol(*id)
+                    .is_some_and(|symbol| symbol.kind == SymbolKind::Object)
+            })
+    }
+
+    /// Kotlin files whose facade class is called `name`, narrowed to those the reference
+    /// file imports or shares a package with when there are any.
+    fn facade_files(&self, name: &str) -> Vec<crate::index::FileId> {
+        if !name.ends_with("Kt") {
+            return Vec::new();
+        }
+        let index = self.site.index;
+        let all: Vec<crate::index::FileId> = index
+            .files()
+            .filter(|(_, file)| {
+                file.language == Some(Language::Kotlin)
+                    && facade_name(file).as_deref() == Some(name)
+            })
+            .map(|(id, _)| id)
+            .collect();
+        let here = self.resolver.facts(self.site.file);
+        let own_package = here
+            .and_then(|facts| facts.package.as_deref())
+            .unwrap_or("");
+        let visible: Vec<crate::index::FileId> = all
+            .iter()
+            .copied()
+            .filter(|id| {
+                let package = index
+                    .file(*id)
+                    .and_then(|file| file.facts.package.as_deref())
+                    .unwrap_or("");
+                let fqn = if package.is_empty() {
+                    name.to_owned()
+                } else {
+                    format!("{package}.{name}")
+                };
+                package == own_package
+                    || here.is_some_and(|facts| {
+                        facts.imports.iter().any(|import| {
+                            import.path == fqn || (import.wildcard && import.path == package)
+                        })
+                    })
+            })
+            .collect();
+        if visible.is_empty() { all } else { visible }
+    }
+
+    /// Top-level functions and properties called `name` (or reached through a Java
+    /// accessor name) in `files`.
+    fn top_level_in(
+        &self,
+        files: &[crate::index::FileId],
+        name: &str,
+        role: ReferenceRole,
+    ) -> Vec<SymbolId> {
+        let lookup = |name: &str, role: ReferenceRole| -> Vec<SymbolId> {
+            self.named_candidates(name, role)
+                .into_iter()
+                .filter(|id| files.contains(&id.file) && !self.is_member(*id))
+                .filter(|id| !self.resolver.is_type(*id))
+                .collect()
+        };
+        let found = lookup(name, role);
+        if !found.is_empty() {
+            return found;
+        }
+        accessor_alternatives(name, role, self.resolver.language)
+            .into_iter()
+            .map(|(alternative, role)| lookup(&alternative, role))
+            .find(|found| !found.is_empty())
+            .unwrap_or_default()
     }
 
     fn is_extension(&self, id: SymbolId) -> bool {
@@ -1141,6 +1350,12 @@ impl Lookup<'_> {
             )
         };
         match self.receiver(qualifier, query.at, query.depth) {
+            Receiver::Facade(files) => Found::sure(
+                self.top_level_in(&files, name, role)
+                    .into_iter()
+                    .map(|id| (id, Tier::Scope))
+                    .collect(),
+            ),
             Receiver::Types(owners) => {
                 let members: Vec<SymbolId> = owners
                     .iter()
@@ -1148,6 +1363,9 @@ impl Lookup<'_> {
                     .collect();
                 if !members.is_empty() {
                     return Found::sure(members.into_iter().map(|id| (id, Tier::Scope)).collect());
+                }
+                if name == "INSTANCE" && self.all_objects(&owners) {
+                    return Found::sure(owners.into_iter().map(|id| (id, Tier::Scope)).collect());
                 }
                 // Otherwise inherited from a library supertype; namesakes elsewhere would be wrong.
                 self.extensions_on(name, role, &self.type_names(&owners))

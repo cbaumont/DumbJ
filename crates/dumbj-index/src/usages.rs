@@ -137,6 +137,9 @@ fn usages_in_file(
             .iter()
             .filter(|import| import.path == fqn);
         names.extend(aliases.filter_map(|import| import.alias.clone()));
+        if let Some(symbol) = index.symbol(*id) {
+            names.extend(crate::resolve::accessor_aliases(&symbol.name, symbol.kind));
+        }
     }
     let Some(parsed) = parse_if_mentions(index, file, &names, cancelled) else {
         return Vec::new();

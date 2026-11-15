@@ -1,4 +1,4 @@
-//! Find Usages against the `shop` fixture project. A `§` in a snippet marks the caret.
+//! A `§` in a snippet marks the caret.
 
 #![expect(
     clippy::unwrap_used,
@@ -7,6 +7,7 @@
 
 mod common;
 
+use std::path::Path;
 use std::sync::atomic::AtomicBool;
 
 use common::{shop_index, shop_root};
@@ -22,7 +23,11 @@ const PRODUCT: &str = "core/src/main/kotlin/com/shop/core/Product.kt";
 
 /// The usages of whatever is at the caret, as `File:line text` with `?` for a maybe.
 fn usages(index: &Index, file: &str, snippet: &str) -> Vec<String> {
-    let path = shop_root().join(file);
+    usages_in(&shop_root(), index, file, snippet)
+}
+
+fn usages_in(root: &Path, index: &Index, file: &str, snippet: &str) -> Vec<String> {
+    let path = root.join(file);
     let source = std::fs::read_to_string(&path).unwrap();
     let plain = snippet.replacen('§', "", 1);
     assert_eq!(
@@ -187,5 +192,32 @@ fn interface_methods_and_cancellation() {
         usage_target_at(site, ByteOffset(0)),
         None,
         "a keyword has no usages"
+    );
+}
+
+#[test]
+fn usages_cross_the_accessor_boundary() {
+    let index = common::freight_index();
+    let found = usages_in(
+        &common::freight_root(),
+        &index,
+        "src/main/kotlin/freight/Shipping.kt",
+        "class NamedCarrier(val na§me: String)",
+    );
+    assert!(
+        found
+            .iter()
+            .any(|usage| usage.starts_with("Interop.java:10")),
+        "{found:?}"
+    );
+    let found = usages_in(
+        &common::freight_root(),
+        &index,
+        "src/main/java/freight/app/Ledger.java",
+        "public int getTo§tal()",
+    );
+    assert!(
+        found.iter().any(|usage| usage.starts_with("Books.kt:3")),
+        "{found:?}"
     );
 }

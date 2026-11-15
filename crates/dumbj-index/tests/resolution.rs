@@ -448,13 +448,13 @@ fn java_calls_kotlin_with_the_receiver_as_an_argument() {
     let go = |snippet: &str| go_in(&freight_root(), &index, DISPATCH, snippet);
     assert_eq!(
         go("ShippingKt.lab§el(product)"),
-        "Choose [Shipping.kt:9 label SameModule]",
-        "the file facade class is not in the index, so this stays a guess"
+        "Jump Shipping.kt:9 label Scope",
+        "`ShippingKt` is the facade class of Shipping.kt"
     );
     assert_eq!(
         go("Shipping.INSTANCE.ra§te(label, true)"),
-        "Choose [Shipping.kt:38 Shipping.rate ExplicitImport]",
-        "a guess, but narrowed to the overload that takes a String and a boolean"
+        "Jump Shipping.kt:38 Shipping.rate Scope",
+        "`INSTANCE` is the object itself; the String, Boolean overload"
     );
 }
 
@@ -569,5 +569,58 @@ fn receivers_of_unknown_type_are_guesses() {
         go_in(&freight_root(), &index, SHIPPING, "state.amo§unt else"),
         "Choose [Shipping.kt:3 Money.amount SameFile]",
         "`Any` has no `amount`, so `state` was smart cast to something"
+    );
+}
+
+#[test]
+fn java_and_kotlin_see_each_others_accessors() {
+    let index = freight_index();
+    let java = |snippet: &str| {
+        go_in(
+            &freight_root(),
+            &index,
+            "src/main/java/freight/app/Interop.java",
+            snippet,
+        )
+    };
+    assert_eq!(
+        java("carrier.getNa§me()"),
+        "Jump Shipping.kt:17 NamedCarrier.name Scope",
+        "a Kotlin property's getter"
+    );
+    assert_eq!(
+        java("money.getAmo§unt()"),
+        "Jump Shipping.kt:3 Money.amount Scope"
+    );
+    assert_eq!(
+        java("Shipping.INSTANCE.getFr§ee()"),
+        "Jump Shipping.kt:32 Shipping.free Scope"
+    );
+    assert_eq!(
+        java("Shipping.INSTA§NCE.getFree()"),
+        "Jump Shipping.kt:31 Shipping Scope",
+        "`INSTANCE` is the object"
+    );
+    assert_eq!(
+        java("ShippingKt.sample().getCost().getAmo§unt()"),
+        "Jump Shipping.kt:3 Money.amount Scope",
+        "a chain through a facade function and getters"
+    );
+    let kotlin = |snippet: &str| {
+        go_in(
+            &freight_root(),
+            &index,
+            "src/main/kotlin/freight/app/Books.kt",
+            snippet,
+        )
+    };
+    assert_eq!(
+        kotlin("ledger.isO§pen"),
+        "Jump Ledger.java:8 Ledger.isOpen Scope",
+        "a Java `isX()` read as a Kotlin property"
+    );
+    assert_eq!(
+        kotlin("ledger.tot§al"),
+        "Jump Ledger.java:4 Ledger.getTotal Scope"
     );
 }
