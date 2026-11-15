@@ -305,3 +305,120 @@ target = "moshi/src/main/java/com/squareup/moshi/JsonAdapter.kt:297"
 file = "moshi/src/main/java/com/squareup/moshi/internal/CollectionJsonAdapter.kt"
 at = '= Array§List()'
 target = "none"
+
+# Java ↔ Kotlin interop
+
+[[case]]
+file = "moshi/src/test/java/com/squareup/moshi/MoshiTest.java"
+at = 'writer.setLen§ient(true);'
+target = "moshi/src/main/java/com/squareup/moshi/JsonWriter.kt:172"
+
+[[case]]
+file = "moshi/src/test/java/com/squareup/moshi/MoshiTest.java"
+at = 'writer.setInd§ent("  ");'
+target = "moshi/src/main/java/com/squareup/moshi/JsonWriter.kt:156"
+
+[[case]]
+file = "moshi/src/test/java/com/squareup/moshi/JsonUtf8WriterTest.java"
+at = 'writer.setSerializeNu§lls(true);'
+target = "moshi/src/main/java/com/squareup/moshi/JsonWriter.kt:181"
+
+[[case]]
+file = "moshi/src/test/java/com/squareup/moshi/internal/MapJsonAdapterTest.java"
+at = 'jsonReader.setLen§ient(true);'
+target = "moshi/src/main/java/com/squareup/moshi/JsonReader.kt:208"
+
+[[case]]
+file = "moshi/src/test/java/com/squareup/moshi/JsonValueReaderTest.java"
+at = 'reader.setFailOnUn§known(true);'
+target = "moshi/src/main/java/com/squareup/moshi/JsonReader.kt:224"
+
+[[case]]
+file = "moshi/src/test/java/com/squareup/moshi/JsonUtf8ReaderTest.java"
+at = '      assertThat(reader.getPa§th()).isEqualTo("$.b");'
+target = "moshi/src/main/java/com/squareup/moshi/JsonReader.kt:517"
+
+[[case]]
+file = "examples/src/main/java/com/squareup/moshi/recipes/ReadJsonListKt.kt"
+at = 'println(ra§nk)'
+target = "examples/src/main/java/com/squareup/moshi/recipes/models/Card.java:19"
+
+[[case]]
+file = "examples/src/main/java/com/squareup/moshi/recipes/ReadJsonListKt.kt"
+at = 'println(su§it)'
+target = "examples/src/main/java/com/squareup/moshi/recipes/models/Card.java:20"
+
+[[case]]
+file = "examples/src/main/java/com/squareup/moshi/recipes/FallbackEnum.java"
+at = 'nameStrings[i] = Util.json§Name(enumType'
+target = "moshi/src/main/java/com/squareup/moshi/internal/Util.kt:85"
+
+[[case]]
+file = "moshi/src/test/java/com/squareup/moshi/TypesTest.java"
+at = 'Util.arrayComponent§Type(String[][].class)'
+target = "moshi/src/main/java/com/squareup/moshi/internal/Util.kt:383"
+
+[[case]]
+file = "moshi/src/test/java/com/squareup/moshi/TypesTest.java"
+at = 'TestQualifier actual = Util.createJsonQualifier§Implementation(TestQualifier.class);'
+target = "moshi/src/main/java/com/squareup/moshi/internal/Util.kt:422"
+
+[[case]]
+file = "moshi/src/test/java/com/squareup/moshi/CircularAdaptersTest.java"
+at = 'Node.class, Util.NO_ANNO§TATIONS)'
+target = "moshi/src/main/java/com/squareup/moshi/internal/Util.kt:45"
+
+[[case]]
+file = "examples/src/main/java/com/squareup/moshi/recipes/CustomAdapterFactory.java"
+at = 'Types.newParameterized§Type(SortedSet.class, String.class)'
+target = "moshi/src/main/java/com/squareup/moshi/Types.kt:101"
+
+[[case]]
+file = "examples/src/main/java/com/squareup/moshi/recipes/Unwrap.java"
+at = 'Types.newParameterizedType§WithOwner('
+target = "moshi/src/main/java/com/squareup/moshi/Types.kt:111"
+
+[[case]]
+file = "examples/src/main/java/com/squareup/moshi/recipes/FallbackEnum.java"
+at = 'options = JsonReader.Options.§of(nameStrings)'
+target = "moshi/src/main/java/com/squareup/moshi/JsonReader.kt:571"
+
+[[case]]
+file = "moshi-adapters/src/test/java/com/squareup/moshi/adapters/EnumJsonAdapterTest.java"
+at = 'EnumJsonAdapter.cre§ate(Roshambo.class).withUnknownFallback(Roshambo.ROCK);'
+target = "moshi-adapters/src/main/java/com/squareup/moshi/adapters/EnumJsonAdapter.kt:92"
+
+[[case]]
+file = "moshi/src/test/java/com/squareup/moshi/internal/JsonValueSourceTest.java"
+at = 'JsonValueSource jsonValueSource = new JsonValue§Source(allData);'
+target = "moshi/src/main/java/com/squareup/moshi/internal/JsonValueSource.kt:35"
+
+[[case]]
+file = "moshi/src/test/java/com/squareup/moshi/TypesTest.java"
+at = 'Types.generatedJsonAdapter§Name("com.foo.Test")).isEqualTo'
+target = "moshi/src/main/java/com/squareup/moshi/Types.kt:67"
+
+[[case]]
+file = "moshi-adapters/src/test/java/com/squareup/moshi/adapters/PolymorphicJsonAdapterFactoryTest.java"
+at = 'moshi.adapter(Message.class).failOn§Unknown();'
+target = "moshi/src/main/java/com/squareup/moshi/JsonAdapter.kt:237"
+
+[[case]]
+file = "examples/src/main/java/com/squareup/moshi/recipes/IncludeNullsForAnnotatedTypes.java"
+at = 'return delegate.serializeNu§lls();'
+target = "moshi/src/main/java/com/squareup/moshi/JsonAdapter.kt:133"
+
+[[case]]
+file = "examples/src/main/java/com/squareup/moshi/recipes/ReadJsonListKt.kt"
+at = 'import com.squareup.moshi.recipes.models.Ca§rd'
+target = "examples/src/main/java/com/squareup/moshi/recipes/models/Card.java:18"
+
+[[case]]
+file = "examples/src/main/java/com/squareup/moshi/recipes/FallbackEnum.java"
+at = 'extends JsonAda§pter<T>'
+target = "moshi/src/main/java/com/squareup/moshi/JsonAdapter.kt:37"
+
+[[case]]
+file = "examples/src/main/java/com/squareup/moshi/recipes/FallbackEnum.java"
+at = 'Class<?> rawType = Types.getRaw§Type(type);'
+target = "moshi/src/main/java/com/squareup/moshi/Types.kt:158"
