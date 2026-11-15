@@ -28,7 +28,7 @@
 - [~] Tree-sitter highlighting — Java, Kotlin, Groovy, YAML, XML, JSON, TOML, .properties, Markdown (block level only), shell, Dockerfile, SQL
 - [~] Scope-aware highlighting (locals) — parameters and their uses; locals keep the default colour
 - [ ] Semantic tokens (LSP)
-- [~] Gutter — line numbers, fold markers, implements/overrides icons
+- [~] Gutter — line numbers, fold markers, implements/overrides icons, bookmarks
 - [ ] Inlay hints
 - [ ] Inline blame / Annotate
 - [x] Sticky lines
@@ -37,7 +37,7 @@
 - [x] Highlight usages at caret
 - [~] Scrollbar — draggable thumb; no marks
 - [ ] Hover popups
-- [ ] Editing — editor is read-only (see ARCHITECTURE decision)
+- [ ] Editing — editor is read-only; planned as M1c (see ARCHITECTURE decision)
 - [x] Caret movement, selection, copy, mouse selection
 - [x] Find in file with match count
 - [ ] Replace in file
@@ -48,14 +48,16 @@
 - [x] Go to Line:Column
 - [ ] Find Action
 - [~] Go to Declaration / Type Declaration / Implementation / Super Method / Test — no Type Declaration or Test
+- [~] Go to Implementation — project sources only, from supertypes in the index (best guess); no implementations inside libraries
+- [~] Library sources — Go to Declaration opens classes from Gradle/Maven source jars and the JDK `src.zip`, read in place; no navigation inside library files, no decompiler
 - [x] Find Usages / Show Usages
 - [ ] Quick Definition / Quick Documentation
 - [x] File Structure popup
 - [~] Call Hierarchy / Type Hierarchy — callers only, no callees
 - [x] Navigate Back / Forward
 - [~] Recent Files, Recent Locations — per project, kept in the state dir; no Last Edit Location or Switcher
-- [~] Find in Files — regex, case, whole word, file mask, directory scope, gitignore; no Replace in Files
-- [x] Bookmarks — anonymous and mnemonic, gutter markers, list popup, kept per project in the state dir
+- [~] Find in Files — regex, case, whole word, file mask, directory scope, gitignore; toggles are mouse-only; no Replace in Files
+- [~] Bookmarks — anonymous and mnemonic, gutter markers, list popup, kept per project in the state dir; no tool window
 - [ ] Copy Reference / Path / permalink
 - [ ] Navigation bar jump
 
@@ -64,11 +66,13 @@
 - [x] Import following (Java, Kotlin)
 - [x] Candidate ranking and chooser
 - [~] Member access heuristics — lambda parameter types, indexing (`a[i].b`), smart casts and scope functions stay guesses
+- [x] Java ↔ Kotlin interop — property accessors, file facade classes, `@JvmName`, `INSTANCE`, companion members
+- [x] Gradle version catalog — `libs.x.y` accessors jump to `libs.versions.toml`
 - [x] Dumb Find Usages
 - [x] Dumb implementations / hierarchy
 - [~] Exact / best-guess labelling — chooser headed "best guess", usages marked "maybe"; no label on a direct jump
 - [ ] Language-server lifecycle
-- [x] Accuracy benchmark — 264 cases, nightly in CI
+- [x] Accuracy benchmark — 287 cases, nightly in CI
 
 ## 4.4 Version control and local review
 - [ ] Git log tool window
