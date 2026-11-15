@@ -1,0 +1,12 @@
+# Hand-checked Go to Declaration cases for square/moshi at the commit in ../manifest.toml.
+# Format: see crates/dumbj-index/examples/accuracy.rs.
+
+[[case]]
+file = "moshi/src/main/java/com/squareup/moshi/JsonAdapter.kt"
+at = "fromJson(JsonReader.o§f(source))"
+target = "moshi/src/main/java/com/squareup/moshi/JsonReader.kt:643"
+
+[[case]]
+file = "moshi/src/main/java/com/squareup/moshi/JsonAdapter.kt"
+at = "public fun fromJson(source: Buffered§Source): T"
+target = "none"
