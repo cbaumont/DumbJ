@@ -3,9 +3,10 @@
 
 use tree_sitter::Node;
 
-use crate::reference::{Binder, Qualifier, ReferenceRole, qualifier_from_text};
+use crate::reference::{Argument, Binder, Call, Qualifier, ReferenceRole, qualifier_from_text};
 use crate::structure::{
-    Collector, Import, Source, SymbolKind, all_children, child_of_kind, named_children,
+    Collector, Import, Source, SymbolKind, all_children, child_of_kind, is_type_parameter,
+    named_children,
 };
 
 /// The dotted name of a `user_type` without type arguments: `java.io.Serializable`.
@@ -238,13 +239,128 @@ pub(crate) fn collect(collector: &mut Collector<'_>, node: Node<'_>, parent: Opt
     }
 }
 
-/// The declared type of a parameter or variable node, without type arguments.
+/// The declared type of a parameter or variable node, without type arguments. `None` when
+/// it is a type parameter (`T`).
 fn declared_type(source: &Source<'_>, declaration: Node<'_>) -> Option<String> {
     named_children(declaration)
         .into_iter()
         .filter(|child| matches!(child.kind(), "user_type" | "nullable_type"))
         .find_map(find_user_type)
         .map(|user_type| user_type_name(source, user_type))
+        .filter(|name| !is_type_parameter(source, declaration, name))
+}
+
+/// What the dumb engine can tell about an expression.
+pub(crate) fn expression(source: &Source<'_>, node: Node<'_>) -> Qualifier {
+    let typed = |name: &str| Qualifier::Typed(name.to_owned());
+    match node.kind() {
+        "simple_identifier" => Qualifier::Name(source.text(node)),
+        "this_expression" => Qualifier::This,
+        "super_expression" => Qualifier::Super,
+        "parenthesized_expression" => node
+            .named_child(0)
+            .map_or(Qualifier::Other, |inner| expression(source, inner)),
+        // `x!!` has the type of `x`; `x++` is not worth following.
+        "postfix_expression" if source.text(node).ends_with("!!") => node
+            .named_child(0)
+            .map_or(Qualifier::Other, |inner| expression(source, inner)),
+        "as_expression" => named_children(node)
+            .into_iter()
+            .skip(1)
+            .find_map(find_user_type)
+            .map(|user_type| user_type_name(source, user_type))
+            .filter(|name| !is_type_parameter(source, node, name))
+            .map_or(Qualifier::Other, Qualifier::Typed),
+        "string_literal" => typed("String"),
+        "boolean_literal" => typed("Boolean"),
+        "integer_literal" | "hex_literal" | "bin_literal" => typed("Int"),
+        "long_literal" => typed("Long"),
+        "real_literal" => typed("Double"),
+        "character_literal" => typed("Char"),
+        "lambda_literal" | "anonymous_function" | "callable_reference" => Qualifier::Lambda,
+        "navigation_expression" => {
+            let name = child_of_kind(node, "navigation_suffix")
+                .and_then(|suffix| child_of_kind(suffix, "simple_identifier"));
+            match (node.named_child(0), name) {
+                (Some(receiver), Some(name)) => {
+                    Qualifier::member(expression(source, receiver), source.text(name))
+                }
+                _ => Qualifier::Other,
+            }
+        }
+        "call_expression" => {
+            let Some(callee) = node.named_child(0) else {
+                return Qualifier::Other;
+            };
+            let (receiver, name) = match callee.kind() {
+                "simple_identifier" => (None, Some(callee)),
+                "navigation_expression" => (
+                    callee.named_child(0),
+                    child_of_kind(callee, "navigation_suffix")
+                        .and_then(|suffix| child_of_kind(suffix, "simple_identifier")),
+                ),
+                _ => (None, None),
+            };
+            name.map_or(Qualifier::Other, |name| {
+                Qualifier::Call(Box::new(Call {
+                    receiver: receiver.map(|receiver| expression(source, receiver)),
+                    name: source.text(name),
+                    arguments: arguments(source, node),
+                }))
+            })
+        }
+        _ => Qualifier::Other,
+    }
+}
+
+/// The arguments of a `call_expression`, a trailing lambda last.
+fn arguments(source: &Source<'_>, call: Node<'_>) -> Vec<Argument> {
+    let Some(suffix) = child_of_kind(call, "call_suffix") else {
+        return Vec::new();
+    };
+    let mut found = Vec::new();
+    for part in named_children(suffix) {
+        match part.kind() {
+            "value_arguments" => {
+                for argument in named_children(part) {
+                    let named = all_children(argument).iter().any(|c| c.kind() == "=");
+                    let name = argument
+                        .named_child(0)
+                        .filter(|first| named && first.kind() == "simple_identifier")
+                        .map(|name| source.text(name));
+                    let value = named_children(argument)
+                        .into_iter()
+                        .last()
+                        .map_or(Qualifier::Other, |value| expression(source, value));
+                    found.push(Argument { name, value });
+                }
+            }
+            "annotated_lambda" => found.push(Argument {
+                name: None,
+                value: Qualifier::Lambda,
+            }),
+            _ => {}
+        }
+    }
+    found
+}
+
+/// The arguments of the call whose callee name is `node`.
+pub(crate) fn call_arguments(source: &Source<'_>, node: Node<'_>) -> Option<Vec<Argument>> {
+    let parent = node.parent()?;
+    let call = match parent.kind() {
+        "call_expression" => parent,
+        "navigation_suffix" => parent.parent()?.parent()?,
+        _ => return None,
+    };
+    (call.kind() == "call_expression").then(|| arguments(source, call))
+}
+
+/// The initialiser of a `property_declaration`, if it has one.
+fn initialiser(source: &Source<'_>, property: Node<'_>) -> Option<Qualifier> {
+    let has_value = all_children(property).iter().any(|c| c.kind() == "=");
+    let value = named_children(property).into_iter().last()?;
+    has_value.then(|| expression(source, value))
 }
 
 /// For `val x = Foo(...)`: the constructor name, taken as the type when none is written.
@@ -261,7 +377,7 @@ fn constructed_type(source: &Source<'_>, property: Node<'_>) -> Option<String> {
 fn variable_binders<'t>(
     source: &Source<'_>,
     node: Node<'t>,
-    fallback_type: Option<&String>,
+    initialiser: Option<&Qualifier>,
 ) -> Vec<Binder<'t>> {
     let declarations = match node.kind() {
         "variable_declaration" => vec![node],
@@ -273,9 +389,11 @@ fn variable_binders<'t>(
         .into_iter()
         .filter_map(|declaration| {
             let name = child_of_kind(declaration, "simple_identifier")?;
-            let type_name = declared_type(source, declaration)
-                .or_else(|| fallback_type.filter(|_| single).cloned());
-            Some(Binder { name, type_name })
+            Some(Binder {
+                name,
+                type_name: declared_type(source, declaration),
+                initialiser: initialiser.filter(|_| single).cloned(),
+            })
         })
         .collect()
 }
@@ -288,20 +406,15 @@ pub(crate) fn binders<'t>(
     want_type: bool,
 ) -> Vec<Binder<'t>> {
     let parameter = |parameter: Node<'t>| {
-        child_of_kind(parameter, "simple_identifier").map(|name| Binder {
-            name,
-            type_name: declared_type(source, parameter),
-        })
+        child_of_kind(parameter, "simple_identifier")
+            .map(|name| Binder::new(name, declared_type(source, parameter)))
     };
     if want_type {
         return if child.kind() == "type_parameters" {
             named_children(child)
                 .into_iter()
                 .filter_map(|parameter| child_of_kind(parameter, "type_identifier"))
-                .map(|name| Binder {
-                    name,
-                    type_name: None,
-                })
+                .map(|name| Binder::new(name, None))
                 .collect()
         } else {
             Vec::new()
@@ -309,18 +422,15 @@ pub(crate) fn binders<'t>(
     }
     match (scope.kind(), child.kind()) {
         ("statements", "property_declaration") => {
-            let constructed = constructed_type(source, child);
+            let initialiser = initialiser(source, child);
             named_children(child)
                 .into_iter()
-                .flat_map(|part| variable_binders(source, part, constructed.as_ref()))
+                .flat_map(|part| variable_binders(source, part, initialiser.as_ref()))
                 .collect()
         }
         // A local function can be called by the code after it.
         ("statements", "function_declaration") => child_of_kind(child, "simple_identifier")
-            .map(|name| Binder {
-                name,
-                type_name: None,
-            })
+            .map(|name| Binder::new(name, None))
             .into_iter()
             .collect(),
         (_, "function_value_parameters") => named_children(child)
@@ -346,10 +456,7 @@ pub(crate) fn binders<'t>(
             .flat_map(|part| variable_binders(source, part, None))
             .collect(),
         ("catch_block", "simple_identifier") => {
-            vec![Binder {
-                name: child,
-                type_name: declared_type(source, scope),
-            }]
+            vec![Binder::new(child, declared_type(source, scope))]
         }
         ("setter", "parameter_with_optional_type") => parameter(child).into_iter().collect(),
         _ => Vec::new(),
@@ -387,11 +494,7 @@ pub(crate) fn classify(
             };
             let qualifier = navigation
                 .named_child(0)
-                .map(|receiver| match receiver.kind() {
-                    "this_expression" => Qualifier::This,
-                    "super_expression" => Qualifier::Super,
-                    _ => qualifier_from_text(&source.text(receiver)),
-                });
+                .map(|receiver| expression(source, receiver));
             let is_callee = navigation.parent().is_some_and(|call| {
                 call.kind() == "call_expression"
                     && call

@@ -6,7 +6,7 @@
     reason = "integration test: a panic is the failure report"
 )]
 
-use dumbj_syntax::{Language, Qualifier, ReferenceRole, SyntaxTree, parse};
+use dumbj_syntax::{Argument, Language, Qualifier, ReferenceRole, SyntaxTree, parse};
 use dumbj_text::{Buffer, ByteOffset};
 
 fn at_caret(language: Language, marked: &str) -> (Buffer, SyntaxTree, ByteOffset) {
@@ -29,6 +29,128 @@ fn reference(language: Language, marked: &str) -> String {
         }
         None => "none".to_owned(),
     }
+}
+
+/// An expression in a compact form: `a.b`, `f(x)`, a bare type name for a typed value,
+/// `{}` for a lambda and `?` for anything the engine does not follow.
+fn show(expression: &Qualifier) -> String {
+    match expression {
+        Qualifier::This => "this".to_owned(),
+        Qualifier::Super => "super".to_owned(),
+        Qualifier::Name(name) | Qualifier::Path(name) | Qualifier::Typed(name) => name.clone(),
+        Qualifier::Member(receiver, name) => format!("{}.{name}", show(receiver)),
+        Qualifier::Call(call) => {
+            let receiver = call
+                .receiver
+                .as_ref()
+                .map_or_else(String::new, |receiver| format!("{}.", show(receiver)));
+            format!(
+                "{receiver}{}({})",
+                call.name,
+                show_arguments(&call.arguments)
+            )
+        }
+        Qualifier::Lambda => "{}".to_owned(),
+        Qualifier::Other => "?".to_owned(),
+    }
+}
+
+fn show_arguments(arguments: &[Argument]) -> String {
+    let shown: Vec<String> = arguments
+        .iter()
+        .map(|argument| match &argument.name {
+            Some(name) => format!("{name}={}", show(&argument.value)),
+            None => show(&argument.value),
+        })
+        .collect();
+    shown.join(", ")
+}
+
+/// The call under the caret as `qualifier.name(arguments)`.
+fn call(language: Language, marked: &str) -> String {
+    let (buffer, tree, caret) = at_caret(language, marked);
+    let found = tree.reference_at(&buffer, caret).unwrap();
+    let qualifier = found
+        .qualifier
+        .map_or_else(String::new, |qualifier| format!("{}.", show(&qualifier)));
+    let arguments = found
+        .arguments
+        .map_or_else(|| "no call".to_owned(), |all| show_arguments(&all));
+    format!("{qualifier}{}({arguments})", found.name)
+}
+
+#[test]
+fn java_calls_and_their_arguments() {
+    let call = |body: &str| call(Language::Java, &java(body));
+    assert_eq!(call("make().fo§o();"), "make().foo()");
+    assert_eq!(call("a.make(1).b.fo§o();"), "a.make(int).b.foo()");
+    assert_eq!(call("new Foo<>(x).fo§o();"), "Foo.foo()");
+    assert_eq!(call("((Bar) x).fo§o();"), "Bar.foo()");
+    assert_eq!(call("((T) x).fo§o();"), "?.foo()", "a type parameter");
+    assert_eq!(
+        call("fo§o(\"s\", 'c', true, 1.5, x, a.b, this, y -> y, C::m, a + b, null);"),
+        "foo(String, char, boolean, double, x, a.b, this, {}, {}, ?, ?)"
+    );
+    assert_eq!(call("int v = x.fie§ld;"), "x.field(no call)");
+}
+
+#[test]
+fn kotlin_calls_and_their_arguments() {
+    let call = |body: &str| call(Language::Kotlin, &kotlin(body));
+    assert_eq!(call("make().fo§o()"), "make().foo()");
+    assert_eq!(call("a.make(1)!!.b?.fo§o()"), "a.make(Int).b.foo()");
+    assert_eq!(call("(x as Bar).fo§o()"), "Bar.foo()");
+    assert_eq!(call("(x as T).fo§o()"), "?.foo()", "a type parameter");
+    assert_eq!(call("this.state.fo§o()"), "this.state.foo()");
+    assert_eq!(
+        call("fo§o(\"s\", 'c', true, 1.5, 2L, x, a.b, limit = 3, block = { it })"),
+        "foo(String, Char, Boolean, Double, Long, x, a.b, limit=Int, block={})"
+    );
+    assert_eq!(call("fo§o(1) { it }"), "foo(Int, {})");
+    assert_eq!(call("x.fo§o { it }"), "x.foo({})");
+    assert_eq!(call("fo§o(::m, a + b, null)"), "foo({}, ?, ?)");
+    assert_eq!(call("val v = x.na§me"), "x.name(no call)");
+}
+
+#[test]
+fn type_parameters_are_not_declared_types() {
+    assert_eq!(
+        local(
+            Language::Java,
+            &java("T t = null; U u = null; §t.go(); u.go();")
+        ),
+        "4:3 None"
+    );
+    assert_eq!(
+        local(
+            Language::Kotlin,
+            &kotlin("val t: T = make()\nval u: U? = null\n§u.go()")
+        ),
+        "5:5 None"
+    );
+}
+
+/// The initialiser of the local the identifier at the caret resolves to.
+fn initialiser(language: Language, marked: &str) -> String {
+    let (buffer, tree, caret) = at_caret(language, marked);
+    let found = tree.reference_at(&buffer, caret).unwrap();
+    tree.resolve_local(&buffer, caret, &found.name, found.role)
+        .and_then(|definition| definition.initialiser)
+        .map_or_else(|| "none".to_owned(), |value| show(&value))
+}
+
+#[test]
+fn locals_carry_their_initialiser() {
+    let java = |body: &str| initialiser(Language::Java, &java(body));
+    assert_eq!(java("var made = new Foo(); mad§e.go();"), "Foo");
+    assert_eq!(java("var n = x.compute(1); §n.go();"), "x.compute(int)");
+    assert_eq!(java("Foo f; §f.go();"), "none");
+    let kotlin = |body: &str| initialiser(Language::Kotlin, &kotlin(body));
+    assert_eq!(kotlin("val made = Foo()\nmad§e.go()"), "Foo()");
+    assert_eq!(kotlin("val n = x.compute(1)\n§n.go()"), "x.compute(Int)");
+    assert_eq!(kotlin("val (a, b) = pair()\n§a.go()"), "none");
+    assert_eq!(kotlin("val f: Foo\n§f.go()"), "none");
+    assert_eq!(kotlin("§p.go()"), "none", "a parameter");
 }
 
 /// Resolves the identifier at the caret locally: `line:column type`.
@@ -70,7 +192,7 @@ fn java_reference_roles() {
     assert_eq!(role("this.fo§o(1);"), "foo Call Some(This)");
     assert_eq!(role("super.fo§o(1);"), "foo Call Some(Super)");
     assert_eq!(role("a.b.fo§o();"), "foo Call Some(Path(\"a.b\"))");
-    assert_eq!(role("make().fo§o();"), "foo Call Some(Other)");
+    assert_eq!(role("(a + b).fo§o();"), "foo Call Some(Other)");
     assert_eq!(role("int v = x.fie§ld;"), "field Member Some(Name(\"x\"))");
     assert_eq!(role("int v = fie§ld;"), "field Value None");
     assert_eq!(role("Ma§th.abs(1);"), "Math Value None");
@@ -191,7 +313,7 @@ fn kotlin_reference_roles() {
     assert_eq!(role("this.fo§o(1)"), "foo Call Some(This)");
     assert_eq!(role("super.fo§o(1)"), "foo Call Some(Super)");
     assert_eq!(role("a.b.fo§o()"), "foo Call Some(Path(\"a.b\"))");
-    assert_eq!(role("make().fo§o()"), "foo Call Some(Other)");
+    assert_eq!(role("(a + b).fo§o()"), "foo Call Some(Other)");
     assert_eq!(role("val v = x.na§me"), "name Member Some(Name(\"x\"))");
     assert_eq!(role("val v = fie§ld"), "field Value None");
     assert_eq!(role("val v: Fo§o? = null"), "Foo Type None");
@@ -223,8 +345,7 @@ fn kotlin_locals() {
         find("val s: String = \"\"\ns§.length"),
         "4:5 Some(\"String\")"
     );
-    assert_eq!(find("val made = Foo()\nmad§e.go()"), "4:5 Some(\"Foo\")");
-    assert_eq!(find("val n = compute()\n§n.go()"), "4:5 None");
+    assert_eq!(find("val made = Foo()\nmad§e.go()"), "4:5 None");
     assert_eq!(find("val v = §p"), "3:12 Some(\"Int\")");
     assert_eq!(find("val v = res§t"), "3:27 Some(\"String\")");
     assert_eq!(

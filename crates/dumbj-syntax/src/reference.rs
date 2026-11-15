@@ -22,7 +22,8 @@ pub enum ReferenceRole {
     Declaration,
 }
 
-/// What stands before the dot of a qualified reference.
+/// An expression as far as the dumb engine understands it: what stands before the dot of
+/// a qualified reference, an argument of a call, or the initialiser of a local.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Qualifier {
     This,
@@ -31,8 +32,46 @@ pub enum Qualifier {
     Name(String),
     /// Dotted identifiers such as `java.util` or `a.b`.
     Path(String),
-    /// Any other expression, e.g. a call. Its type is unknown to the dumb engine.
+    /// A call: `foo(x)`, `a.foo(x)`, or in Kotlin a constructor call `Foo(x)`.
+    Call(Box<Call>),
+    /// A member read on something that is not a plain dotted path: `foo().bar`.
+    Member(Box<Qualifier>, String),
+    /// A value whose type is written on the spot: `new Foo()`, `x as Foo`, or a literal
+    /// (`String`, and `Int`/`int` and the like in the file's language).
+    Typed(String),
+    /// A lambda, an anonymous function or a method reference.
+    Lambda,
+    /// Any other expression. Its type is unknown to the dumb engine.
     Other,
+}
+
+/// A call expression: the callee's name, what it is called on, and its arguments.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Call {
+    pub receiver: Option<Qualifier>,
+    pub name: String,
+    pub arguments: Vec<Argument>,
+}
+
+/// One argument of a call. A Kotlin trailing lambda is the last argument.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Argument {
+    /// The parameter name of a Kotlin named argument (`limit = 3`).
+    pub name: Option<String>,
+    pub value: Qualifier,
+}
+
+impl Qualifier {
+    /// `receiver.name`: a longer dotted path when the receiver is one, otherwise a member
+    /// read.
+    pub(crate) fn member(receiver: Self, name: String) -> Self {
+        match receiver {
+            Self::Name(first) => Self::Path(format!("{first}.{name}")),
+            Self::Path(path) => Self::Path(format!("{path}.{name}")),
+            Self::Other | Self::Lambda => Self::Other,
+            other => Self::Member(Box::new(other), name),
+        }
+    }
 }
 
 /// An identifier occurrence and its syntactic context.
@@ -42,6 +81,8 @@ pub struct Reference {
     pub range: ByteRange,
     pub role: ReferenceRole,
     pub qualifier: Option<Qualifier>,
+    /// The arguments, when the identifier is the callee of a call.
+    pub arguments: Option<Vec<Argument>>,
     /// Whether the identifier is part of an import statement.
     pub in_import: bool,
 }
@@ -50,15 +91,28 @@ pub struct Reference {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LocalDefinition {
     pub name_range: ByteRange,
-    /// The declared type without type arguments, or the constructor name of an obvious
-    /// initialiser (`val x = Foo()`), when either is available.
+    /// The declared type without type arguments, when one is written.
     pub type_name: Option<String>,
+    /// The expression the name is initialised from (`val x = foo.bar()`), which gives its
+    /// type when none is written.
+    pub initialiser: Option<Qualifier>,
 }
 
 /// A name introduced into a scope, with the node that carries its type if there is one.
 pub(crate) struct Binder<'t> {
     pub(crate) name: Node<'t>,
     pub(crate) type_name: Option<String>,
+    pub(crate) initialiser: Option<Qualifier>,
+}
+
+impl<'t> Binder<'t> {
+    pub(crate) fn new(name: Node<'t>, type_name: Option<String>) -> Self {
+        Self {
+            name,
+            type_name,
+            initialiser: None,
+        }
+    }
 }
 
 /// Classifies a qualifier expression by its text.
@@ -101,11 +155,17 @@ impl SyntaxTree {
             Language::Kotlin => crate::kotlin::classify(source, node),
             Language::Yaml => (ReferenceRole::Value, None, false),
         };
+        let arguments = match (role, self.language()) {
+            (ReferenceRole::Call, Language::Java) => crate::java::call_arguments(source, node),
+            (ReferenceRole::Call, Language::Kotlin) => crate::kotlin::call_arguments(source, node),
+            _ => None,
+        };
         Reference {
             name: source.text(node),
             range: range_of(node),
             role,
             qualifier,
+            arguments,
             in_import,
         }
     }
@@ -190,6 +250,7 @@ impl SyntaxTree {
                 return Some(LocalDefinition {
                     name_range: range_of(binder.name),
                     type_name: binder.type_name,
+                    initialiser: binder.initialiser,
                 });
             }
             inner = scope;

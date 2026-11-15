@@ -10,7 +10,8 @@ use std::collections::HashSet;
 use std::path::PathBuf;
 
 use dumbj_syntax::{
-    FileFacts, Language, Qualifier, Reference, ReferenceRole, Symbol, SymbolKind, SyntaxTree,
+    Argument, FileFacts, Language, LocalDefinition, Qualifier, Reference, ReferenceRole, Symbol,
+    SymbolKind, SyntaxTree,
 };
 use dumbj_text::{Buffer, ByteOffset, ByteRange};
 
@@ -78,6 +79,9 @@ pub struct Site<'a> {
 
 /// How deep supertype chains are followed. Guards against cycles and absurd hierarchies.
 const MAX_SUPERTYPE_DEPTH: usize = 12;
+
+/// How many calls and local initialisers are followed to find the type of one expression.
+const MAX_EXPRESSION_DEPTH: usize = 8;
 
 fn kind_fits(kind: SymbolKind, role: ReferenceRole, language: Language) -> bool {
     match role {
@@ -365,7 +369,8 @@ impl<'a> Resolver<'a> {
     }
 }
 
-/// What stands before the dot of a qualified reference, as far as the index can tell.
+/// What an expression denotes, as far as the index can tell.
+#[derive(PartialEq, Eq)]
 enum Receiver {
     /// Values of these indexed types.
     Types(Vec<SymbolId>),
@@ -380,7 +385,60 @@ struct Lookup<'a> {
     site: Site<'a>,
     resolver: Resolver<'a>,
     enclosing: Vec<SymbolId>,
-    reference: Reference,
+}
+
+/// A name to look up: the reference under the caret, or a callee inside its qualifier.
+#[derive(Clone, Copy)]
+struct Query<'q> {
+    name: &'q str,
+    role: ReferenceRole,
+    qualifier: Option<&'q Qualifier>,
+    /// The arguments of a call. Not used to pick an overload yet.
+    #[expect(dead_code, reason = "overload selection reads it")]
+    arguments: Option<&'q [Argument]>,
+    /// Where the name is written; locals are looked up from here.
+    at: ByteOffset,
+    /// How many expressions deep this lookup is.
+    depth: usize,
+}
+
+/// What a lookup found.
+#[derive(Default)]
+struct Found {
+    /// A local declaration; it shadows everything in the index.
+    local: Option<LocalDefinition>,
+    ranked: Vec<(SymbolId, Tier)>,
+    /// False when the lookup involved a guess, which always means a chooser.
+    confident: bool,
+}
+
+impl Found {
+    fn sure(ranked: Vec<(SymbolId, Tier)>) -> Self {
+        Self {
+            local: None,
+            ranked,
+            confident: true,
+        }
+    }
+
+    fn guess(ranked: Vec<(SymbolId, Tier)>) -> Self {
+        Self {
+            local: None,
+            ranked,
+            confident: false,
+        }
+    }
+
+    /// Sorts best first and returns how many candidates share the best tier.
+    fn rank(&mut self) -> usize {
+        self.ranked.sort_by_key(|(id, tier)| (*tier, *id));
+        self.ranked.dedup();
+        let best = self.ranked.first().map(|(_, tier)| *tier);
+        self.ranked
+            .iter()
+            .filter(|(_, tier)| Some(*tier) == best)
+            .count()
+    }
 }
 
 impl Lookup<'_> {
@@ -426,17 +484,30 @@ impl Lookup<'_> {
         })
     }
 
-    /// What a single-name qualifier denotes: the type of a local or field called `name`,
-    /// or the type `name` itself.
-    fn receiver_of_name(&self, name: &str) -> Receiver {
+    /// A value of a type written at the reference site.
+    fn receiver_of_written_type(&self, type_name: &String) -> Receiver {
+        Self::receiver_of_type(Some(type_name), |name| {
+            self.resolver
+                .resolve_type(self.site.file, &self.enclosing, name)
+        })
+    }
+
+    /// What a single name written at `at` denotes: the type of a local or field called
+    /// `name`, or the type `name` itself.
+    fn receiver_of_name(&self, name: &str, at: ByteOffset, depth: usize) -> Receiver {
         let Site {
             tree, buffer, file, ..
         } = self.site;
-        let at = self.reference.range.start;
         if let Some(local) = tree.resolve_local(buffer, at, name, ReferenceRole::Value) {
-            return Self::receiver_of_type(local.type_name.as_ref(), |type_name| {
-                self.resolver.resolve_type(file, &self.enclosing, type_name)
-            });
+            return match (&local.type_name, &local.initialiser) {
+                (Some(type_name), _) => self.receiver_of_written_type(type_name),
+                // `val paid = Cash.of(…)`: the local has the type of its initialiser,
+                // which is evaluated where the local is declared.
+                (None, Some(initialiser)) => {
+                    self.receiver(initialiser, local.name_range.start, depth + 1)
+                }
+                (None, None) => Receiver::Unknown,
+            };
         }
         // A field or property of an enclosing type (or of one of its supertypes).
         let field = self
@@ -473,8 +544,82 @@ impl Lookup<'_> {
         })
     }
 
-    /// What the qualifier of the reference denotes.
-    fn receiver(&self, qualifier: &Qualifier) -> Receiver {
+    /// What reading the member `name` of `receiver` gives.
+    fn receiver_of_member(&self, receiver: &Receiver, name: &str) -> Receiver {
+        let Receiver::Types(owners) = receiver else {
+            return Receiver::Unknown;
+        };
+        let member = owners
+            .iter()
+            .flat_map(|owner| {
+                self.resolver
+                    .members_named(*owner, name, ReferenceRole::Member)
+            })
+            .next();
+        match member {
+            None => Receiver::Unknown,
+            Some(member) if self.resolver.is_type(member) => Receiver::Types(vec![member]),
+            Some(member) => self.receiver_of_symbol(member),
+        }
+    }
+
+    /// What a call evaluates to: the callee's return type, or the constructed type.
+    fn receiver_of_call(
+        &self,
+        call: &dumbj_syntax::Call,
+        at: ByteOffset,
+        depth: usize,
+    ) -> Receiver {
+        let mut found = self.find(Query {
+            name: &call.name,
+            role: ReferenceRole::Call,
+            qualifier: call.receiver.as_ref(),
+            arguments: Some(&call.arguments),
+            at,
+            depth,
+        });
+        let in_best_tier = found.rank();
+        if found.local.is_some() || !found.confident {
+            return Receiver::Unknown;
+        }
+        if found.ranked.is_empty() {
+            // `ArrayList<Foo>()`: a Kotlin constructor call of a library type.
+            let constructs = call.receiver.is_none()
+                && self.site.tree.language() == Language::Kotlin
+                && call.name.starts_with(char::is_uppercase);
+            return if constructs {
+                Receiver::External(call.name.clone())
+            } else {
+                Receiver::Unknown
+            };
+        }
+        // Overloads may tie as long as they all return the same thing.
+        let mut results = found.ranked.iter().take(in_best_tier).map(|(id, _)| {
+            match self.resolver.symbol(*id).map(|symbol| symbol.kind) {
+                Some(kind) if kind.is_type() => Receiver::Types(vec![*id]),
+                Some(SymbolKind::Constructor) => self
+                    .site
+                    .index
+                    .parent(*id)
+                    .map_or(Receiver::Unknown, |owner| Receiver::Types(vec![owner])),
+                _ => self.receiver_of_symbol(*id),
+            }
+        });
+        let Some(first) = results.next() else {
+            return Receiver::Unknown;
+        };
+        if results.all(|other| other == first) {
+            first
+        } else {
+            Receiver::Unknown
+        }
+    }
+
+    /// What `expression`, written at `at`, denotes.
+    fn receiver(&self, expression: &Qualifier, at: ByteOffset, depth: usize) -> Receiver {
+        if depth > MAX_EXPRESSION_DEPTH {
+            return Receiver::Unknown;
+        }
         let types = |types: Vec<SymbolId>| {
             if types.is_empty() {
                 Receiver::Unknown
@@ -482,14 +627,14 @@ impl Lookup<'_> {
                 Receiver::Types(types)
             }
         };
-        match qualifier {
+        match expression {
             Qualifier::This => types(self.enclosing.clone()),
             Qualifier::Super => types(
                 self.enclosing
                     .first()
                     .map_or_else(Vec::new, |own| self.resolver.supertypes(*own)),
             ),
-            Qualifier::Name(name) => self.receiver_of_name(name),
+            Qualifier::Name(name) => self.receiver_of_name(name, at, depth),
             Qualifier::Path(path) => {
                 // A fully qualified or nested type name, e.g. `com.shop.core.Money`.
                 let named = self
@@ -500,37 +645,25 @@ impl Lookup<'_> {
                 }
                 // Otherwise a chain of member accesses: `a.b.c`.
                 let mut parts = path.split('.');
-                let mut receiver = parts
-                    .next()
-                    .map_or(Receiver::Unknown, |first| self.receiver_of_name(first));
+                let mut receiver = parts.next().map_or(Receiver::Unknown, |first| {
+                    self.receiver_of_name(first, at, depth)
+                });
                 for part in parts {
-                    let Receiver::Types(owners) = &receiver else {
-                        break;
-                    };
-                    let member = owners
-                        .iter()
-                        .flat_map(|owner| {
-                            self.resolver
-                                .members_named(*owner, part, ReferenceRole::Member)
-                        })
-                        .next();
-                    receiver = match member {
-                        None => Receiver::Unknown,
-                        Some(member) if self.resolver.is_type(member) => {
-                            Receiver::Types(vec![member])
-                        }
-                        Some(member) => self.receiver_of_symbol(member),
-                    };
+                    receiver = self.receiver_of_member(&receiver, part);
                 }
                 receiver
             }
-            Qualifier::Other => Receiver::Unknown,
+            Qualifier::Member(inner, name) => {
+                self.receiver_of_member(&self.receiver(inner, at, depth + 1), name)
+            }
+            Qualifier::Call(call) => self.receiver_of_call(call, at, depth + 1),
+            Qualifier::Typed(type_name) => self.receiver_of_written_type(type_name),
+            Qualifier::Lambda | Qualifier::Other => Receiver::Unknown,
         }
     }
 
-    /// Every declaration called like the reference whose kind fits its role.
-    fn named_candidates(&self) -> Vec<SymbolId> {
-        let (name, role) = (&self.reference.name, self.reference.role);
+    /// Every declaration called `name` whose kind fits `role`.
+    fn named_candidates(&self, name: &str, role: ReferenceRole) -> Vec<SymbolId> {
         self.site
             .index
             .symbols_named(name)
@@ -556,67 +689,24 @@ impl Lookup<'_> {
         self.site.index.parent(id).is_some()
     }
 
-    /// Turns ranked candidates into a resolution. `confident` is false when the lookup
-    /// involved a guess, which always means a chooser.
-    fn finish(self, mut ranked: Vec<(SymbolId, Tier)>, confident: bool) -> Resolution {
-        ranked.sort_by_key(|(id, tier)| (*tier, *id));
-        ranked.dedup();
-        let best = ranked.first().map(|(_, tier)| *tier);
-        let in_best_tier = ranked
-            .iter()
-            .filter(|(_, tier)| Some(*tier) == best)
-            .count();
-        let targets: Vec<Target> = ranked
-            .iter()
-            .filter_map(|(id, tier)| self.target(*id, *tier))
-            .collect();
-        let decision = match (targets.len(), in_best_tier) {
-            (0, _) => Decision::NotFound,
-            (_, 1) if confident => Decision::Jump,
-            _ => Decision::Choose,
-        };
-        Resolution {
-            reference: self.reference,
-            targets,
-            decision,
+    /// Looks `query` up among locals and in the index.
+    fn find(&self, query: Query<'_>) -> Found {
+        match query.qualifier {
+            Some(qualifier) => self.find_qualified(query, qualifier),
+            None => self.find_unqualified(query),
         }
     }
 
-    fn resolve_import(self) -> Resolution {
-        let prefix = match &self.reference.qualifier {
-            Some(Qualifier::Name(prefix) | Qualifier::Path(prefix)) => format!("{prefix}."),
-            _ => String::new(),
-        };
-        let fqn = format!("{prefix}{}", self.reference.name);
-        let found = self.site.index.symbols_by_fqn(&fqn);
-        let ranked = found
-            .into_iter()
-            .map(|id| (id, Tier::ExplicitImport))
-            .collect();
-        self.finish(ranked, true)
-    }
-
-    fn resolve_unqualified(self) -> Resolution {
+    fn find_unqualified(&self, query: Query<'_>) -> Found {
         let Site {
             tree, buffer, file, ..
         } = self.site;
-        let (name, role) = (self.reference.name.clone(), self.reference.role);
-        if let Some(local) = tree.resolve_local(buffer, self.reference.range.start, &name, role) {
-            let path = self
-                .site
-                .index
-                .file(file)
-                .map_or_else(PathBuf::new, |file| file.path.clone());
-            let target = Target {
-                path,
-                range: local.name_range,
-                symbol: None,
-                tier: Tier::Local,
-            };
-            return Resolution {
-                reference: self.reference,
-                targets: vec![target],
-                decision: Decision::Jump,
+        let Query { name, role, .. } = query;
+        if let Some(local) = tree.resolve_local(buffer, query.at, name, role) {
+            return Found {
+                local: Some(local),
+                ranked: Vec::new(),
+                confident: true,
             };
         }
         // An import alias (`import a.B as C`) names exactly one declaration.
@@ -624,40 +714,41 @@ impl Lookup<'_> {
             facts
                 .imports
                 .iter()
-                .find(|import| import.alias.as_deref() == Some(name.as_str()))
+                .find(|import| import.alias.as_deref() == Some(name))
         });
         if let Some(import) = aliased {
             let found = self.site.index.symbols_by_fqn(&import.path);
-            let ranked = found
-                .into_iter()
-                .map(|id| (id, Tier::ExplicitImport))
-                .collect();
-            return self.finish(ranked, true);
+            return Found::sure(
+                found
+                    .into_iter()
+                    .map(|id| (id, Tier::ExplicitImport))
+                    .collect(),
+            );
         }
         // Members of the enclosing types and of their supertypes.
         let in_scope: Vec<SymbolId> = self
             .enclosing
             .iter()
-            .flat_map(|owner| self.resolver.members_named(*owner, &name, role))
+            .flat_map(|owner| self.resolver.members_named(*owner, name, role))
             .collect();
         if let Some(first) = in_scope.first() {
             // The innermost type that declares the name wins; overloads there tie.
             let owner = self.site.index.parent(*first);
-            let ranked = in_scope
-                .into_iter()
-                .filter(|id| self.site.index.parent(*id) == owner)
-                .map(|id| (id, Tier::Scope))
-                .collect();
-            return self.finish(ranked, true);
+            return Found::sure(
+                in_scope
+                    .into_iter()
+                    .filter(|id| self.site.index.parent(*id) == owner)
+                    .map(|id| (id, Tier::Scope))
+                    .collect(),
+            );
         }
         // Types, top-level functions and properties, and statically imported members
         // are visible unqualified. Other members can only be reached through an implicit
         // receiver (inherited from a library type, or a Kotlin scope function), which the
         // dumb engine cannot see: they are offered as guesses.
-        let candidates = self.named_candidates();
         let mut visible = Vec::new();
         let mut guesses = Vec::new();
-        for id in candidates {
+        for id in self.named_candidates(name, role) {
             let tier = self.resolver.tier(file, &self.enclosing, id, false);
             let is_type = self.resolver.is_type(id);
             if is_type || !self.is_member(id) || tier == Tier::ExplicitImport {
@@ -667,15 +758,19 @@ impl Lookup<'_> {
             }
         }
         if visible.is_empty() {
-            return self.finish(guesses, false);
+            return Found::guess(guesses);
         }
         // An extension function's receiver is not checked, so it is never a sure thing.
         let confident = !visible.iter().any(|(id, _)| self.is_extension(*id));
-        self.finish(visible, confident)
+        Found {
+            local: None,
+            ranked: visible,
+            confident,
+        }
     }
 
-    fn resolve_qualified(self, qualifier: &Qualifier) -> Resolution {
-        let (name, role) = (self.reference.name.clone(), self.reference.role);
+    fn find_qualified(&self, query: Query<'_>, qualifier: &Qualifier) -> Found {
+        let Query { name, role, .. } = query;
         let file = self.site.file;
         if role == ReferenceRole::Type
             && let Qualifier::Name(prefix) | Qualifier::Path(prefix) = qualifier
@@ -683,15 +778,16 @@ impl Lookup<'_> {
             let types =
                 self.resolver
                     .resolve_type(file, &self.enclosing, &format!("{prefix}.{name}"));
-            let ranked = types
-                .into_iter()
-                .map(|id| (id, self.resolver.tier(file, &self.enclosing, id, true)))
-                .collect();
-            return self.finish(ranked, true);
+            return Found::sure(
+                types
+                    .into_iter()
+                    .map(|id| (id, self.resolver.tier(file, &self.enclosing, id, true)))
+                    .collect(),
+            );
         }
         // Kotlin extensions declared on a type with one of these simple names.
         let extensions_on = |receiver_names: &HashSet<&str>| -> Vec<(SymbolId, Tier)> {
-            self.named_candidates()
+            self.named_candidates(name, role)
                 .into_iter()
                 .filter(|id| {
                     let receiver = self
@@ -705,15 +801,14 @@ impl Lookup<'_> {
                 .map(|id| (id, self.resolver.tier(file, &self.enclosing, id, false)))
                 .collect()
         };
-        match self.receiver(qualifier) {
+        match self.receiver(qualifier, query.at, query.depth) {
             Receiver::Types(owners) => {
                 let members: Vec<SymbolId> = owners
                     .iter()
-                    .flat_map(|owner| self.resolver.members_named(*owner, &name, role))
+                    .flat_map(|owner| self.resolver.members_named(*owner, name, role))
                     .collect();
                 if !members.is_empty() {
-                    let ranked = members.into_iter().map(|id| (id, Tier::Scope)).collect();
-                    return self.finish(ranked, true);
+                    return Found::sure(members.into_iter().map(|id| (id, Tier::Scope)).collect());
                 }
                 // Not a member: perhaps a Kotlin extension on the receiver's type.
                 let owner_names: HashSet<&str> = owners
@@ -724,30 +819,81 @@ impl Lookup<'_> {
                     .collect();
                 let extensions = extensions_on(&owner_names);
                 if !extensions.is_empty() {
-                    return self.finish(extensions, false);
+                    return Found::guess(extensions);
                 }
                 // The receiver's type is known and has no such member: it is inherited from a
                 // library supertype (`JpaRepository.save`, `Enum.name`). Members of unrelated
                 // project types with the same name would only be wrong answers.
-                return self.finish(Vec::new(), true);
+                Found::sure(Vec::new())
             }
             // The receiver's type is written but is not in the project (a library type).
             // Its members are not ours; only an extension on that type can match.
             Receiver::External(type_name) => {
                 let simple = type_name.rsplit('.').next().unwrap_or(&type_name);
-                let extensions = extensions_on(&HashSet::from([simple]));
-                return self.finish(extensions, false);
+                Found::guess(extensions_on(&HashSet::from([simple])))
             }
-            Receiver::Unknown => {}
+            // Unknown receiver: every member or extension with this name is a guess.
+            Receiver::Unknown => Found::guess(
+                self.named_candidates(name, role)
+                    .into_iter()
+                    .filter(|id| self.is_member(*id) || self.is_extension(*id))
+                    .map(|id| (id, self.resolver.tier(file, &self.enclosing, id, true)))
+                    .collect(),
+            ),
         }
-        // Unknown receiver: every member or extension with this name is a guess.
-        let ranked = self
-            .named_candidates()
-            .into_iter()
-            .filter(|id| self.is_member(*id) || self.is_extension(*id))
-            .map(|id| (id, self.resolver.tier(file, &self.enclosing, id, true)))
+    }
+
+    fn find_import(&self, reference: &Reference) -> Found {
+        let prefix = match &reference.qualifier {
+            Some(Qualifier::Name(prefix) | Qualifier::Path(prefix)) => format!("{prefix}."),
+            _ => String::new(),
+        };
+        let fqn = format!("{prefix}{}", reference.name);
+        let found = self.site.index.symbols_by_fqn(&fqn);
+        Found::sure(
+            found
+                .into_iter()
+                .map(|id| (id, Tier::ExplicitImport))
+                .collect(),
+        )
+    }
+
+    /// Turns what was found into a resolution.
+    fn finish(&self, reference: Reference, mut found: Found) -> Resolution {
+        if let Some(local) = found.local {
+            let path = self
+                .site
+                .index
+                .file(self.site.file)
+                .map_or_else(PathBuf::new, |file| file.path.clone());
+            let target = Target {
+                path,
+                range: local.name_range,
+                symbol: None,
+                tier: Tier::Local,
+            };
+            return Resolution {
+                reference,
+                targets: vec![target],
+                decision: Decision::Jump,
+            };
+        }
+        let in_best_tier = found.rank();
+        let targets: Vec<Target> = found
+            .ranked
+            .iter()
+            .filter_map(|(id, tier)| self.target(*id, *tier))
             .collect();
-        self.finish(ranked, false)
+        let decision = match (targets.len(), in_best_tier) {
+            (0, _) => Decision::NotFound,
+            (_, 1) if found.confident => Decision::Jump,
+            _ => Decision::Choose,
+        };
+        Resolution {
+            reference,
+            targets,
+            decision,
+        }
     }
 }
 
@@ -761,18 +907,20 @@ pub fn resolve(site: Site<'_>, offset: ByteOffset) -> Option<Resolution> {
         site,
         resolver,
         enclosing,
-        reference,
     };
-    Some(
-        match (lookup.reference.role, lookup.reference.qualifier.clone()) {
-            (ReferenceRole::Declaration, _) => Resolution {
-                reference: lookup.reference,
-                targets: Vec::new(),
-                decision: Decision::NotFound,
-            },
-            _ if lookup.reference.in_import => lookup.resolve_import(),
-            (_, Some(qualifier)) => lookup.resolve_qualified(&qualifier),
-            (_, None) => lookup.resolve_unqualified(),
-        },
-    )
+    let found = if reference.role == ReferenceRole::Declaration {
+        Found::sure(Vec::new())
+    } else if reference.in_import {
+        lookup.find_import(&reference)
+    } else {
+        lookup.find(Query {
+            name: &reference.name,
+            role: reference.role,
+            qualifier: reference.qualifier.as_ref(),
+            arguments: reference.arguments.as_deref(),
+            at: reference.range.start,
+            depth: 0,
+        })
+    };
+    Some(lookup.finish(reference, found))
 }

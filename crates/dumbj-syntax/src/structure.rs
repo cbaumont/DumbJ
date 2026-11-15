@@ -216,6 +216,16 @@ pub(crate) fn child_of_kind<'t>(node: Node<'t>, kind: &str) -> Option<Node<'t>> 
         .find(|child| child.kind() == kind)
 }
 
+/// Whether `name` is a type parameter of `node` or of a declaration enclosing it. A type
+/// parameter is not a type anyone can navigate to or look members up in.
+pub(crate) fn is_type_parameter(source: &Source<'_>, node: Node<'_>, name: &str) -> bool {
+    std::iter::successors(Some(node), Node::parent)
+        .filter_map(|scope| child_of_kind(scope, "type_parameters"))
+        .flat_map(named_children)
+        .filter_map(|parameter| child_of_kind(parameter, "type_identifier"))
+        .any(|parameter| source.text(parameter) == name)
+}
+
 /// Collects symbols while walking; keeps the push logic in one place.
 pub(crate) struct Collector<'a> {
     pub(crate) source: Source<'a>,

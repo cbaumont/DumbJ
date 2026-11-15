@@ -13,7 +13,7 @@ import java.util.Collections.* static -> None
 10:26 Field Structure.names -> List
 11:12 Constructor Structure.Structure
 12:27 Method Structure.run
-20:18 Method Structure.foo -> U
+20:18 Method Structure.foo
 21:15 Interface Structure.Shape
 21:30 Method Structure.Shape.area
 22:10 Enum Structure.Color

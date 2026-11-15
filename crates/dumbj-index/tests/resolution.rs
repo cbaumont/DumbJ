@@ -276,19 +276,19 @@ fn members_through_a_receiver_with_a_known_type() {
     );
     assert_eq!(
         go(&index, CHECKOUT, "return paid.a§dd("),
-        "Choose [Money.java:15 Money.add ExplicitImport] [Product.kt:25 Catalog.add ExplicitImport] \
-         [Cart.java:13 Cart.add SamePackage]",
-        "`paid = Cash.of(…)` has an inferred type, so every `add` is offered"
+        "Jump Money.java:15 Money.add Scope",
+        "`paid = Cash.of(…)` has the type `of` returns"
+    );
+    assert_eq!(
+        go(&index, CART, "candidate.price().amo§unt() <"),
+        "Jump Money.java:20 Money.amount Scope",
+        "a call result has the callee's return type"
     );
 }
 
 #[test]
-fn unknown_receivers_and_extensions_get_a_chooser() {
+fn extensions_get_a_chooser() {
     let index = shop_index();
-    // `candidate.price()` is a call result: its type is unknown to the dumb engine.
-    let amount = go(&index, CART, "candidate.price().amo§unt() <");
-    assert!(amount.starts_with("Choose"), "{amount}");
-    assert!(amount.contains("Money.amount"), "{amount}");
     // An extension function is never a sure thing, even with a single candidate.
     assert_eq!(
         go(&index, CHECKOUT, "first.lab§el()"),

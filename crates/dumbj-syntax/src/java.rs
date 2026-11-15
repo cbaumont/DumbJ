@@ -2,8 +2,10 @@
 
 use tree_sitter::Node;
 
-use crate::reference::{Binder, Qualifier, ReferenceRole, qualifier_from_text};
-use crate::structure::{Collector, Import, Source, SymbolKind, all_children, named_children};
+use crate::reference::{Argument, Binder, Call, Qualifier, ReferenceRole, qualifier_from_text};
+use crate::structure::{
+    Collector, Import, Source, SymbolKind, all_children, is_type_parameter, named_children,
+};
 
 /// Type names in a `superclass`, `super_interfaces` or `extends_interfaces` clause.
 fn supertypes(collector: &Collector<'_>, clause: Node<'_>, out: &mut Vec<String>) {
@@ -158,7 +160,8 @@ fn declared_type(
 ) -> Option<String> {
     let written = declaration
         .child_by_field_name("type")
-        .and_then(|node| type_name(source, node));
+        .and_then(|node| type_name(source, node))
+        .filter(|name| !is_type_parameter(source, declaration, name));
     written.or_else(|| {
         let value = declarator?.child_by_field_name("value")?;
         (value.kind() == "object_creation_expression")
@@ -166,6 +169,76 @@ fn declared_type(
             .flatten()
             .and_then(|node| type_name(source, node))
     })
+}
+
+/// What the dumb engine can tell about an expression.
+pub(crate) fn expression(source: &Source<'_>, node: Node<'_>) -> Qualifier {
+    let typed = |name: &str| Qualifier::Typed(name.to_owned());
+    let written_type = |node: Node<'_>| {
+        node.child_by_field_name("type")
+            .and_then(|written| type_name(source, written))
+            .filter(|name| !is_type_parameter(source, node, name))
+            .map_or(Qualifier::Other, Qualifier::Typed)
+    };
+    match node.kind() {
+        "identifier" => Qualifier::Name(source.text(node)),
+        "this" => Qualifier::This,
+        "super" => Qualifier::Super,
+        "parenthesized_expression" => node
+            .named_child(0)
+            .map_or(Qualifier::Other, |inner| expression(source, inner)),
+        "object_creation_expression" | "cast_expression" => written_type(node),
+        "string_literal" => typed("String"),
+        "true" | "false" => typed("boolean"),
+        "character_literal" => typed("char"),
+        "decimal_integer_literal"
+        | "hex_integer_literal"
+        | "octal_integer_literal"
+        | "binary_integer_literal" => typed("int"),
+        "decimal_floating_point_literal" | "hex_floating_point_literal" => typed("double"),
+        "lambda_expression" | "method_reference" => Qualifier::Lambda,
+        "field_access" => {
+            match (
+                node.child_by_field_name("object"),
+                node.child_by_field_name("field"),
+            ) {
+                (Some(object), Some(field)) => {
+                    Qualifier::member(expression(source, object), source.text(field))
+                }
+                _ => Qualifier::Other,
+            }
+        }
+        "method_invocation" => node
+            .child_by_field_name("name")
+            .map_or(Qualifier::Other, |name| {
+                Qualifier::Call(Box::new(Call {
+                    receiver: node
+                        .child_by_field_name("object")
+                        .map(|object| expression(source, object)),
+                    name: source.text(name),
+                    arguments: arguments(source, node),
+                }))
+            }),
+        _ => Qualifier::Other,
+    }
+}
+
+/// The arguments of a `method_invocation`.
+fn arguments(source: &Source<'_>, call: Node<'_>) -> Vec<Argument> {
+    call.child_by_field_name("arguments")
+        .map_or_else(Vec::new, named_children)
+        .into_iter()
+        .map(|argument| Argument {
+            name: None,
+            value: expression(source, argument),
+        })
+        .collect()
+}
+
+/// The arguments of the call whose callee name is `node`.
+pub(crate) fn call_arguments(source: &Source<'_>, node: Node<'_>) -> Option<Vec<Argument>> {
+    let call = node.parent()?;
+    (call.kind() == "method_invocation").then(|| arguments(source, call))
 }
 
 /// The names `child` introduces into `scope` for code that comes after it.
@@ -176,10 +249,9 @@ pub(crate) fn binders<'t>(
     want_type: bool,
 ) -> Vec<Binder<'t>> {
     let named = |declaration: Node<'t>| {
-        declaration.child_by_field_name("name").map(|name| Binder {
-            name,
-            type_name: declared_type(source, declaration, None),
-        })
+        declaration
+            .child_by_field_name("name")
+            .map(|name| Binder::new(name, declared_type(source, declaration, None)))
     };
     if want_type {
         // Type parameters of the enclosing method or class.
@@ -188,10 +260,7 @@ pub(crate) fn binders<'t>(
                 .into_iter()
                 .filter_map(|parameter| named_children(parameter).into_iter().next())
                 .filter(|name| name.kind() == "type_identifier")
-                .map(|name| Binder {
-                    name,
-                    type_name: None,
-                })
+                .map(|name| Binder::new(name, None))
                 .collect()
         } else {
             Vec::new()
@@ -206,6 +275,9 @@ pub(crate) fn binders<'t>(
                 Some(Binder {
                     name,
                     type_name: declared_type(source, child, Some(declarator)),
+                    initialiser: declarator
+                        .child_by_field_name("value")
+                        .map(|value| expression(source, value)),
                 })
             })
             .collect(),
@@ -218,10 +290,7 @@ pub(crate) fn binders<'t>(
                     .into_iter()
                     .find(|part| part.kind() == "variable_declarator")
                     .and_then(|declarator| declarator.child_by_field_name("name"))
-                    .map(|name| Binder {
-                        name,
-                        type_name: None,
-                    }),
+                    .map(|name| Binder::new(name, None)),
                 _ => None,
             })
             .collect(),
@@ -229,17 +298,11 @@ pub(crate) fn binders<'t>(
         "inferred_parameters" => named_children(child)
             .into_iter()
             .filter(|name| name.kind() == "identifier")
-            .map(|name| Binder {
-                name,
-                type_name: None,
-            })
+            .map(|name| Binder::new(name, None))
             .collect(),
         // A single untyped lambda parameter: `x ->`.
         "identifier" if scope.kind() == "lambda_expression" => {
-            vec![Binder {
-                name: child,
-                type_name: None,
-            }]
+            vec![Binder::new(child, None)]
         }
         // The loop variable of `for (String s : names)`.
         "identifier"
@@ -248,10 +311,7 @@ pub(crate) fn binders<'t>(
                     .child_by_field_name("name")
                     .is_some_and(|name| name.id() == child.id()) =>
         {
-            vec![Binder {
-                name: child,
-                type_name: declared_type(source, scope, None),
-            }]
+            vec![Binder::new(child, declared_type(source, scope, None))]
         }
         "resource_specification" => named_children(child)
             .into_iter()
@@ -265,7 +325,7 @@ pub(crate) fn binders<'t>(
                 .and_then(|first| type_name(source, first));
             child
                 .child_by_field_name("name")
-                .map(|name| Binder { name, type_name })
+                .map(|name| Binder::new(name, type_name))
                 .into_iter()
                 .collect()
         }
@@ -286,7 +346,7 @@ fn pattern_variables<'t>(source: &Source<'_>, node: Node<'t>, out: &mut Vec<Bind
         let type_name = node
             .child_by_field_name("right")
             .and_then(|right| type_name(source, right));
-        out.push(Binder { name, type_name });
+        out.push(Binder::new(name, type_name));
     }
     if matches!(
         node.kind(),
@@ -312,9 +372,13 @@ pub(crate) fn classify(
             .is_some_and(|n| n.id() == node.id())
     };
     let qualifier_of = |field: &str| {
-        parent
-            .child_by_field_name(field)
-            .map(|object| qualifier_from_text(&source.text(object)))
+        parent.child_by_field_name(field).map(|object| {
+            if matches!(parent.kind(), "method_invocation" | "field_access") {
+                expression(source, object)
+            } else {
+                qualifier_from_text(&source.text(object))
+            }
+        })
     };
     let in_import = {
         let mut ancestor = Some(parent);

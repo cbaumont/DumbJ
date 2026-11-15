@@ -104,10 +104,10 @@ fn usages_of_a_method_from_a_reference() {
         usages(&index, CART, "total = total.a§dd(cost);"),
         [
             "Cart.java:16 total = total.add(cost);",
-            "Checkout.kt:19 return paid.add(cart.price()) ?",
+            "Checkout.kt:19 return paid.add(cart.price())",
             "Product.kt:26 items.add(product) ?",
         ],
-        "calls through untyped receivers are only a maybe; products.add is List.add"
+        "`paid` has the type its initialiser returns; `items` is a library list, so only a maybe"
     );
     assert_eq!(
         usages(&index, PRODUCT, "fun sam§ple(): Product"),
