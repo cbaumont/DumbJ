@@ -37,6 +37,17 @@ pub struct Call {
     pub arguments: Vec<Argument>,
 }
 
+/// A Kotlin lambda and the call it is passed to: `x.let { … }` has callee `let` and
+/// receiver `x`; `with(y) { … }` has `y` as its first argument.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LambdaCall {
+    pub callee: String,
+    pub receiver: Option<Qualifier>,
+    pub first_argument: Option<Qualifier>,
+    /// Whether it names its parameters (`{ v -> … }`) instead of using `it`.
+    pub has_parameters: bool,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Argument {
     pub name: Option<String>,
@@ -159,6 +170,23 @@ impl SyntaxTree {
     pub fn reference_at(&self, buffer: &Buffer, offset: ByteOffset) -> Option<Reference> {
         let node = self.identifier_node(offset)?;
         Some(self.classify(&Source { buffer }, node))
+    }
+
+    /// The Kotlin lambdas around `offset`, innermost first.
+    #[must_use]
+    pub fn enclosing_lambdas(&self, buffer: &Buffer, offset: ByteOffset) -> Vec<LambdaCall> {
+        if self.language() != Language::Kotlin {
+            return Vec::new();
+        }
+        self.identifier_node(offset)
+            .or_else(|| {
+                self.tree()
+                    .root_node()
+                    .descendant_for_byte_range(offset.get(), offset.get())
+            })
+            .map_or_else(Vec::new, |node| {
+                crate::kotlin::enclosing_lambdas(&Source { buffer }, node)
+            })
     }
 
     #[must_use]

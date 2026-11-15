@@ -2,7 +2,9 @@
 
 use tree_sitter::Node;
 
-use crate::reference::{Argument, Binder, Call, Qualifier, ReferenceRole, qualifier_from_text};
+use crate::reference::{
+    Argument, Binder, Call, LambdaCall, Qualifier, ReferenceRole, qualifier_from_text,
+};
 use crate::structure::{
     Collector, Import, Parameter, Platform, Source, SymbolKind, all_children, child_of_kind,
     is_type_parameter, named_children,
@@ -484,6 +486,31 @@ fn arguments(source: &Source<'_>, call: Node<'_>) -> Vec<Argument> {
         }
     }
     found
+}
+
+/// The lambdas around `node`, innermost first, with the call each is passed to.
+pub(crate) fn enclosing_lambdas(source: &Source<'_>, node: Node<'_>) -> Vec<LambdaCall> {
+    std::iter::successors(Some(node), Node::parent)
+        .filter(|lambda| lambda.kind() == "lambda_literal")
+        .filter_map(|lambda| {
+            let call = std::iter::successors(lambda.parent(), Node::parent)
+                .take(3)
+                .find(|ancestor| ancestor.kind() == "call_expression")?;
+            let Qualifier::Call(call_info) = expression(source, call) else {
+                return None;
+            };
+            Some(LambdaCall {
+                callee: call_info.name,
+                receiver: call_info.receiver,
+                first_argument: call_info
+                    .arguments
+                    .into_iter()
+                    .find(|argument| !argument.trailing)
+                    .map(|argument| argument.value),
+                has_parameters: child_of_kind(lambda, "lambda_parameters").is_some(),
+            })
+        })
+        .collect()
 }
 
 pub(crate) fn extension_receiver(source: &Source<'_>, node: Node<'_>) -> Option<String> {

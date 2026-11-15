@@ -722,3 +722,44 @@ fn gradle_scripts_reach_the_version_catalog() {
         "a partial accessor offers the entries under it"
     );
 }
+
+#[test]
+fn kotlin_scope_functions() {
+    let index = freight_index();
+    let go = |snippet: &str| {
+        go_in(
+            &freight_root(),
+            &index,
+            "src/main/kotlin/freight/Scopes.kt",
+            snippet,
+        )
+    };
+    assert_eq!(
+        go("let { it.tot§al.amount }"),
+        "Jump Scopes.kt:3 Ledger2.total Scope",
+        "`it` in `let` is the receiver"
+    );
+    assert_eq!(
+        go("it.total.amo§unt }"),
+        "Jump Shipping.kt:3 Money.amount Scope"
+    );
+    assert_eq!(
+        go("also { it.quo§te(sample()) }"),
+        "Jump Shipping.kt:20 NamedCarrier.quote Scope"
+    );
+    assert_eq!(
+        go("apply { clo§se() }"),
+        "Jump Scopes.kt:4 Ledger2.close Scope",
+        "the `apply` receiver comes before the enclosing class"
+    );
+    assert_eq!(
+        go("describe() + na§me }"),
+        "Jump Shipping.kt:17 NamedCarrier.name Scope",
+        "`with(x)` makes x the receiver"
+    );
+    let unknown = go("forEach { it.na§me }");
+    assert!(
+        unknown.starts_with("Choose"),
+        "an element type is not known: {unknown}"
+    );
+}

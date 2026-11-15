@@ -16,7 +16,9 @@ use tree_sitter::{ParseOptions, Parser, Tree};
 
 pub use highlight::{HighlightKind, HighlightSpan};
 pub use language::Language;
-pub use reference::{Argument, Call, LocalDefinition, Qualifier, Reference, ReferenceRole};
+pub use reference::{
+    Argument, Call, LambdaCall, LocalDefinition, Qualifier, Reference, ReferenceRole,
+};
 pub use structure::{FileFacts, Import, Parameter, Platform, Symbol, SymbolKind};
 
 #[derive(Debug, Error)]

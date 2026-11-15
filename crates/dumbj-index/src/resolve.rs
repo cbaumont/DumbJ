@@ -494,7 +494,7 @@ enum Fit {
     Exact,
 }
 
-#[derive(PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 enum Receiver {
     Function,
     /// The facade class of Kotlin top-level declarations in these files.
@@ -510,6 +510,10 @@ struct Lookup<'a> {
     enclosing: Vec<SymbolId>,
     /// Inside a Kotlin extension, `this` is its receiver, ahead of the enclosing types.
     extension_receiver: Option<Receiver>,
+    /// `this` inside `apply { }`, `run { }` and `with(x) { }`, innermost first.
+    lambda_receivers: Vec<Receiver>,
+    /// What `it` is inside `let { }`, `also { }`, `takeIf { }` and `takeUnless { }`.
+    it_receiver: Option<Receiver>,
 }
 
 #[derive(Clone, Copy)]
@@ -576,11 +580,38 @@ impl<'a> Lookup<'a> {
             resolver,
             enclosing,
             extension_receiver: None,
+            lambda_receivers: Vec::new(),
+            it_receiver: None,
         };
+        let at = reference.range.start;
         lookup.extension_receiver = site
             .tree
-            .extension_receiver_at(site.buffer, reference.range.start)
+            .extension_receiver_at(site.buffer, at)
             .map(|type_name| lookup.receiver_of_written_type(&type_name));
+        let lambdas = site.tree.enclosing_lambdas(site.buffer, at);
+        let mut lambda_receivers = Vec::new();
+        for lambda in &lambdas {
+            let target = match lambda.callee.as_str() {
+                "apply" | "run" => lambda.receiver.as_ref(),
+                "with" if lambda.receiver.is_none() => lambda.first_argument.as_ref(),
+                _ => None,
+            };
+            if let Some(target) = target {
+                lambda_receivers.push(lookup.receiver(target, at, 1));
+            }
+        }
+        lookup.it_receiver = lambdas
+            .iter()
+            .find(|lambda| !lambda.has_parameters)
+            .filter(|lambda| {
+                matches!(
+                    lambda.callee.as_str(),
+                    "let" | "also" | "takeIf" | "takeUnless"
+                )
+            })
+            .and_then(|lambda| lambda.receiver.as_ref())
+            .map(|receiver| lookup.receiver(receiver, at, 1));
+        lookup.lambda_receivers = lambda_receivers;
         lookup
     }
 }
@@ -637,6 +668,14 @@ impl Lookup<'_> {
         let Site {
             tree, buffer, file, ..
         } = self.site;
+        if name == "it"
+            && let Some(it) = &self.it_receiver
+            && tree
+                .resolve_local(buffer, at, name, ReferenceRole::Value)
+                .is_none()
+        {
+            return it.clone();
+        }
         if let Some(local) = tree.resolve_local(buffer, at, name, ReferenceRole::Value) {
             return match (&local.type_name, &local.initialiser) {
                 (Some(type_name), _) => self.receiver_of_written_type(type_name),
@@ -779,7 +818,11 @@ impl Lookup<'_> {
             }
         };
         match expression {
-            Qualifier::This => match &self.extension_receiver {
+            Qualifier::This => match self
+                .lambda_receivers
+                .first()
+                .or(self.extension_receiver.as_ref())
+            {
                 Some(Receiver::Types(receiver)) => Receiver::Types(receiver.clone()),
                 Some(Receiver::External(name)) => Receiver::External(name.clone()),
                 _ => types(self.enclosing.clone()),
@@ -1314,20 +1357,29 @@ impl Lookup<'_> {
     }
 
     fn implicit_receivers(&self) -> Vec<SymbolId> {
-        let extension = match &self.extension_receiver {
-            Some(Receiver::Types(types)) => types.as_slice(),
-            _ => &[],
-        };
-        extension.iter().chain(&self.enclosing).copied().collect()
+        self.lambda_receivers
+            .iter()
+            .chain(&self.extension_receiver)
+            .flat_map(|receiver| match receiver {
+                Receiver::Types(types) => types.as_slice(),
+                _ => &[],
+            })
+            .chain(&self.enclosing)
+            .copied()
+            .collect()
     }
 
     fn implicit_receiver_names(&self) -> Vec<&str> {
-        let external = match &self.extension_receiver {
-            Some(Receiver::External(name)) => Some(simple_name(name)),
-            _ => None,
-        };
+        let external = self
+            .lambda_receivers
+            .iter()
+            .chain(&self.extension_receiver)
+            .filter_map(|receiver| match receiver {
+                Receiver::External(name) => Some(simple_name(name)),
+                _ => None,
+            });
         let indexed = self.type_names(&self.implicit_receivers());
-        external.into_iter().chain(indexed).collect()
+        external.chain(indexed).collect()
     }
 
     fn type_names(&self, types: &[SymbolId]) -> Vec<&str> {
