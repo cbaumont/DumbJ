@@ -1,6 +1,7 @@
 //! DumbJ's tree-sitter layer: language detection, cancellable parsing and highlighting.
 //! No UI and no I/O; callers run [`parse`] on a background thread.
 
+mod document;
 mod highlight;
 mod java;
 mod kotlin;

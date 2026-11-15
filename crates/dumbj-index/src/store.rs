@@ -13,7 +13,7 @@ use rusqlite::{Connection, params};
 
 use crate::index::IndexedFile;
 
-const SCHEMA_VERSION: i64 = 4;
+const SCHEMA_VERSION: i64 = 8;
 
 const SCHEMA: &str = "
 CREATE TABLE files (

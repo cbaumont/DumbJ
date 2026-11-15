@@ -36,6 +36,15 @@ tracing-subscriber = { version = "0.3", default-features = false, features = ["a
 tree-sitter = "0.27"
 tree-sitter-java = "0.23"
 tree-sitter-kotlin-sg = "0.4"
+tree-sitter-xml = "0.7"
+tree-sitter-properties = "0.3"
+tree-sitter-json = "0.24"
+tree-sitter-toml-ng = "0.7"
+dekobon-tree-sitter-groovy = "0.6"
+tree-sitter-md = "0.5"
+tree-sitter-bash = "0.25"
+tree-sitter-dockerfile-updated = "0.2"
+tree-sitter-sequel = "0.3"
 tree-sitter-yaml = "0.7"
 zip = { version = "9.6", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 

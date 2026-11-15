@@ -51,9 +51,7 @@ pub fn index_file(root: &Path, path: &Path, cancelled: &AtomicBool) -> IndexedFi
     let relative = relative_path(root, path);
     let language = Language::from_path(path);
     let facts = match language {
-        Some(language @ (Language::Java | Language::Kotlin)) => {
-            file_facts(path, language, cancelled)
-        }
+        Some(language) if language.has_structure() => file_facts(path, language, cancelled),
         _ => FileFacts::default(),
     };
     IndexedFile {
@@ -142,10 +140,7 @@ pub fn index_project_cached(
     });
     let changed = Mutex::new(HashMap::<String, FileStamp>::new());
     let files = walk_files(root, cancelled, progress, |path| {
-        if !matches!(
-            Language::from_path(path),
-            Some(Language::Java | Language::Kotlin)
-        ) {
+        if !Language::from_path(path).is_some_and(Language::has_structure) {
             // Nothing is read from these, so there is nothing worth caching.
             return index_file(root, path, cancelled);
         }

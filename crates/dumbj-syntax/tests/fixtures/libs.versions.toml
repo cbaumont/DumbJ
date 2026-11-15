@@ -1,0 +1,21 @@
+# Gradle version catalog
+[versions]
+kotlin = "2.0.21"
+coroutines = "1.9.0"
+junit = { strictly = "5.11.0" }
+enabled = true
+build = 2024
+released = 2024-10-01T08:30:00Z
+
+[libraries]
+kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
+junit-jupiter = { group = "org.junit.jupiter", name = "junit-jupiter", version.ref = "junit" }
+"quoted.key" = 'literal \ string'
+escaped = "tab\there"
+
+[plugins]
+kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+
+[[bundles]]
+name = "testing"
+libraries = ["junit-jupiter", "kotlinx-coroutines-core"]

@@ -28,6 +28,15 @@ pub enum SymbolKind {
     /// A Kotlin property, including `val`/`var` constructor parameters.
     Property,
     EnumConstant,
+    /// A Markdown heading.
+    Heading,
+    /// A TOML table or array of tables.
+    Table,
+    /// An element of an XML file: the root and its children, and Maven modules,
+    /// dependencies and plugins.
+    Element,
+    /// A key of a configuration file: a TOML or YAML key.
+    Key,
 }
 
 impl SymbolKind {
@@ -47,6 +56,10 @@ impl SymbolKind {
         Self::Field,
         Self::Property,
         Self::EnumConstant,
+        Self::Heading,
+        Self::Table,
+        Self::Element,
+        Self::Key,
     ];
 
     /// A stable name for storing the kind outside the process; see [`Self::from_name`].
@@ -67,6 +80,10 @@ impl SymbolKind {
             Self::Field => "Field",
             Self::Property => "Property",
             Self::EnumConstant => "EnumConstant",
+            Self::Heading => "Heading",
+            Self::Table => "Table",
+            Self::Element => "Element",
+            Self::Key => "Key",
         }
     }
 
@@ -88,6 +105,10 @@ impl SymbolKind {
             "Field" => Some(Self::Field),
             "Property" => Some(Self::Property),
             "EnumConstant" => Some(Self::EnumConstant),
+            "Heading" => Some(Self::Heading),
+            "Table" => Some(Self::Table),
+            "Element" => Some(Self::Element),
+            "Key" => Some(Self::Key),
             _ => None,
         }
     }
@@ -104,6 +125,17 @@ impl SymbolKind {
                 | Self::Object
                 | Self::Companion
                 | Self::TypeAlias
+        )
+    }
+
+    /// Whether the symbol is an entry of a document or configuration file (a heading, a
+    /// table, a key) rather than a declaration in code. These are shown in File Structure
+    /// but are not searched for across the project and never resolve a reference.
+    #[must_use]
+    pub fn is_document(self) -> bool {
+        matches!(
+            self,
+            Self::Heading | Self::Table | Self::Element | Self::Key
         )
     }
 
@@ -283,11 +315,40 @@ impl Collector<'_> {
         name: Node<'_>,
         parent: Option<usize>,
     ) -> usize {
+        self.push_range(kind, range_of(declaration), range_of(name), parent)
+    }
+
+    /// Adds a symbol whose name is a part of a node, such as the text of a heading.
+    pub(crate) fn push_range(
+        &mut self,
+        kind: SymbolKind,
+        declaration: ByteRange,
+        name_range: ByteRange,
+        parent: Option<usize>,
+    ) -> usize {
+        let name = self
+            .source
+            .buffer
+            .text(name_range.clone())
+            .unwrap_or_default();
+        self.push_with_name(kind, declaration, name, name_range, parent)
+    }
+
+    /// Adds a symbol named `name`, which need not be written anywhere as such (a Maven
+    /// `groupId:artifactId`); `landing` is where navigation goes, possibly an empty range.
+    pub(crate) fn push_with_name(
+        &mut self,
+        kind: SymbolKind,
+        declaration: ByteRange,
+        name: String,
+        name_range: ByteRange,
+        parent: Option<usize>,
+    ) -> usize {
         self.facts.symbols.push(Symbol {
-            name: self.source.text(name),
+            name,
             kind,
-            range: range_of(declaration),
-            name_range: range_of(name),
+            range: declaration,
+            name_range,
             parent,
             supertypes: Vec::new(),
             receiver: None,
@@ -314,7 +375,16 @@ impl SyntaxTree {
         match self.language() {
             Language::Java => crate::java::collect(&mut collector, root, None),
             Language::Kotlin => crate::kotlin::collect(&mut collector, root, None),
-            Language::Yaml => {}
+            Language::Markdown => crate::document::markdown(&mut collector, root),
+            Language::Toml => crate::document::toml(&mut collector, root),
+            Language::Xml => crate::document::xml(&mut collector, root),
+            Language::Yaml => crate::document::yaml(&mut collector, root),
+            Language::Properties
+            | Language::Json
+            | Language::Groovy
+            | Language::Shell
+            | Language::Dockerfile
+            | Language::Sql => {}
         }
         collector.facts
     }

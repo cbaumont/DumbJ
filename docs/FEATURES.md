@@ -25,7 +25,7 @@
 ## 4.2 Editor surface
 - [x] Large files scroll smoothly (100k lines)
 - [~] Degraded mode — no highlighting over 20 MB, long lines cut; no notice shown
-- [~] Tree-sitter highlighting — Java, Kotlin, YAML
+- [~] Tree-sitter highlighting — Java, Kotlin, Groovy, YAML, XML, JSON, TOML, .properties, Markdown (block level only), shell, Dockerfile, SQL
 - [ ] Scope-aware highlighting (locals)
 - [ ] Semantic tokens (LSP)
 - [~] Gutter — line numbers, implements/overrides icons

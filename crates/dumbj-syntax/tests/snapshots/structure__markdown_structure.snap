@@ -1,0 +1,13 @@
+---
+source: crates/dumbj-syntax/tests/structure.rs
+expression: "render(\"Structure.md\")"
+---
+package None
+1:3 Heading Guide
+5:4 Heading Guide.Install
+7:5 Heading Guide.Install.From source
+11:5 Heading Guide.Install.From a package
+13:4 Heading Guide.Usage
+15:6 Heading Guide.Usage.Skipped a level
+17:1 Heading Setext title
+20:1 Heading Setext title.Setext subtitle

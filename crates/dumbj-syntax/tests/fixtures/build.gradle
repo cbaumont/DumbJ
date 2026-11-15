@@ -1,0 +1,34 @@
+plugins {
+    id 'java'
+    id 'org.springframework.boot' version '3.3.0'
+}
+
+group = 'org.example'
+version = '1.0-SNAPSHOT'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation project(':core')
+    testImplementation "org.junit.jupiter:junit-jupiter:${junitVersion}"
+}
+
+def greeting = "Hello, $project.name"
+
+tasks.register('hello') {
+    doLast {
+        println greeting
+    }
+}
+
+test {
+    useJUnitPlatform()
+    // Show failures only.
+    testLogging {
+        events 'failed'
+        exceptionFormat = 'full'
+    }
+}

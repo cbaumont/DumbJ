@@ -155,7 +155,16 @@ impl SyntaxTree {
         let (role, qualifier, in_import) = match self.language() {
             Language::Java => crate::java::classify(source, node),
             Language::Kotlin => crate::kotlin::classify(source, node),
-            Language::Yaml => (ReferenceRole::Value, None, false),
+            Language::Yaml
+            | Language::Xml
+            | Language::Properties
+            | Language::Json
+            | Language::Toml
+            | Language::Groovy
+            | Language::Markdown
+            | Language::Shell
+            | Language::Dockerfile
+            | Language::Sql => (ReferenceRole::Value, None, false),
         };
         let arguments = match (role, self.language()) {
             (ReferenceRole::Call, Language::Java) => crate::java::call_arguments(source, node),
@@ -249,7 +258,16 @@ impl SyntaxTree {
                 let binders = match self.language() {
                     Language::Java => crate::java::binders(&source, scope, child, want_type),
                     Language::Kotlin => crate::kotlin::binders(&source, scope, child, want_type),
-                    Language::Yaml => Vec::new(),
+                    Language::Yaml
+                    | Language::Xml
+                    | Language::Properties
+                    | Language::Json
+                    | Language::Toml
+                    | Language::Groovy
+                    | Language::Markdown
+                    | Language::Shell
+                    | Language::Dockerfile
+                    | Language::Sql => Vec::new(),
                 };
                 for binder in binders {
                     if binder.name.start_byte() < reference_start

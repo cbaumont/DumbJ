@@ -70,8 +70,66 @@ fn yaml_highlights() {
 }
 
 #[test]
+fn xml_highlights() {
+    insta::assert_snapshot!(render("pom.xml"));
+}
+
+#[test]
+fn properties_highlights() {
+    insta::assert_snapshot!(render("application.properties"));
+}
+
+#[test]
+fn json_highlights() {
+    insta::assert_snapshot!(render("package.json"));
+}
+
+#[test]
+fn toml_highlights() {
+    insta::assert_snapshot!(render("libs.versions.toml"));
+}
+
+#[test]
+fn groovy_highlights() {
+    insta::assert_snapshot!(render("build.gradle"));
+}
+
+#[test]
+fn markdown_highlights() {
+    insta::assert_snapshot!(render("README.md"));
+}
+
+#[test]
+fn shell_highlights() {
+    insta::assert_snapshot!(render("run.sh"));
+}
+
+#[test]
+fn dockerfile_highlights() {
+    insta::assert_snapshot!(render("Dockerfile"));
+}
+
+#[test]
+fn sql_highlights() {
+    insta::assert_snapshot!(render("schema.sql"));
+}
+
+#[test]
 fn a_range_query_matches_the_same_part_of_a_full_query() {
-    for name in ["Sample.java", "Sample.kt", "sample.yaml"] {
+    for name in [
+        "Sample.java",
+        "Sample.kt",
+        "sample.yaml",
+        "pom.xml",
+        "application.properties",
+        "package.json",
+        "libs.versions.toml",
+        "build.gradle",
+        "README.md",
+        "run.sh",
+        "Dockerfile",
+        "schema.sql",
+    ] {
         let (language, buffer) = fixture(name);
         let tree = parse(language, &buffer, || false).unwrap().unwrap();
         let all = tree

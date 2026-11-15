@@ -8,7 +8,10 @@
 mod common;
 
 use common::{shop_index, shop_root};
-use dumbj_index::{HitTarget, Index, SearchScope, file_structure, search};
+use std::path::PathBuf;
+use std::sync::atomic::AtomicBool;
+
+use dumbj_index::{HitTarget, Index, SearchScope, file_structure, index_project, search};
 
 /// The names of the hits, best first: file names for files, qualified names for symbols.
 fn names(index: &Index, query: &str, scope: SearchScope) -> Vec<String> {
@@ -175,4 +178,25 @@ fn file_structure_lists_and_filters() {
     );
     assert_eq!(list("am"), ["Money.amount", "Money.amount"]);
     assert_eq!(list("zzz"), [] as [String; 0]);
+}
+
+#[test]
+fn document_outlines_show_in_file_structure_only() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/notes");
+    let index = index_project(&root, &AtomicBool::new(false), |_| {}).unwrap();
+    let file = index.file_by_path(&root.join("README.md")).unwrap();
+    let structure: Vec<_> = file_structure(&index, file, "")
+        .into_iter()
+        .map(|hit| match hit.target {
+            HitTarget::Symbol(id) => index.qualified_name(id),
+            HitTarget::File(_) => unreachable!(),
+        })
+        .collect();
+    assert_eq!(structure, ["Notes", "Notes.Money", "Notes.Money.Currency"]);
+    assert_eq!(
+        names(&index, "money", SearchScope::Symbols),
+        [] as [String; 0],
+        "headings are not declarations to go to"
+    );
+    assert_eq!(names(&index, "readme", SearchScope::Files), ["README.md"]);
 }
