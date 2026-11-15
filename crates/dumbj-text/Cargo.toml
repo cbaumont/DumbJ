@@ -1,6 +1,6 @@
 [package]
 name = "dumbj-text"
-description = "DumbJ's text model: a rope buffer with typed offsets, edits and plain-text search. Headless."
+description = "DumbJ's text model: a rope buffer with typed offsets, edits, undo history, plain-text search and atomic saving. Headless."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
