@@ -1,0 +1,23 @@
+[package]
+name = "dumbj-jars"
+description = "DumbJ's library sources: Gradle and Maven source jars, indexed by class and read in place. Headless."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+dumbj-syntax.workspace = true
+dumbj-text.workspace = true
+ignore.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+zip.workspace = true
+
+[dev-dependencies]
+zip.workspace = true
+
+[lints]
+workspace = true

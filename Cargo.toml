@@ -37,6 +37,7 @@ tree-sitter = "0.27"
 tree-sitter-java = "0.23"
 tree-sitter-kotlin-sg = "0.4"
 tree-sitter-yaml = "0.7"
+zip = { version = "9.6", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 
 # Pinned exactly: GPUI's API moves fast. Upgrade deliberately. Only dumbj-ui may depend on it.
 gpui = { git = "https://github.com/zed-industries/zed", rev = "e8bc16acee5ae1937600d571d441c4b5d7b0d288" }
