@@ -31,6 +31,66 @@ pub enum SymbolKind {
 }
 
 impl SymbolKind {
+    /// Every kind, for tests and exhaustive tables.
+    pub const ALL: &[Self] = &[
+        Self::Class,
+        Self::Interface,
+        Self::Enum,
+        Self::Record,
+        Self::Annotation,
+        Self::Object,
+        Self::Companion,
+        Self::TypeAlias,
+        Self::Function,
+        Self::Method,
+        Self::Constructor,
+        Self::Field,
+        Self::Property,
+        Self::EnumConstant,
+    ];
+
+    /// A stable name for storing the kind outside the process; see [`Self::from_name`].
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Class => "Class",
+            Self::Interface => "Interface",
+            Self::Enum => "Enum",
+            Self::Record => "Record",
+            Self::Annotation => "Annotation",
+            Self::Object => "Object",
+            Self::Companion => "Companion",
+            Self::TypeAlias => "TypeAlias",
+            Self::Function => "Function",
+            Self::Method => "Method",
+            Self::Constructor => "Constructor",
+            Self::Field => "Field",
+            Self::Property => "Property",
+            Self::EnumConstant => "EnumConstant",
+        }
+    }
+
+    /// The kind stored under `name` by [`Self::as_str`], or `None` for an unknown name.
+    #[must_use]
+    pub fn from_name(name: &str) -> Option<Self> {
+        match name {
+            "Class" => Some(Self::Class),
+            "Interface" => Some(Self::Interface),
+            "Enum" => Some(Self::Enum),
+            "Record" => Some(Self::Record),
+            "Annotation" => Some(Self::Annotation),
+            "Object" => Some(Self::Object),
+            "Companion" => Some(Self::Companion),
+            "TypeAlias" => Some(Self::TypeAlias),
+            "Function" => Some(Self::Function),
+            "Method" => Some(Self::Method),
+            "Constructor" => Some(Self::Constructor),
+            "Field" => Some(Self::Field),
+            "Property" => Some(Self::Property),
+            "EnumConstant" => Some(Self::EnumConstant),
+            _ => None,
+        }
+    }
     /// Whether the symbol declares a type that can contain members.
     #[must_use]
     pub fn is_type(self) -> bool {
@@ -210,5 +270,18 @@ impl SyntaxTree {
             Language::Yaml => {}
         }
         collector.facts
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn every_symbol_kind_round_trips_through_its_name() {
+        for &kind in SymbolKind::ALL {
+            assert_eq!(SymbolKind::from_name(kind.as_str()), Some(kind));
+        }
+        assert_eq!(SymbolKind::from_name("Nope"), None);
     }
 }

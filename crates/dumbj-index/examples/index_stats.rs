@@ -8,7 +8,7 @@ use std::path::Path;
 use std::sync::atomic::AtomicBool;
 use std::time::Instant;
 
-use dumbj_index::{SearchScope, index_project, search};
+use dumbj_index::{IndexStore, SearchScope, index_project, index_project_cached, search};
 
 fn main() {
     let Some(dir) = std::env::args_os().nth(1) else {
@@ -25,6 +25,21 @@ fn main() {
         index.symbol_count(),
         started.elapsed()
     );
+    // Cached runs go to a scratch database next to the system temp dir, not the real cache.
+    let db = std::env::temp_dir().join(format!("index_stats-{}.sqlite", std::process::id()));
+    if let Ok(mut store) = IndexStore::open(&db) {
+        for label in ["cold cache", "warm cache"] {
+            let started = Instant::now();
+            let cached =
+                index_project_cached(Path::new(&dir), &mut store, &AtomicBool::new(false), |_| {});
+            println!(
+                "{label}: {} files in {:.2?}",
+                cached.map_or(0, |index| index.file_count()),
+                started.elapsed()
+            );
+        }
+    }
+    let _ = std::fs::remove_file(&db);
     for query in ["Job", "launch", "CS", "flow"] {
         let started = Instant::now();
         let hits = search(&index, query, SearchScope::All, 50, || false).unwrap_or_default();

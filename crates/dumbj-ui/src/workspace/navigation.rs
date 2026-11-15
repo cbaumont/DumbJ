@@ -7,7 +7,10 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::time::Duration;
 
 use dumbj_actions::{Action, MouseStroke};
-use dumbj_index::{Decision, Index, Resolution, Target, index_project};
+use dumbj_index::{
+    Decision, Index, IndexStore, Resolution, Target, cache_path, index_project,
+    index_project_cached,
+};
 use dumbj_settings::UiRole;
 use dumbj_text::ByteOffset;
 use gpui::{
@@ -135,9 +138,21 @@ impl Workspace {
             let started = std::time::Instant::now();
             let index = cx
                 .background_spawn(async move {
-                    index_project(&root, &cancelled, |count| {
-                        progress.store(count, Ordering::Relaxed);
-                    })
+                    let report = |count| progress.store(count, Ordering::Relaxed);
+                    let store = cache_path(&root)
+                        .ok_or_else(|| "no cache directory".to_owned())
+                        .and_then(|path| {
+                            IndexStore::open(&path).map_err(|error| error.to_string())
+                        });
+                    match store {
+                        Ok(mut store) => {
+                            index_project_cached(&root, &mut store, &cancelled, report)
+                        }
+                        Err(reason) => {
+                            tracing::warn!(%reason, "index cache unavailable; indexing without it");
+                            index_project(&root, &cancelled, report)
+                        }
+                    }
                 })
                 .await;
             let _ = this.update(cx, |this, cx| {

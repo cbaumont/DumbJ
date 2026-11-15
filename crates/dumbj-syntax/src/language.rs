@@ -40,6 +40,26 @@ impl Language {
         }
     }
 
+    /// A stable lowercase identifier for storing the language outside the process; see
+    /// [`Self::from_id`].
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Java => "java",
+            Self::Kotlin => "kotlin",
+            Self::Yaml => "yaml",
+        }
+    }
+
+    /// The language stored under `id` by [`Self::as_str`], or `None` for an unknown id.
+    #[must_use]
+    pub fn from_id(id: &str) -> Option<Self> {
+        Self::ALL
+            .iter()
+            .copied()
+            .find(|language| language.as_str() == id)
+    }
+
     pub(crate) fn grammar(self) -> tree_sitter::Language {
         match self {
             Self::Java => tree_sitter_java::LANGUAGE.into(),
@@ -93,6 +113,14 @@ mod tests {
         assert_eq!(detect("config.yaml"), Some(Language::Yaml));
         assert_eq!(detect("README.md"), None);
         assert_eq!(detect("Makefile"), None);
+    }
+
+    #[test]
+    fn every_language_round_trips_through_its_id() {
+        for &language in Language::ALL {
+            assert_eq!(Language::from_id(language.as_str()), Some(language));
+        }
+        assert_eq!(Language::from_id("cobol"), None);
     }
 
     #[test]

@@ -12,6 +12,7 @@ publish.workspace = true
 dumbj-syntax.workspace = true
 dumbj-text.workspace = true
 ignore.workspace = true
+rusqlite.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 
