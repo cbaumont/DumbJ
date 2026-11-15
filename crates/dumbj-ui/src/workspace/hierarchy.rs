@@ -1,19 +1,21 @@
+use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
 use dumbj_actions::Action;
 use dumbj_index::{
     Caller, Certainty, Index, SymbolId, UsageTarget, callers, direct_subtypes, direct_supertypes,
-    implementations, super_members,
+    gutter_marks, implementations, super_members,
 };
 use dumbj_settings::UiRole;
 use gpui::{
-    Context, IntoElement, MouseButton, ScrollStrategy, UniformListScrollHandle, Window, div,
-    prelude::*, px, uniform_list,
+    Context, Entity, IntoElement, MouseButton, ScrollStrategy, UniformListScrollHandle, Window,
+    div, prelude::*, px, uniform_list,
 };
 
 use super::Workspace;
 use super::navigation::{Chooser, ChooserItem, Location};
+use crate::editor::{EditorView, GutterIcon};
 use crate::theme;
 
 const ROW_HEIGHT: f32 = 22.;
@@ -310,6 +312,66 @@ impl Workspace {
             "Super methods"
         };
         self.jump_or_choose(&index, title.to_owned(), &targets, window, cx);
+    }
+
+    pub(super) fn refresh_gutter_icons(
+        &self,
+        editor: &Entity<EditorView>,
+        path: &Path,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(index) = self.index.clone() else {
+            return;
+        };
+        let Some(file) = index.file_by_path(path) else {
+            return;
+        };
+        let editor = editor.downgrade();
+        cx.spawn(async move |_, cx| {
+            let marks_index = index.clone();
+            let marks = cx
+                .background_spawn(async move { gutter_marks(&marks_index, file) })
+                .await;
+            let icons = marks
+                .iter()
+                .filter_map(|mark| {
+                    Some(GutterIcon {
+                        offset: index.symbol(mark.symbol)?.name_range.start,
+                        symbol: mark.symbol,
+                        overrides: mark.overrides,
+                        overridden: mark.overridden,
+                    })
+                })
+                .collect();
+            let _ = editor.update(cx, |editor, cx| editor.set_gutter_icons(icons, cx));
+        })
+        .detach();
+    }
+
+    pub(super) fn gutter_icon_clicked(
+        &mut self,
+        icon: GutterIcon,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(index) = self.index.clone() else {
+            return;
+        };
+        let name = index.qualified_name(icon.symbol);
+        let is_type = index.symbol(icon.symbol).is_some_and(|s| s.kind.is_type());
+        let mut targets = Vec::new();
+        if icon.overrides {
+            targets.extend(super_members(&index, icon.symbol));
+        }
+        if icon.overridden {
+            targets.extend(implementations(&index, icon.symbol));
+        }
+        let title = match (icon.overrides, is_type) {
+            (true, _) => format!("Related to {name}"),
+            (false, true) => format!("Subtypes of {name}"),
+            (false, false) => format!("Implementations of {name}"),
+        };
+        self.jump_or_choose(&index, title, &targets, window, cx);
     }
 
     pub(super) fn type_hierarchy(&mut self, cx: &mut Context<Self>) {

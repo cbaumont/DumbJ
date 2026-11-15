@@ -10,7 +10,7 @@ use gpui::{
     WindowOptions, div, prelude::*, px, size, svg,
 };
 
-use crate::editor::{EditorView, MousePressed};
+use crate::editor::{EditorView, GutterIconClicked, MousePressed};
 use crate::editor_model::parse_line_column;
 use crate::file_tree::{FileTree, OpenFile};
 use crate::keys::{modifiers_from_gpui, stroke_from_gpui};
@@ -292,8 +292,16 @@ impl Workspace {
                         this.on_editor_mouse(*stroke, window, cx);
                     },
                 ));
+                self.subscriptions.push(cx.subscribe_in(
+                    &editor,
+                    window,
+                    |this, _, GutterIconClicked(icon), window, cx| {
+                        this.gutter_icon_clicked(*icon, window, cx);
+                    },
+                ));
                 self.subscriptions
                     .push(cx.observe(&editor, |_, _, cx| cx.notify()));
+                self.refresh_gutter_icons(&editor, &path, cx);
                 self.tabs.push(Tab {
                     path,
                     title,

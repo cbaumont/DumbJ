@@ -5,7 +5,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 use dumbj_actions::{Action, MouseStroke};
-use dumbj_index::{Index, Resolution, Site, UsageTarget};
+use dumbj_index::{Index, Resolution, Site, SymbolId, UsageTarget};
 use dumbj_settings::UiRole;
 use dumbj_syntax::{HighlightSpan, Language, SyntaxTree};
 use dumbj_text::search::{self, SearchOptions};
@@ -130,6 +130,17 @@ enum Drag {
 /// workspace can run a mouse shortcut bound to it.
 pub(crate) struct MousePressed(pub(crate) MouseStroke);
 
+/// An implements/overrides marker next to a declaration.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct GutterIcon {
+    pub(crate) offset: ByteOffset,
+    pub(crate) symbol: SymbolId,
+    pub(crate) overrides: bool,
+    pub(crate) overridden: bool,
+}
+
+pub(crate) struct GutterIconClicked(pub(crate) GutterIcon);
+
 pub(crate) struct EditorView {
     path: PathBuf,
     focus: FocusHandle,
@@ -147,11 +158,13 @@ pub(crate) struct EditorView {
     drag: Option<Drag>,
     pending_offset: Option<ByteOffset>,
     benchmark: Option<ScrollBenchmark>,
+    gutter_icons: Vec<GutterIcon>,
     load_cancel: Arc<AtomicBool>,
     _load: Task<()>,
 }
 
 impl EventEmitter<MousePressed> for EditorView {}
+impl EventEmitter<GutterIconClicked> for EditorView {}
 
 impl Drop for EditorView {
     fn drop(&mut self) {
@@ -200,6 +213,7 @@ impl EditorView {
             drag: None,
             pending_offset: None,
             benchmark: None,
+            gutter_icons: Vec::new(),
             load_cancel,
             _load: task,
         }
@@ -360,6 +374,19 @@ impl EditorView {
         }
         cx.notify();
         true
+    }
+
+    pub(crate) fn set_gutter_icons(&mut self, icons: Vec<GutterIcon>, cx: &mut Context<Self>) {
+        self.gutter_icons = icons;
+        cx.notify();
+    }
+
+    fn gutter_icon_on_line(&self, line: usize) -> Option<GutterIcon> {
+        let buffer = self.model.buffer();
+        self.gutter_icons
+            .iter()
+            .find(|icon| buffer.point_at(icon.offset).line.get() == line)
+            .copied()
     }
 
     pub(crate) fn caret_offset(&self) -> ByteOffset {
@@ -556,6 +583,17 @@ impl EditorView {
         let Some(offset) = self.offset_at(event.position) else {
             return;
         };
+        let in_icon_column = self
+            .painted
+            .as_ref()
+            .is_some_and(|painted| event.position.x < painted.bounds.left() + GUTTER_PADDING_LEFT);
+        if in_icon_column {
+            let line = self.model.buffer().point_at(offset).line.get();
+            if let Some(icon) = self.gutter_icon_on_line(line) {
+                cx.emit(GutterIconClicked(icon));
+                return;
+            }
+        }
         match event.click_count {
             1 => self.model.move_to(offset, event.modifiers.shift),
             2 => {
@@ -839,6 +877,19 @@ impl EditorView {
             let number = shape(window, number.clone(), &[run(number.len(), color)]);
             let number_x = bounds.left() + gutter_width - GUTTER_PADDING_RIGHT - number.width;
             numbers.push((point(number_x, top), number));
+            if let Some(icon) = self.gutter_icon_on_line(line) {
+                let (glyph, role) = match (icon.overrides, icon.overridden) {
+                    (true, true) => ("↕", UiRole::Accent),
+                    (true, false) => ("↑", UiRole::Info),
+                    _ => ("↓", UiRole::Success),
+                };
+                let glyph = shape(
+                    window,
+                    glyph.to_owned(),
+                    &[run(glyph.len(), theme::ui(cx, role))],
+                );
+                numbers.push((point(bounds.left() + px(4.), top), glyph));
+            }
             lines.push((display, shaped));
         }
 

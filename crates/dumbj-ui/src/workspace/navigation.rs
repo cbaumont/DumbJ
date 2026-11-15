@@ -153,6 +153,14 @@ impl Workspace {
                         "project indexed"
                     );
                     this.index = Some(Arc::new(index));
+                    let open: Vec<_> = this
+                        .tabs
+                        .iter()
+                        .map(|tab| (tab.editor.clone(), tab.path.clone()))
+                        .collect();
+                    for (editor, path) in open {
+                        this.refresh_gutter_icons(&editor, &path, cx);
+                    }
                 }
                 this.indexing = None;
                 cx.notify();
