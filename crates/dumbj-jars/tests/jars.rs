@@ -197,3 +197,30 @@ fn build_files_pick_the_version() {
         "version = \"2.3.21\" of something else"
     ));
 }
+
+#[test]
+fn jdk_source_zips_drop_the_module_directory() {
+    let scratch = Scratch::new("jdk");
+    let zip = scratch.0.join("jdk-21/lib/src.zip");
+    write_jar(
+        &zip,
+        &[(
+            "java.base/java/util/List.java",
+            "package java.util;\npublic interface List<E> {}\n",
+        )],
+    );
+    let jar = SourceJar {
+        path: zip.clone(),
+        artifact: "jdk".to_owned(),
+        version: "jdk-21".to_owned(),
+    };
+    let index = JarIndex::build(vec![jar], &AtomicBool::new(false)).unwrap();
+    let found = index.find("java.util.List");
+    assert_eq!(found.len(), 1);
+    let path = found[0].virtual_path();
+    assert_eq!(
+        split_virtual_path(&path),
+        Some((zip, "java.base/java/util/List.java".to_owned()))
+    );
+    assert!(read_virtual(&path).unwrap().contains("interface List"));
+}

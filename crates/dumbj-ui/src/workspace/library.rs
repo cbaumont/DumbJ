@@ -4,7 +4,8 @@ use std::sync::atomic::AtomicBool;
 use dumbj_index::Index;
 use dumbj_index::LibraryTarget;
 use dumbj_jars::{
-    ClassSource, JarIndex, default_roots, discover, locate, named_by_build, read_virtual,
+    ClassSource, JarIndex, default_roots, discover, discover_jdk, locate, named_by_build,
+    read_virtual,
 };
 use dumbj_syntax::Language;
 use gpui::{AppContext, Context, Window};
@@ -63,7 +64,8 @@ impl Workspace {
             let jars = cx
                 .background_spawn(async move {
                     let cancelled = AtomicBool::new(false);
-                    let jars = discover(&default_roots(), &cancelled)?;
+                    let mut jars = discover(&default_roots(), &cancelled)?;
+                    jars.extend(discover_jdk());
                     JarIndex::build(jars, &cancelled)
                 })
                 .await;

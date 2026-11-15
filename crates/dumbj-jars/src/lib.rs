@@ -59,6 +59,44 @@ fn coordinates(path: &Path) -> Option<(String, String)> {
     }
 }
 
+/// The JDK's sources: `$JAVA_HOME/lib/src.zip`, else the newest JDK that has one among
+/// SDKMAN's, IntelliJ's (`~/.jdks`) and the system's (`/usr/lib/jvm`).
+#[must_use]
+pub fn discover_jdk() -> Option<SourceJar> {
+    let source_zip = |home: &Path| {
+        let zip = home.join("lib/src.zip");
+        zip.is_file().then(|| {
+            let home = home.canonicalize().unwrap_or_else(|_| home.to_path_buf());
+            SourceJar {
+                path: zip,
+                artifact: "jdk".to_owned(),
+                version: home
+                    .file_name()
+                    .map_or_else(String::new, |name| name.to_string_lossy().into_owned()),
+            }
+        })
+    };
+    if let Some(found) = std::env::var_os("JAVA_HOME").and_then(|home| source_zip(Path::new(&home)))
+    {
+        return Some(found);
+    }
+    let home = std::env::var_os("HOME").map(PathBuf::from);
+    let parents = [
+        home.as_ref()
+            .map(|home| home.join(".sdkman/candidates/java")),
+        home.as_ref().map(|home| home.join(".jdks")),
+        Some(PathBuf::from("/usr/lib/jvm")),
+    ];
+    parents
+        .into_iter()
+        .flatten()
+        .filter_map(|parent| std::fs::read_dir(parent).ok())
+        .flatten()
+        .filter_map(Result::ok)
+        .filter_map(|entry| source_zip(&entry.path()))
+        .max_by(|a, b| version_key(&a.version).cmp(&version_key(&b.version)))
+}
+
 #[must_use]
 pub fn discover(roots: &[PathBuf], cancelled: &AtomicBool) -> Option<Vec<SourceJar>> {
     let mut found = Vec::new();
@@ -95,6 +133,15 @@ fn open(jar: &Path) -> Result<zip::ZipArchive<File>, JarError> {
 fn source_set_of(entry: &str) -> Option<(&str, &str)> {
     let (first, rest) = entry.split_once('/')?;
     first.ends_with("Main").then_some((first, rest))
+}
+
+/// The JDK's `src.zip` puts each module in a top directory: `java.base/java/util/List.java`.
+/// Package roots never contain a dot, module names do.
+fn without_module(stem: &str) -> &str {
+    match stem.split_once('/') {
+        Some((first, rest)) if first.contains('.') => rest,
+        _ => stem,
+    }
 }
 
 fn stem_of(entry: &str) -> Option<&str> {
@@ -190,7 +237,7 @@ impl JarIndex {
                 let class = match source_set_of(stem) {
                     Some((_, rest)) => read_head(&mut archive, &entry)
                         .and_then(|head| class_from_source(&head, rest)),
-                    None => Some(stem.replace('/', ".")),
+                    None => Some(without_module(stem).replace('/', ".")),
                 };
                 if let Some(class) = class {
                     classes.entry(class).or_default().push((position, entry));
@@ -265,7 +312,13 @@ pub fn virtual_path(jar: &Path, entry: &str) -> PathBuf {
 #[must_use]
 pub fn split_virtual_path(path: &Path) -> Option<(PathBuf, String)> {
     let text = path.to_str()?;
-    let at = text.find(&format!(".jar{SEPARATOR}"))? + ".jar".len();
+    let at = [".jar", ".zip"]
+        .iter()
+        .filter_map(|extension| {
+            text.find(&format!("{extension}{SEPARATOR}"))
+                .map(|at| at + extension.len())
+        })
+        .min()?;
     let (jar, rest) = text.split_at(at);
     Some((PathBuf::from(jar), rest.strip_prefix(SEPARATOR)?.to_owned()))
 }
