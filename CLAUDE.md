@@ -5,9 +5,16 @@ A fast, native, keyboard-first **code reading and code review editor** with Inte
 Full spec: `docs/BRIEF.md`. Where it conflicts with the Decisions in `docs/ARCHITECTURE.md`, the Decisions win. Read the sections relevant to your current task, not the whole file every time.
 
 ## Current milestone
-M1b: the rest of M1 (see BRIEF §9), **complete and waiting for the owner's review** (2026-11-15). M1a was approved on 2026-11-15; M0 on 2026-11-14. Decisions are in `docs/ARCHITECTURE.md`. Stop after each milestone with a summary, run instructions, test status, known gaps and screenshots, then wait for approval.
+M1c: editing, **in progress** (started 2026-11-15). M1b was approved on 2026-11-15, M1a on 2026-11-15, M0 on 2026-11-14. Decisions are in `docs/ARCHITECTURE.md`. At each milestone end write the review package (summary, run instructions, test status, known gaps, screenshots) and push; the owner asked on 2026-11-15 not to be asked for approval between milestones unless strictly necessary, so then continue with the next one (M2, BRIEF §9).
 
-Next after approval: **M1c, editing** (typing, undo/redo with grouping, atomic autosave, reload prompt for files changed on disk, index refresh on change), split out of M1b by the 2026-11-15 decision. Then M2.
+### M1c plan
+1. `dumbj-text`: undo/redo `History` with grouping, atomic save and file stamps (`disk`), line-ending detection. *Delegated to a subagent in a worktree; merge its branch when it reports.*
+2. `EditorModel`: typing, Backspace/Delete, Enter with auto-indent, Tab/Shift+Tab, cut/paste, undo/redo, all through `History`.
+3. `EditorView`: IME input handler, edit actions, reparse after edits, folds and highlights kept valid, modified marker on the tab, library files stay read-only.
+4. Autosave (focus loss, tab switch, idle, close) through `write_atomic`; never write a file that was not edited.
+5. Disk changes: check stamps on window activation and tab switch; reload silently when unmodified, prompt when modified.
+6. Index refresh after a save or a detected change.
+7. Line actions if the milestone stays reviewable: duplicate, delete line, move line, comment toggle. Multi-caret and column selection are out of M1c.
 
 M1b holds: hierarchy (Go to Implementation/Super Method, gutter icons, Type/Call Hierarchy window), Java↔Kotlin interop (accessors, facades, `@JvmName`, `INSTANCE`), library sources (source jars and the JDK `src.zip`, read in place), editor surface (folding, sticky lines, Extend/Shrink Selection, usage highlighting, parameter colouring), Tier 1 support files, `libs.versions.toml` navigation, Find in Files (`dumbj-search`), Recent Files/Locations and Bookmarks (per-project state in `$XDG_STATE_HOME/dumbj/projects/<id>/state.toml`), Kotlin scope functions and typed collection/Flow lambdas in the resolver.
 
