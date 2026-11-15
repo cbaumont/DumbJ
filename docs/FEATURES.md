@@ -15,7 +15,7 @@
 - [ ] Review tool window
 - [ ] Bookmarks tool window
 - [ ] Problems tool window
-- [ ] Hierarchy tool window
+- [~] Hierarchy tool window — below the editor; no docking choice
 - [~] Hide all tool windows; no distraction-free mode
 - [x] Catppuccin Mocha theme, as data files
 - [~] Catppuccin Latte — loads and is tested; not selectable, no system dark/light
@@ -28,7 +28,7 @@
 - [~] Tree-sitter highlighting — Java, Kotlin, YAML
 - [ ] Scope-aware highlighting (locals)
 - [ ] Semantic tokens (LSP)
-- [~] Gutter — line numbers only
+- [~] Gutter — line numbers, implements/overrides icons
 - [ ] Inlay hints
 - [ ] Inline blame / Annotate
 - [ ] Sticky lines
@@ -47,11 +47,11 @@
 - [x] Go to File / Class / Symbol
 - [x] Go to Line:Column
 - [ ] Find Action
-- [~] Go to Declaration / Type Declaration / Implementation / Super Method / Test — Go to Declaration only (Ctrl+B, Ctrl+click)
+- [~] Go to Declaration / Type Declaration / Implementation / Super Method / Test — no Type Declaration or Test
 - [x] Find Usages / Show Usages
 - [ ] Quick Definition / Quick Documentation
 - [x] File Structure popup
-- [ ] Call Hierarchy / Type Hierarchy
+- [~] Call Hierarchy / Type Hierarchy — callers only, no callees
 - [x] Navigate Back / Forward
 - [ ] Recent Files / Recent Locations / Last Edit Location / Switcher
 - [ ] Find in Files / Replace in Files
@@ -65,7 +65,7 @@
 - [x] Candidate ranking and chooser
 - [~] Member access heuristics — lambda parameter types, indexing (`a[i].b`), smart casts and scope functions stay guesses
 - [x] Dumb Find Usages
-- [ ] Dumb implementations / hierarchy
+- [x] Dumb implementations / hierarchy
 - [~] Exact / best-guess labelling — chooser headed "best guess", usages marked "maybe"; no label on a direct jump
 - [ ] Language-server lifecycle
 - [x] Accuracy benchmark — 264 cases, nightly in CI
@@ -113,8 +113,8 @@ Search & go to
 Code navigation
 - [x] GotoDeclaration
 - [ ] GotoTypeDeclaration
-- [ ] GotoImplementation
-- [ ] GotoSuperMethod
+- [x] GotoImplementation
+- [x] GotoSuperMethod
 - [ ] GotoTest
 - [x] FindUsages
 - [x] ShowUsages
@@ -123,8 +123,8 @@ Code navigation
 - [ ] QuickJavaDoc
 - [ ] ParameterInfo
 - [x] FileStructurePopup
-- [ ] TypeHierarchy
-- [ ] CallHierarchy
+- [x] TypeHierarchy
+- [~] CallHierarchy — callers only
 - [x] Back
 - [x] Forward
 - [ ] JumpToLastChange
