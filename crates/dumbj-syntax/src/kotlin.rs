@@ -323,14 +323,17 @@ pub(crate) fn binders<'t>(
             })
             .into_iter()
             .collect(),
-        // Function parameters, and constructor parameters, which are visible in
-        // initialisers and `init` blocks.
-        (_, "function_value_parameters") | ("class_declaration", "primary_constructor") => {
-            named_children(child)
-                .into_iter()
-                .filter_map(parameter)
-                .collect()
-        }
+        (_, "function_value_parameters") => named_children(child)
+            .into_iter()
+            .filter_map(parameter)
+            .collect(),
+        // Plain constructor parameters are visible in initialisers and `init` blocks.
+        // `val`/`var` parameters are properties, which the index resolves as members.
+        ("class_declaration", "primary_constructor") => named_children(child)
+            .into_iter()
+            .filter(|parameter| child_of_kind(*parameter, "binding_pattern_kind").is_none())
+            .filter_map(parameter)
+            .collect(),
         (_, "lambda_parameters") => named_children(child)
             .into_iter()
             .flat_map(|part| variable_binders(source, part, None))

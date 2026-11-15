@@ -272,6 +272,11 @@ fn kotlin_scoping_rules() {
         "implicit `it` has no declaration"
     );
     assert_eq!(find("val v = lat§er\nval later = 1"), "none");
+    assert_eq!(
+        local(Kotlin, "class C(val kept: Int) { fun m() = ke§pt }"),
+        "none",
+        "a val constructor parameter is a property, not a local"
+    );
     assert_eq!(find("run { val inner = 1 }\nval v = inn§er"), "none");
     assert_eq!(
         find("val x = 1\nrest.forEach { x -> println(§x) }"),
