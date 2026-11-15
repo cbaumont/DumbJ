@@ -14,6 +14,7 @@ publish = false
 dumbj-actions = { path = "crates/dumbj-actions" }
 dumbj-index = { path = "crates/dumbj-index" }
 dumbj-jars = { path = "crates/dumbj-jars" }
+dumbj-search = { path = "crates/dumbj-search" }
 dumbj-settings = { path = "crates/dumbj-settings" }
 dumbj-syntax = { path = "crates/dumbj-syntax" }
 dumbj-text = { path = "crates/dumbj-text" }
@@ -21,12 +22,14 @@ dumbj-ui = { path = "crates/dumbj-ui" }
 
 anyhow = "1"
 
+globset = "0.4"
 ignore = "0.4"
 insta = "1.49"
 proptest = "1.12"
 # Line breaks are LF only (a preceding CR is handled by dumbj-text), so that line numbers
 # agree with git, tree-sitter and LSP. Ropey's default also splits on lone CR, VT, FF, NEL, LS, PS.
 ropey = { version = "1.6", default-features = false, features = ["simd"] }
+regex = "1"
 roxmltree = "0.21"
 rusqlite = { version = "0.41", features = ["bundled"] }
 serde = { version = "1", features = ["derive"] }

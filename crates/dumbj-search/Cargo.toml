@@ -1,0 +1,18 @@
+[package]
+name = "dumbj-search"
+description = "DumbJ's Find in Files: a cancellable text search over a project's files. Headless."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+globset.workspace = true
+ignore.workspace = true
+regex.workspace = true
+thiserror.workspace = true
+
+[lints]
+workspace = true

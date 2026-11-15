@@ -1241,6 +1241,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "dumbj-search"
+version = "0.1.0"
+dependencies = [
+ "globset",
+ "ignore",
+ "regex",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "dumbj-settings"
 version = "0.1.0"
 dependencies = [
