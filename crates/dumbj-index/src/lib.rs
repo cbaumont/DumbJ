@@ -1,10 +1,14 @@
 //! DumbJ's symbol index and dumb navigation engine. No UI; callers run indexing and
 //! searches on background threads.
 
+mod fuzzy;
 mod index;
 mod indexer;
 mod resolve;
+mod search;
 
+pub use fuzzy::{FuzzyMatch, fuzzy_match};
 pub use index::{FileId, Index, IndexedFile, SymbolId};
 pub use indexer::{absolute, index_file, index_project};
 pub use resolve::{Decision, Resolution, Site, Target, Tier, resolve};
+pub use search::{HitTarget, SearchHit, SearchScope, file_structure, search};
