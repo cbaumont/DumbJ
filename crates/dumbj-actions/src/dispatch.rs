@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
 use crate::bindings::Bindings;
-use crate::keystroke::{KeyStroke, Modifier, Modifiers, Shortcut};
+use crate::keystroke::{KeyStroke, Modifier, Modifiers, MouseStroke, Shortcut};
 use crate::registry::Action;
 
 /// The longest gap allowed between each press and release of a double-tapped modifier.
@@ -41,6 +41,7 @@ pub struct KeyDispatcher {
     single: HashMap<KeyStroke, Vec<Action>>,
     chords: HashMap<KeyStroke, HashMap<KeyStroke, Vec<Action>>>,
     double_modifier: HashMap<Modifier, Vec<Action>>,
+    mouse: HashMap<MouseStroke, Vec<Action>>,
     pending_chord: Option<KeyStroke>,
     tap: TapState,
 }
@@ -51,6 +52,7 @@ impl KeyDispatcher {
         let mut single: HashMap<_, Vec<_>> = HashMap::new();
         let mut chords: HashMap<_, HashMap<_, Vec<_>>> = HashMap::new();
         let mut double_modifier: HashMap<_, Vec<_>> = HashMap::new();
+        let mut mouse: HashMap<_, Vec<_>> = HashMap::new();
         // `Bindings::iter` is ordered by action, which keeps candidate lists deterministic.
         for (action, shortcuts) in bindings.iter() {
             for shortcut in shortcuts {
@@ -75,6 +77,7 @@ impl KeyDispatcher {
                     Shortcut::DoubleModifier(modifier) => {
                         double_modifier.entry(*modifier).or_default().push(action);
                     }
+                    Shortcut::Mouse(stroke) => mouse.entry(*stroke).or_default().push(action),
                     Shortcut::Unsupported(_) => {}
                 }
             }
@@ -83,6 +86,7 @@ impl KeyDispatcher {
             single,
             chords,
             double_modifier,
+            mouse,
             pending_chord: None,
             tap: TapState::Idle,
         }
@@ -120,6 +124,21 @@ impl KeyDispatcher {
             return Dispatch::Pending;
         }
         Dispatch::Unhandled
+    }
+
+    /// Feeds a mouse button press. Returns the first enabled action bound to it.
+    pub fn mouse_down(
+        &mut self,
+        stroke: MouseStroke,
+        enabled: impl Fn(Action) -> bool,
+    ) -> Option<Action> {
+        self.tap = TapState::Idle;
+        self.pending_chord = None;
+        self.mouse
+            .get(&stroke)?
+            .iter()
+            .copied()
+            .find(|action| enabled(*action))
     }
 
     /// Feeds a change in the held modifiers. Returns an action when a modifier has been

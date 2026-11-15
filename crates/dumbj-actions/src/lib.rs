@@ -19,6 +19,6 @@ pub use dispatch::{Dispatch, KeyDispatcher};
 pub use keymap::{KeymapError, KeymapFile, KeymapLibrary, ResolvedKeymap};
 pub use keymap_doc::render_keymap_markdown;
 pub use keystroke::{
-    Key, KeyStroke, KeyStrokeParseError, Modifier, Modifiers, Shortcut, ShortcutStyle,
+    Key, KeyStroke, KeyStrokeParseError, Modifier, Modifiers, MouseStroke, Shortcut, ShortcutStyle,
 };
 pub use registry::{Action, Scope};

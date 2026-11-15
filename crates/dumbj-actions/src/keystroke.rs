@@ -309,6 +309,65 @@ pub(crate) fn parse_double_modifier(text: &str) -> Option<Modifier> {
     (modifiers == Modifiers::only(modifier)).then_some(modifier)
 }
 
+/// A mouse button press with its modifiers, e.g. Ctrl+click.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct MouseStroke {
+    pub modifiers: Modifiers,
+    /// The AWT button number: 1 left, 2 middle, 3 right, 4 back, 5 forward.
+    pub button: u8,
+    /// 1 for a click, 2 for a double click.
+    pub clicks: u8,
+}
+
+impl MouseStroke {
+    /// Formats the stroke the way the given platform writes shortcuts.
+    #[must_use]
+    pub fn display(self, style: ShortcutStyle) -> String {
+        let button = match (self.button, self.clicks) {
+            (1, 1) => "Click".to_owned(),
+            (1, _) => "Double Click".to_owned(),
+            (2, _) => "Middle Click".to_owned(),
+            (3, _) => "Right Click".to_owned(),
+            (4, _) => "Mouse Back".to_owned(),
+            (5, _) => "Mouse Forward".to_owned(),
+            (other, _) => format!("Button {other}"),
+        };
+        // Reuse the key formatting for the modifier prefix.
+        let prefix = KeyStroke::new(self.modifiers, Key::Space).display(style);
+        let prefix = prefix.trim_end_matches("Space");
+        format!("{prefix}{button}")
+    }
+}
+
+impl FromStr for MouseStroke {
+    type Err = KeyStrokeParseError;
+
+    /// Parses IntelliJ's mouse shortcut syntax: modifiers, `buttonN` and an optional
+    /// `doubleClick`, in any order (`"ctrl button1"`, `"alt button1 doubleClick"`).
+    fn from_str(text: &str) -> Result<Self, Self::Err> {
+        let mut stroke = Self {
+            modifiers: Modifiers::NONE,
+            button: 0,
+            clicks: 1,
+        };
+        for token in text.split_ascii_whitespace() {
+            if let Some(modifier) = parse_modifier(token) {
+                stroke.modifiers.insert(modifier);
+            } else if token.eq_ignore_ascii_case("doubleClick") {
+                stroke.clicks = 2;
+            } else if let Some(button) = token.strip_prefix("button").and_then(|n| n.parse().ok()) {
+                stroke.button = button;
+            } else {
+                return Err(KeyStrokeParseError::UnknownKey(token.to_owned()));
+            }
+        }
+        if stroke.button == 0 {
+            return Err(KeyStrokeParseError::Empty);
+        }
+        Ok(stroke)
+    }
+}
+
 /// A way to trigger an action.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Shortcut {
@@ -319,7 +378,9 @@ pub enum Shortcut {
     },
     /// A modifier pressed twice in quick succession, e.g. double Shift.
     DoubleModifier(Modifier),
-    /// A shortcut kind DumbJ does not dispatch yet (mouse shortcuts and other gestures).
+    /// A mouse button with modifiers, e.g. Ctrl+click.
+    Mouse(MouseStroke),
+    /// A shortcut kind DumbJ does not dispatch (touch gestures and other key gestures).
     /// Holds the raw keymap text so reports can show it.
     Unsupported(String),
 }
@@ -361,6 +422,7 @@ impl Shortcut {
                 };
                 Some(format!("{name} {name}"))
             }
+            Self::Mouse(stroke) => Some(stroke.display(style)),
             Self::Unsupported(_) => None,
         }
     }
@@ -429,6 +491,24 @@ mod tests {
     }
 
     #[test]
+    fn parses_and_displays_mouse_strokes() {
+        let ctrl_click: MouseStroke = "ctrl button1".parse().unwrap();
+        assert_eq!(ctrl_click.button, 1);
+        assert!(ctrl_click.modifiers.ctrl);
+        assert_eq!(ctrl_click.display(ShortcutStyle::Linux), "Ctrl+Click");
+        let double: MouseStroke = "alt button1 doubleClick".parse().unwrap();
+        assert_eq!((double.button, double.clicks), (1, 2));
+        assert_eq!(double.display(ShortcutStyle::Linux), "Alt+Double Click");
+        let back: MouseStroke = "button4".parse().unwrap();
+        assert_eq!(back.display(ShortcutStyle::Linux), "Mouse Back");
+        let meta: MouseStroke = "meta shift button1".parse().unwrap();
+        assert_eq!(meta.display(ShortcutStyle::MacOs), "⇧⌘Click");
+        assert!("Force touch".parse::<MouseStroke>().is_err());
+        assert!("ctrl".parse::<MouseStroke>().is_err());
+        assert!("".parse::<MouseStroke>().is_err());
+    }
+
+    #[test]
     fn displays_per_platform() {
         let s = stroke("control shift CLOSE_BRACKET");
         assert_eq!(s.display(ShortcutStyle::Linux), "Ctrl+Shift+]");
@@ -459,6 +539,7 @@ mod tests {
         fn parsing_never_panics(text in "\\PC*") {
             let _ = text.parse::<KeyStroke>();
             let _ = parse_double_modifier(&text);
+            let _ = text.parse::<MouseStroke>();
         }
     }
 }

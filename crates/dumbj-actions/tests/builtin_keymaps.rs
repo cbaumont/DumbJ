@@ -36,7 +36,7 @@ fn macos(intellij_id: &str) -> Vec<String> {
 #[test]
 fn macos_for_all_known_bindings() {
     assert_eq!(linux("SearchEverywhere"), ["Shift Shift"]);
-    assert_eq!(linux("GotoDeclaration"), ["Ctrl+B"]);
+    assert_eq!(linux("GotoDeclaration"), ["Ctrl+B", "Ctrl+Click"]);
     assert_eq!(linux("FindUsages"), ["Alt+F7"]);
     assert_eq!(linux("FileStructurePopup"), ["Ctrl+F12"]);
     assert_eq!(linux("ActivateProjectToolWindow"), ["Alt+1"]);
@@ -60,7 +60,7 @@ fn macos_for_all_m0_actions() {
 #[test]
 fn intellij_macos_known_bindings() {
     assert_eq!(macos("SearchEverywhere"), ["Shift Shift"]);
-    assert_eq!(macos("GotoDeclaration"), ["⌘B"]);
+    assert_eq!(macos("GotoDeclaration"), ["⌘B", "⌘Click", "Middle Click"]);
     assert_eq!(macos("CloseContent"), ["⌘W"]);
     assert_eq!(macos("ActivateProjectToolWindow"), ["⌘1"]);
     assert_eq!(macos("FindNext"), ["⌘G"]);
@@ -129,6 +129,29 @@ fn default_linux_bindings_dispatch() {
     assert_eq!(
         dispatcher.key_down(stroke("W"), |_| true),
         Dispatch::Unhandled
+    );
+    let click = |text: &str| text.parse::<dumbj_actions::MouseStroke>().unwrap();
+    let all = |_| true;
+    assert_eq!(
+        dispatcher.mouse_down(click("ctrl button1"), all),
+        Some(Action::GotoDeclaration)
+    );
+    assert_eq!(
+        dispatcher.mouse_down(click("button4"), all),
+        Some(Action::Back)
+    );
+    assert_eq!(
+        dispatcher.mouse_down(click("button5"), all),
+        Some(Action::Forward)
+    );
+    assert_eq!(
+        dispatcher.mouse_down(click("button1"), all),
+        None,
+        "a plain click is unbound"
+    );
+    assert_eq!(
+        dispatcher.mouse_down(click("ctrl button1"), |_| false),
+        None
     );
     // Nothing in M0 is bound to double Shift, so it must not fire.
     let now = std::time::Instant::now();

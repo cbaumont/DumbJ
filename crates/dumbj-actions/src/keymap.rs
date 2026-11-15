@@ -133,10 +133,14 @@ fn parse_shortcut(node: roxmltree::Node<'_, '_>) -> Result<Shortcut, String> {
                 None => Shortcut::Unsupported(format!("{modifier} {keystroke}")),
             })
         }
-        "mouse-shortcut" => Ok(Shortcut::Unsupported(format!(
-            "mouse {}",
-            attribute("keystroke")?
-        ))),
+        "mouse-shortcut" => {
+            let keystroke = attribute("keystroke")?;
+            // Touch gestures ("Force touch") have no button; keep them for reports.
+            Ok(keystroke.parse().map_or_else(
+                |_| Shortcut::Unsupported(format!("mouse {keystroke}")),
+                Shortcut::Mouse,
+            ))
+        }
         other => Err(format!("unknown shortcut element <{other}>")),
     }
 }
@@ -150,9 +154,15 @@ fn swap_ctrl_and_meta(shortcut: &mut Shortcut) {
     let swap = |stroke: &mut KeyStroke| {
         std::mem::swap(&mut stroke.modifiers.ctrl, &mut stroke.modifiers.meta);
     };
-    if let Shortcut::Keyboard { first, second } = shortcut {
-        swap(first);
-        second.as_mut().map(swap);
+    match shortcut {
+        Shortcut::Keyboard { first, second } => {
+            swap(first);
+            second.as_mut().map(swap);
+        }
+        Shortcut::Mouse(stroke) => {
+            std::mem::swap(&mut stroke.modifiers.ctrl, &mut stroke.modifiers.meta);
+        }
+        Shortcut::DoubleModifier(_) | Shortcut::Unsupported(_) => {}
     }
 }
 
@@ -309,7 +319,7 @@ mod tests {
             base.shortcuts("Close"),
             [
                 key("control F4"),
-                Shortcut::Unsupported("mouse button2".into())
+                Shortcut::Mouse("button2".parse().unwrap())
             ]
         );
         assert_eq!(
