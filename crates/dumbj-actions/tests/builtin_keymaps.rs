@@ -93,7 +93,7 @@ fn every_action_is_mapped_from_an_intellij_id() {
 }
 
 #[test]
-fn every_m0_action_except_open_folder_is_bound_on_both_platforms() {
+fn every_action_with_an_intellij_shortcut_is_bound_on_both_platforms() {
     for platform in [Platform::Linux, Platform::MacOs] {
         let bindings = builtin::default_bindings(platform).unwrap();
         for action in Action::all() {
@@ -101,9 +101,10 @@ fn every_m0_action_except_open_folder_is_bound_on_both_platforms() {
                 .shortcuts(action)
                 .iter()
                 .any(|shortcut| !matches!(shortcut, Shortcut::Unsupported(_)));
+            let unbound_in_intellij = [Action::OpenFolder, Action::ActivateHierarchyToolWindow];
             assert_eq!(
                 bound,
-                action != Action::OpenFolder,
+                !unbound_in_intellij.contains(&action),
                 "{action} on {platform:?}"
             );
         }

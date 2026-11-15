@@ -28,6 +28,11 @@ Linux uses the `macOS For All` keymap and macOS uses IntelliJ's `Mac OS X 10.5+`
 | Find Usages | `navigate.find-usages` | `FindUsages` | `Alt+F7` | `⌥F7` |
 | Show Usages | `navigate.show-usages` | `ShowUsages` | `Ctrl+Alt+F7` | `⌥⌘F7` |
 | Find Tool Window | `tool-window.find` | `ActivateFindToolWindow` | `Alt+3` | `⌘3` |
+| Go to Implementation(s) | `navigate.goto-implementation` | `GotoImplementation` | `Ctrl+Alt+B` / `Ctrl+Alt+Click` | `⌥⌘B` / `⌥⌘Click` |
+| Go to Super Method | `navigate.goto-super-method` | `GotoSuperMethod` | `Ctrl+U` | `⌘U` |
+| Type Hierarchy | `navigate.type-hierarchy` | `TypeHierarchy` | `Ctrl+H` | `⌃H` |
+| Call Hierarchy | `navigate.call-hierarchy` | `CallHierarchy` | `Ctrl+Alt+H` | `⌃⌥H` |
+| Hierarchy | `tool-window.hierarchy` | `ActivateHierarchyToolWindow` | — | — |
 | Move Caret Left | `text.move-left` | `EditorLeft` | `Left` | `Left` / `⌃B` |
 | Move Caret Right | `text.move-right` | `EditorRight` | `Right` | `Right` / `⌃F` |
 | Move Caret Up | `text.move-up` | `EditorUp` | `Up` | `Up` / `⌃P` |
