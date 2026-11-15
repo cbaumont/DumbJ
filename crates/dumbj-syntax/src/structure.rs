@@ -314,7 +314,11 @@ impl SyntaxTree {
         match self.language() {
             Language::Java => crate::java::collect(&mut collector, root, None),
             Language::Kotlin => crate::kotlin::collect(&mut collector, root, None),
-            Language::Yaml | Language::Xml | Language::Properties | Language::Json => {}
+            Language::Yaml
+            | Language::Xml
+            | Language::Properties
+            | Language::Json
+            | Language::Toml => {}
         }
         collector.facts
     }

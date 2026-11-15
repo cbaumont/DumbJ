@@ -1232,6 +1232,7 @@ dependencies = [
  "tree-sitter-kotlin-ng",
  "tree-sitter-kotlin-sg",
  "tree-sitter-properties",
+ "tree-sitter-toml-ng",
  "tree-sitter-xml",
  "tree-sitter-yaml",
 ]
@@ -5452,6 +5453,16 @@ name = "tree-sitter-properties"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0a6c2f38dea68abd782573bb6ec3dbd14175cce2953f693055743925d785ceeb"
+dependencies = [
+ "cc",
+ "tree-sitter-language",
+]
+
+[[package]]
+name = "tree-sitter-toml-ng"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e9adc2c898ae49730e857d75be403da3f92bb81d8e37a2f918a08dd10de5ebb1"
 dependencies = [
  "cc",
  "tree-sitter-language",

@@ -16,6 +16,7 @@ pub enum Language {
     Xml,
     Properties,
     Json,
+    Toml,
 }
 
 impl Language {
@@ -26,6 +27,7 @@ impl Language {
         Self::Xml,
         Self::Properties,
         Self::Json,
+        Self::Toml,
     ];
 
     /// Picks the language from a file name's extension.
@@ -40,6 +42,7 @@ impl Language {
             "xml" | "xsd" | "xsl" | "xslt" | "svg" | "wsdl" | "pom" | "fxml" => Some(Self::Xml),
             "properties" => Some(Self::Properties),
             "json" | "jsonc" | "geojson" | "webmanifest" => Some(Self::Json),
+            "toml" => Some(Self::Toml),
             _ => None,
         }
     }
@@ -54,6 +57,7 @@ impl Language {
             Self::Xml => "XML",
             Self::Properties => "Properties",
             Self::Json => "JSON",
+            Self::Toml => "TOML",
         }
     }
 
@@ -68,6 +72,7 @@ impl Language {
             Self::Xml => "xml",
             Self::Properties => "properties",
             Self::Json => "json",
+            Self::Toml => "toml",
         }
     }
 
@@ -91,6 +96,7 @@ impl Language {
             Self::Xml => tree_sitter_xml::LANGUAGE_XML.into(),
             Self::Properties => tree_sitter_properties::LANGUAGE.into(),
             Self::Json => tree_sitter_json::LANGUAGE.into(),
+            Self::Toml => tree_sitter_toml_ng::LANGUAGE.into(),
         }
     }
 
@@ -102,6 +108,7 @@ impl Language {
             Self::Xml => include_str!("../queries/xml/highlights.scm"),
             Self::Properties => include_str!("../queries/properties/highlights.scm"),
             Self::Json => include_str!("../queries/json/highlights.scm"),
+            Self::Toml => include_str!("../queries/toml/highlights.scm"),
         }
     }
 
