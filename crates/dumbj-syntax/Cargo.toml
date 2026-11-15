@@ -25,6 +25,7 @@ dekobon-tree-sitter-groovy.workspace = true
 tree-sitter-md.workspace = true
 tree-sitter-bash.workspace = true
 tree-sitter-dockerfile-updated.workspace = true
+tree-sitter-sequel.workspace = true
 tree-sitter-yaml.workspace = true
 
 [features]

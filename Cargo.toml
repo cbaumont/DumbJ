@@ -45,6 +45,7 @@ dekobon-tree-sitter-groovy = "0.6"
 tree-sitter-md = "0.5"
 tree-sitter-bash = "0.25"
 tree-sitter-dockerfile-updated = "0.2"
+tree-sitter-sequel = "0.3"
 tree-sitter-yaml = "0.7"
 
 # Pinned exactly: GPUI's API moves fast. Upgrade deliberately. Only dumbj-ui may depend on it.

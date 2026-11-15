@@ -21,6 +21,7 @@ pub enum Language {
     Markdown,
     Shell,
     Dockerfile,
+    Sql,
 }
 
 impl Language {
@@ -36,6 +37,7 @@ impl Language {
         Self::Markdown,
         Self::Shell,
         Self::Dockerfile,
+        Self::Sql,
     ];
 
     /// Picks the language from a file's name, or else its extension. Only the path is
@@ -60,6 +62,7 @@ impl Language {
             "groovy" | "gradle" => Some(Self::Groovy),
             "md" | "markdown" | "mdx" => Some(Self::Markdown),
             "sh" | "bash" | "zsh" | "ksh" => Some(Self::Shell),
+            "sql" => Some(Self::Sql),
             _ => None,
         }
     }
@@ -91,6 +94,7 @@ impl Language {
             Self::Markdown => "Markdown",
             Self::Shell => "Shell",
             Self::Dockerfile => "Dockerfile",
+            Self::Sql => "SQL",
         }
     }
 
@@ -110,6 +114,7 @@ impl Language {
             Self::Markdown => "markdown",
             Self::Shell => "shell",
             Self::Dockerfile => "dockerfile",
+            Self::Sql => "sql",
         }
     }
 
@@ -138,6 +143,7 @@ impl Language {
             Self::Markdown => tree_sitter_md::LANGUAGE.into(),
             Self::Shell => tree_sitter_bash::LANGUAGE.into(),
             Self::Dockerfile => tree_sitter_dockerfile_updated::language(),
+            Self::Sql => tree_sitter_sequel::LANGUAGE.into(),
         }
     }
 
@@ -154,6 +160,7 @@ impl Language {
             Self::Markdown => include_str!("../queries/markdown/highlights.scm"),
             Self::Shell => include_str!("../queries/shell/highlights.scm"),
             Self::Dockerfile => include_str!("../queries/dockerfile/highlights.scm"),
+            Self::Sql => include_str!("../queries/sql/highlights.scm"),
         }
     }
 
@@ -193,6 +200,7 @@ mod tests {
         assert_eq!(detect("Dockerfile.dev"), Some(Language::Dockerfile));
         assert_eq!(detect("app.dockerfile"), Some(Language::Dockerfile));
         assert_eq!(detect("Dockerfiles"), None);
+        assert_eq!(detect("schema.SQL"), Some(Language::Sql));
         assert_eq!(detect("Makefile"), None);
     }
 

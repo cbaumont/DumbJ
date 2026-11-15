@@ -163,7 +163,8 @@ impl SyntaxTree {
             | Language::Groovy
             | Language::Markdown
             | Language::Shell
-            | Language::Dockerfile => (ReferenceRole::Value, None, false),
+            | Language::Dockerfile
+            | Language::Sql => (ReferenceRole::Value, None, false),
         };
         let arguments = match (role, self.language()) {
             (ReferenceRole::Call, Language::Java) => crate::java::call_arguments(source, node),
@@ -265,7 +266,8 @@ impl SyntaxTree {
                     | Language::Groovy
                     | Language::Markdown
                     | Language::Shell
-                    | Language::Dockerfile => Vec::new(),
+                    | Language::Dockerfile
+                    | Language::Sql => Vec::new(),
                 };
                 for binder in binders {
                     if binder.name.start_byte() < reference_start

@@ -322,7 +322,8 @@ impl SyntaxTree {
             | Language::Groovy
             | Language::Markdown
             | Language::Shell
-            | Language::Dockerfile => {}
+            | Language::Dockerfile
+            | Language::Sql => {}
         }
         collector.facts
     }
