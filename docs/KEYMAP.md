@@ -25,6 +25,9 @@ Linux uses the `macOS For All` keymap and macOS uses IntelliJ's `Mac OS X 10.5+`
 | Go to File… | `navigate.goto-file` | `GotoFile` | `Ctrl+Shift+O` | `⇧⌘O` |
 | Go to Symbol… | `navigate.goto-symbol` | `GotoSymbol` | `Ctrl+Alt+O` | `⌥⌘O` |
 | File Structure | `navigate.file-structure` | `FileStructurePopup` | `Ctrl+F12` | `⌘F12` |
+| Find Usages | `navigate.find-usages` | `FindUsages` | `Alt+F7` | `⌥F7` |
+| Show Usages | `navigate.show-usages` | `ShowUsages` | `Ctrl+Alt+F7` | `⌥⌘F7` |
+| Find Tool Window | `tool-window.find` | `ActivateFindToolWindow` | `Alt+3` | `⌘3` |
 | Move Caret Left | `text.move-left` | `EditorLeft` | `Left` | `Left` / `⌃B` |
 | Move Caret Right | `text.move-right` | `EditorRight` | `Right` | `Right` / `⌃F` |
 | Move Caret Up | `text.move-up` | `EditorUp` | `Up` | `Up` / `⌃P` |

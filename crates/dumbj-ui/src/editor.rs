@@ -8,7 +8,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 use dumbj_actions::{Action, MouseStroke};
-use dumbj_index::{Index, Resolution, Site};
+use dumbj_index::{Index, Resolution, Site, UsageTarget};
 use dumbj_settings::UiRole;
 use dumbj_syntax::{HighlightSpan, Language, SyntaxTree};
 use dumbj_text::search::{self, SearchOptions};
@@ -408,6 +408,28 @@ impl EditorView {
             },
             self.model.caret(),
         )
+    }
+
+    /// What Find Usages should look for at the caret.
+    pub(crate) fn usage_target_at_caret(&self, index: &Index) -> Option<UsageTarget> {
+        let tree = self.syntax.as_ref()?;
+        let buffer = self.model.buffer();
+        let file = index.file_by_path(&self.path)?;
+        dumbj_index::usage_target_at(
+            Site {
+                index,
+                file,
+                tree,
+                buffer,
+            },
+            self.model.caret(),
+        )
+    }
+
+    /// The word the caret is on or next to.
+    pub(crate) fn word_at_caret(&self) -> Option<String> {
+        let buffer = self.model.buffer();
+        buffer.text(buffer.word_range_at(self.model.caret())?).ok()
     }
 
     /// Moves the caret to a one-based line and column and centres it.

@@ -22,10 +22,12 @@ use crate::theme;
 
 mod navigation;
 mod search_popup;
+mod usages;
 
 use dumbj_index::SearchScope;
 use navigation::{Chooser, Indexing, NavigationHistory};
 use search_popup::{SearchMode, SearchPopup};
+use usages::FindWindow;
 
 const HEADER_HEIGHT: Pixels = px(40.);
 const STRIPE_WIDTH: Pixels = px(40.);
@@ -59,6 +61,7 @@ enum ToolWindowState {
 /// Which part of the window has keyboard focus.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum FocusArea {
+    FindWindow,
     Chooser,
     Search,
     GotoLine,
@@ -88,6 +91,13 @@ pub(crate) struct Workspace {
     chooser: Option<Chooser>,
     search_input: Entity<TextInput>,
     search: Option<SearchPopup>,
+    /// The Find tool window with the last Find Usages result.
+    find_window: Option<FindWindow>,
+    find_window_focus: FocusHandle,
+    /// Stops a usage search that a newer one replaces.
+    usages_cancel: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    /// Set when results arrive: the next render moves focus to them.
+    focus_results: bool,
     /// A one-off notice in the status bar, cleared by the next action.
     status_message: Option<String>,
     subscriptions: Vec<Subscription>,
@@ -177,6 +187,10 @@ impl Workspace {
             chooser: None,
             search_input,
             search: None,
+            find_window: None,
+            find_window_focus: cx.focus_handle(),
+            usages_cancel: std::sync::Arc::default(),
+            focus_results: false,
             status_message: None,
             subscriptions: vec![on_find_changed, on_search_changed],
         }
@@ -202,6 +216,7 @@ impl Workspace {
         let editor_focused = self
             .active_tab()
             .is_some_and(|tab| tab.editor.read(cx).focus_handle().is_focused(window));
+        let find_window_shown = self.find_window.as_ref().is_some_and(|find| find.visible);
         if self.chooser.is_some() {
             FocusArea::Chooser
         } else if self.search.is_some() {
@@ -210,6 +225,8 @@ impl Workspace {
             FocusArea::GotoLine
         } else if self.find_open && self.find.read(cx).focus_handle().is_focused(window) {
             FocusArea::Find
+        } else if find_window_shown && self.find_window_focus.is_focused(window) {
+            FocusArea::FindWindow
         } else if tree_focused {
             FocusArea::Tree
         } else if editor_focused {
@@ -412,6 +429,10 @@ impl Workspace {
             | Action::GotoFile
             | Action::GotoSymbol => self.index.is_some() && !other_popup,
             Action::FileStructure => has_editor && self.index.is_some() && !other_popup,
+            Action::FindUsages | Action::ShowUsages => {
+                has_editor && self.index.is_some() && !popup_open
+            }
+            Action::ActivateFindToolWindow => self.find_window.is_some() && !popup_open,
             Action::GotoDeclaration => has_editor && self.index.is_some() && !popup_open,
             Action::Back => self.history.can_go_back() && !popup_open,
             Action::Forward => self.history.can_go_forward() && !popup_open,
@@ -453,6 +474,9 @@ impl Workspace {
                 self.open_search(SearchMode::Project(SearchScope::Symbols), window, cx);
             }
             Action::FileStructure => self.open_file_structure(window, cx),
+            Action::FindUsages => self.find_usages(false, cx),
+            Action::ShowUsages => self.find_usages(true, cx),
+            Action::ActivateFindToolWindow => self.toggle_find_window(window, cx),
             Action::GotoDeclaration => self.goto_declaration(window, cx),
             Action::Back => self.go_back(window, cx),
             Action::Forward => self.go_forward(window, cx),
@@ -471,62 +495,10 @@ impl Workspace {
                 };
                 self.activate_tab((active + step) % count, window, cx);
             }
-            Action::ActivateProjectToolWindow => {
-                let Some(project) = &self.project else { return };
-                let tree_focus = project.tree.read(cx).focus_handle().clone();
-                // IDEA: the shortcut shows and focuses the tool window, or hides it when
-                // it already has focus.
-                if self.project_window_shown() && tree_focus.is_focused(window) {
-                    self.project_window = ToolWindowState::Hidden;
-                    self.focus_fallback(window, cx);
-                } else {
-                    self.project_window = ToolWindowState::Visible;
-                    window.focus(&tree_focus, cx);
-                }
-                cx.notify();
-            }
-            Action::HideAllToolWindows => {
-                match self.project_window {
-                    ToolWindowState::Visible => {
-                        self.project_window = ToolWindowState::HiddenByHideAll;
-                        self.focus_fallback(window, cx);
-                    }
-                    ToolWindowState::HiddenByHideAll => {
-                        self.project_window = ToolWindowState::Visible;
-                    }
-                    ToolWindowState::Hidden => {}
-                }
-                cx.notify();
-            }
-            Action::GotoLine => {
-                let Some(editor) = self.active_editor() else {
-                    return;
-                };
-                let (line, column) = editor.read(cx).caret_line_column();
-                self.goto_line.update(cx, |input, cx| {
-                    input.set_text(&format!("{line}:{column}"), true, cx);
-                });
-                self.goto_line_open = true;
-                let handle = self.goto_line.read(cx).focus_handle().clone();
-                window.focus(&handle, cx);
-                cx.notify();
-            }
-            Action::Find => {
-                let Some(editor) = self.active_editor() else {
-                    return;
-                };
-                let seed = editor.read(cx).selection_for_search();
-                self.find.update(cx, |input, cx| match seed {
-                    Some(seed) => input.set_text(&seed, true, cx),
-                    None => input.select_all(cx),
-                });
-                let query = self.find.read(cx).text().to_owned();
-                editor.update(cx, |editor, cx| editor.set_search_query(&query, cx));
-                self.find_open = true;
-                let handle = self.find.read(cx).focus_handle().clone();
-                window.focus(&handle, cx);
-                cx.notify();
-            }
+            Action::ActivateProjectToolWindow => self.toggle_project_window(window, cx),
+            Action::HideAllToolWindows => self.hide_all_tool_windows(window, cx),
+            Action::GotoLine => self.open_goto_line(window, cx),
+            Action::Find => self.open_find(window, cx),
             Action::FindNext | Action::FindPrevious => {
                 if let Some(editor) = self.active_editor() {
                     editor.update(cx, |editor, cx| {
@@ -538,9 +510,83 @@ impl Workspace {
         }
     }
 
+    /// Shows and focuses the Project tool window, or hides it when it already has focus
+    /// (IDEA's behaviour for a tool-window shortcut).
+    fn toggle_project_window(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(project) = &self.project else { return };
+        let tree_focus = project.tree.read(cx).focus_handle().clone();
+        if self.project_window_shown() && tree_focus.is_focused(window) {
+            self.project_window = ToolWindowState::Hidden;
+            self.focus_fallback(window, cx);
+        } else {
+            self.project_window = ToolWindowState::Visible;
+            window.focus(&tree_focus, cx);
+        }
+        cx.notify();
+    }
+
+    /// Hides every tool window, or brings back the ones the last call hid.
+    fn hide_all_tool_windows(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let hiding = self.project_window == ToolWindowState::Visible
+            || self.find_window.as_ref().is_some_and(|find| find.visible);
+        if let Some(find) = self.find_window.as_mut() {
+            if hiding && find.visible {
+                (find.visible, find.hidden_by_hide_all) = (false, true);
+            } else if !hiding && find.hidden_by_hide_all {
+                (find.visible, find.hidden_by_hide_all) = (true, false);
+            }
+        }
+        match (self.project_window, hiding) {
+            (ToolWindowState::Visible, _) => {
+                self.project_window = ToolWindowState::HiddenByHideAll;
+            }
+            (ToolWindowState::HiddenByHideAll, false) => {
+                self.project_window = ToolWindowState::Visible;
+            }
+            (ToolWindowState::HiddenByHideAll, true) | (ToolWindowState::Hidden, _) => {}
+        }
+        if hiding {
+            self.focus_fallback(window, cx);
+        }
+        cx.notify();
+    }
+
+    fn open_goto_line(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(editor) = self.active_editor() else {
+            return;
+        };
+        let (line, column) = editor.read(cx).caret_line_column();
+        self.goto_line.update(cx, |input, cx| {
+            input.set_text(&format!("{line}:{column}"), true, cx);
+        });
+        self.goto_line_open = true;
+        let handle = self.goto_line.read(cx).focus_handle().clone();
+        window.focus(&handle, cx);
+        cx.notify();
+    }
+
+    /// Opens the find bar, seeded with a single-line selection if there is one.
+    fn open_find(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(editor) = self.active_editor() else {
+            return;
+        };
+        let seed = editor.read(cx).selection_for_search();
+        self.find.update(cx, |input, cx| match seed {
+            Some(seed) => input.set_text(&seed, true, cx),
+            None => input.select_all(cx),
+        });
+        let query = self.find.read(cx).text().to_owned();
+        editor.update(cx, |editor, cx| editor.set_search_query(&query, cx));
+        self.find_open = true;
+        let handle = self.find.read(cx).focus_handle().clone();
+        window.focus(&handle, cx);
+        cx.notify();
+    }
+
     /// Routes editor and text actions to whatever has focus.
     fn perform_in_focus(&mut self, action: Action, window: &mut Window, cx: &mut Context<Self>) {
         match self.focus_area(window, cx) {
+            FocusArea::FindWindow => self.find_window_action(action, window, cx),
             FocusArea::Chooser => self.chooser_action(action, window, cx),
             FocusArea::Search => self.search_action(action, window, cx),
             FocusArea::GotoLine => match action {
@@ -1103,13 +1149,35 @@ impl Render for Workspace {
             .project
             .is_some()
             .then(|| self.render_stripe(cx).into_any_element());
-        let body = div()
+        let find_window = self
+            .find_window
+            .as_ref()
+            .filter(|find| find.visible)
+            .map(|find| self.render_find_window(find, window, cx).into_any_element());
+        if std::mem::take(&mut self.focus_results) {
+            // Usage results arrived: keys go to the popup, or to the Find tool window.
+            let focus = if self.chooser.is_some() {
+                self.focus.clone()
+            } else {
+                self.find_window_focus.clone()
+            };
+            window.focus(&focus, cx);
+        }
+        let main = div()
             .flex_1()
             .min_h_0()
             .flex()
-            .children(stripe)
             .children(project_window)
             .child(self.render_editor_area(cx));
+        let body = div().flex_1().min_h_0().flex().children(stripe).child(
+            div()
+                .flex_1()
+                .min_w_0()
+                .flex()
+                .flex_col()
+                .child(main)
+                .children(find_window),
+        );
         let popup = match (&self.chooser, &self.search) {
             (Some(chooser), _) => Some(Self::render_chooser(chooser, cx).into_any_element()),
             (None, Some(search)) => Some(self.render_search(search, cx).into_any_element()),

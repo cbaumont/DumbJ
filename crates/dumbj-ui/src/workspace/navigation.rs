@@ -10,7 +10,10 @@ use dumbj_actions::{Action, MouseStroke};
 use dumbj_index::{Decision, Index, Resolution, Target, index_project};
 use dumbj_settings::UiRole;
 use dumbj_text::ByteOffset;
-use gpui::{Context, IntoElement, MouseButton, Task, Window, div, prelude::*, px};
+use gpui::{
+    Context, IntoElement, MouseButton, ScrollStrategy, Task, UniformListScrollHandle, Window, div,
+    prelude::*, px, uniform_list,
+};
 
 use super::Workspace;
 use crate::theme;
@@ -69,13 +72,25 @@ impl NavigationHistory {
     }
 }
 
+const CHOOSER_ROW_HEIGHT: f32 = 26.;
+
 /// One row of the chooser popup.
 pub(super) struct ChooserItem {
-    /// The declaration, e.g. `Money.add`.
+    /// The declaration, e.g. `Money.add`, or a usage's `File.java:12`.
     label: String,
-    /// Where it is, e.g. `com.shop.core · Money.java`.
+    /// Where it is, e.g. `com.shop.core · Money.java`, or a usage's line of code.
     detail: String,
     location: Location,
+}
+
+impl ChooserItem {
+    pub(super) fn new(label: String, detail: String, location: Location) -> Self {
+        Self {
+            label,
+            detail,
+            location,
+        }
+    }
 }
 
 /// A list of candidate targets to pick from, shown when a jump would be a guess.
@@ -83,6 +98,18 @@ pub(super) struct Chooser {
     title: String,
     items: Vec<ChooserItem>,
     selected: usize,
+    scroll: UniformListScrollHandle,
+}
+
+impl Chooser {
+    pub(super) fn new(title: String, items: Vec<ChooserItem>) -> Self {
+        Self {
+            title,
+            items,
+            selected: 0,
+            scroll: UniformListScrollHandle::new(),
+        }
+    }
 }
 
 /// Indexing that is still running.
@@ -247,6 +274,11 @@ impl Workspace {
         else {
             return;
         };
+        if reference.role == dumbj_syntax::ReferenceRole::Declaration {
+            // On a declaration there is nowhere to go, so show where it is used (as IDEA does).
+            self.find_usages(true, cx);
+            return;
+        }
         match (decision, targets.first()) {
             (Decision::Jump, Some(target)) => {
                 let to = Location {
@@ -261,11 +293,7 @@ impl Workspace {
                     .map(|target| Self::chooser_item(&index, target))
                     .collect();
                 let title = format!("Declarations of {}", reference.name);
-                self.chooser = Some(Chooser {
-                    title,
-                    items,
-                    selected: 0,
-                });
+                self.chooser = Some(Chooser::new(title, items));
                 // The chooser has no text field; keys reach it through the window.
                 let focus = self.focus.clone();
                 window.focus(&focus, cx);
@@ -327,8 +355,10 @@ impl Workspace {
         match action {
             Action::MoveUp => chooser.selected = chooser.selected.saturating_sub(1),
             Action::MoveDown => chooser.selected = (chooser.selected + 1).min(last),
-            Action::MoveTextStart | Action::MovePageUp => chooser.selected = 0,
-            Action::MoveTextEnd | Action::MovePageDown => chooser.selected = last,
+            Action::MoveTextStart => chooser.selected = 0,
+            Action::MoveTextEnd => chooser.selected = last,
+            Action::MovePageUp => chooser.selected = chooser.selected.saturating_sub(10),
+            Action::MovePageDown => chooser.selected = (chooser.selected + 10).min(last),
             Action::Enter => {
                 let selected = chooser.selected;
                 self.accept_chooser(selected, window, cx);
@@ -336,40 +366,75 @@ impl Workspace {
             Action::Escape => self.close_chooser(window, cx),
             _ => {}
         }
+        if let Some(chooser) = self.chooser.as_ref() {
+            chooser
+                .scroll
+                .scroll_to_item(chooser.selected, ScrollStrategy::Nearest);
+        }
         cx.notify();
     }
 
+    fn render_chooser_row(
+        chooser: &Chooser,
+        index: usize,
+        item: &ChooserItem,
+        cx: &Context<Self>,
+    ) -> impl IntoElement {
+        let selected = index == chooser.selected;
+        div()
+            .id(("chooser-row", index))
+            .flex()
+            .items_center()
+            .justify_between()
+            .gap(px(24.))
+            .px(px(10.))
+            .w_full()
+            .h(px(CHOOSER_ROW_HEIGHT))
+            .rounded(px(4.))
+            .when(selected, |row| row.bg(theme::ui(cx, UiRole::Selected)))
+            .when(!selected, |row| {
+                row.hover(|style| style.bg(theme::ui(cx, UiRole::Hover)))
+            })
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(move |this, _, window, cx| {
+                    cx.stop_propagation();
+                    this.accept_chooser(index, window, cx);
+                }),
+            )
+            .child(div().flex_none().child(item.label.clone()))
+            .child(
+                div()
+                    .truncate()
+                    .text_color(theme::ui(cx, UiRole::TextFaint))
+                    .child(item.detail.clone()),
+            )
+    }
+
     pub(super) fn render_chooser(chooser: &Chooser, cx: &mut Context<Self>) -> impl IntoElement {
-        let rows = chooser.items.iter().enumerate().map(|(index, item)| {
-            let selected = index == chooser.selected;
-            div()
-                .id(("chooser-row", index))
-                .flex()
-                .items_center()
-                .justify_between()
-                .gap(px(24.))
-                .px(px(10.))
-                .h(px(26.))
-                .rounded(px(4.))
-                .when(selected, |row| row.bg(theme::ui(cx, UiRole::Selected)))
-                .when(!selected, |row| {
-                    row.hover(|style| style.bg(theme::ui(cx, UiRole::Hover)))
-                })
-                .on_mouse_down(
-                    MouseButton::Left,
-                    cx.listener(move |this, _, window, cx| {
-                        cx.stop_propagation();
-                        this.accept_chooser(index, window, cx);
-                    }),
-                )
-                .child(div().flex_none().child(item.label.clone()))
-                .child(
-                    div()
-                        .truncate()
-                        .text_color(theme::ui(cx, UiRole::TextFaint))
-                        .child(item.detail.clone()),
-                )
-        });
+        let count = chooser.items.len();
+        #[expect(
+            clippy::cast_precision_loss,
+            reason = "a popup shows at most a dozen rows"
+        )]
+        let list_height = px(CHOOSER_ROW_HEIGHT * count.min(14) as f32);
+        let rows = uniform_list(
+            "chooser-rows",
+            count,
+            cx.processor(|this, range: std::ops::Range<usize>, _window, cx| {
+                let Some(chooser) = this.chooser.as_ref() else {
+                    return Vec::new();
+                };
+                range
+                    .filter_map(|index| Some((index, chooser.items.get(index)?)))
+                    .map(|(index, item)| {
+                        Self::render_chooser_row(chooser, index, item, cx).into_any_element()
+                    })
+                    .collect::<Vec<_>>()
+            }),
+        )
+        .track_scroll(&chooser.scroll)
+        .h(list_height);
         let header = div()
             .flex()
             .items_center()
@@ -389,8 +454,7 @@ impl Workspace {
                     .child("best guess"),
             );
         let popup = div()
-            .w(px(560.))
-            .max_h(px(420.))
+            .w(px(720.))
             .flex()
             .flex_col()
             .p(px(8.))
@@ -401,14 +465,7 @@ impl Workspace {
             .shadow_lg()
             .text_color(theme::ui(cx, UiRole::Text))
             .child(header)
-            .child(
-                div()
-                    .id("chooser-rows")
-                    .flex()
-                    .flex_col()
-                    .overflow_y_scroll()
-                    .children(rows),
-            );
+            .child(rows);
         div()
             .id("chooser-layer")
             .absolute()
