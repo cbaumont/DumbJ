@@ -1043,7 +1043,17 @@ impl Workspace {
 
     fn render_status_bar(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let tab = self.active_tab();
+        let library = tab.and_then(|tab| dumbj_jars::split_virtual_path(&tab.path));
         let breadcrumb = match (&self.project, tab) {
+            _ if library.is_some() => library.map_or_else(String::new, |(jar, entry)| {
+                let jar = jar
+                    .file_name()
+                    .map_or_else(String::new, |name| name.to_string_lossy().into_owned());
+                std::iter::once(jar)
+                    .chain(entry.split('/').map(str::to_owned))
+                    .collect::<Vec<_>>()
+                    .join(" › ")
+            }),
             (Some(project), Some(tab)) => {
                 let relative = tab.path.strip_prefix(&project.root).unwrap_or(&tab.path);
                 let parts = relative

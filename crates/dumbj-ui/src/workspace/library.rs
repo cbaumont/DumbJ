@@ -96,11 +96,16 @@ impl Workspace {
             cx.notify();
             return;
         };
+        let targets_named_a_class = !targets.is_empty();
         let Some((target, sources)) = targets.into_iter().find_map(|target| {
             let sources = jars.find(&target.class);
             (!sources.is_empty()).then_some((target, sources))
         }) else {
-            self.status_message = Some(format!("Cannot find declaration of {name}"));
+            self.status_message = Some(if targets_named_a_class {
+                format!("No sources available for {name}")
+            } else {
+                format!("Cannot find declaration of {name}")
+            });
             cx.notify();
             return;
         };
