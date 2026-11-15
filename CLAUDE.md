@@ -5,20 +5,22 @@ A fast, native, keyboard-first **code reading and code review editor** with Inte
 Full spec: `docs/BRIEF.md`. Where it conflicts with the Decisions in `docs/ARCHITECTURE.md`, the Decisions win. Read the sections relevant to your current task, not the whole file every time.
 
 ## Current milestone
-M1b: the rest of M1 (see BRIEF §9), **in progress**. M1a was approved on 2026-11-15 (the nightly accuracy workflow has not yet had a successful run on GitHub: check it). M0 was approved on 2026-11-14. Decisions are in `docs/ARCHITECTURE.md`. Stop after each milestone with a summary, run instructions, test status, known gaps and screenshots, then wait for approval.
+M1b: the rest of M1 (see BRIEF §9), **in progress, close to its review stop**. M1a was approved on 2026-11-15; M0 on 2026-11-14. Decisions are in `docs/ARCHITECTURE.md`. Stop after each milestone with a summary, run instructions, test status, known gaps and screenshots, then wait for approval.
 
-M1b phases, in this order (each a series of small commits):
-1. *(done)* **Hierarchy:** Go to Implementation(s), Go to Super Method, overriding/implementing gutter icons, Type Hierarchy, dumb Call Hierarchy.
-2. *(done)* **Java↔Kotlin interop:** properties ↔ `getX`/`isX`/`setX`, `FileKt` facades and `@file:JvmName`, `Companion` and `@JvmStatic`/`@JvmField`/`@JvmName`/`@JvmOverloads`, `INSTANCE`; usages across the boundary. Add benchmark cases.
-3. *(done; JDK `src.zip` still missing)* **Library source jars:** the global source-jar class index, read-only viewing inside the jar, "no sources available".
-4. *(done)* **Editor surface:** folding, sticky lines, Extend/Shrink selection, usage highlighting, scope-aware highlighting.
-5. **Navigation extras:** Find in Files, Recent Files / Recent Locations, Bookmarks.
-6. *(done)* **Tier 1 support files (BRIEF §5.2):** grammars, highlighting and structure; `libs.versions.toml` navigation.
-7. **Editing** (ARCHITECTURE "Editing lands in M1b"): typing, undo/redo, atomic autosave, reload prompt, index refresh on change.
+### M1b handover (2026-11-15)
+Phases 1–4 and 6 are done, committed and pushed: hierarchy (Go to Implementation/Super Method, gutter icons, Type/Call Hierarchy window), Java↔Kotlin interop (accessors, facades, `@JvmName`, `INSTANCE`), library sources (source jars and the JDK `src.zip`, read in place), editor surface (folding, sticky lines, Extend/Shrink Selection, usage highlighting, parameter colouring), Tier 1 support files, `libs.versions.toml` navigation. Beyond the plan: Kotlin scope functions and typed collection/Flow lambdas in the resolver.
 
-Accuracy benchmark (2026-11-15): 287 cases, 84.3% correct, 0 wrong. Run `scripts/fetch-corpus.sh`, then `cargo run --release -p dumbj-index --example accuracy`; it also runs nightly (`.github/workflows/accuracy.yml`), failing on any wrong jump. Known causes of the remaining choosers, for after the review: lambda parameter types (`it`), indexing (`a[i].b`), smart casts, scope functions (`apply { }`), and Java `Class` arguments not matching a Kotlin `Type` parameter.
+Left to do, in this order:
+1. **Merge phase 5.** Branch `worktree-agent-ac66455a0311c8d69` (worktree in `.claude/worktrees/`, 7 commits, not yet merged or reviewed) adds Find in Files (new crate `dumbj-search`), Recent Files/Locations and Bookmarks with per-project state in `$XDG_STATE_HOME/dumbj/projects/<id>/state.toml`. It branched before the folding, sticky-line and usage-highlight work, so expect conflicts in `crates/dumbj-ui/src/editor.rs` (its bookmark gutter marker and `go_to` change), `workspace.rs`, `crates/dumbj-actions/src/registry.rs`, `keymaps/action-id-map.toml`, `docs/KEYMAP.md` (regenerate rather than merge) and `docs/FEATURES.md`. Review it, merge with `--no-ff`, run the gate, screenshot each feature, then remove the worktree and branch. Its known gaps: Find in Files toggles are mouse-only, no Bookmarks tool window, no Last Edit Location or Switcher.
+2. **Split editing out.** Phase 7 (typing, undo/redo, autosave, reload prompt, index refresh on change) was not started. M1b grew past one reviewable milestone, so record a decision making editing its own milestone (the 2026-11-14 decision "Editing lands in M1b" and the "M1b assumptions" entry allow this) and leave it out of M1b.
+3. **Docs.** `docs/FEATURES.md` lacks lines for interop, library sources and Go to Implementation's partial state; `docs/ARCHITECTURE.md` crate map lacks `dumbj-jars` (and `dumbj-search` after the merge); add the data flow for hierarchy, library sources and folding.
+4. **Milestone review package:** summary, screenshots (`scripts/screenshot.sh`), known gaps, then stop for approval and push.
 
-Working notes: the owner wants self-contained work delegated to subagents on cheaper models to limit spend. Gate every commit on `cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo nextest run`, chained with `&&`. For screenshots, `wtype` sends F7 as `q`: drive Find Usages through Ctrl+B on a declaration instead of Alt+F7.
+Accuracy benchmark (2026-11-15): 287 cases, 86.1% correct, 0 wrong (Java 92.9%, Kotlin 82.5%). Run `scripts/fetch-corpus.sh`, then `cargo run --release -p dumbj-index --example accuracy`; it also runs nightly (`.github/workflows/accuracy.yml`, never yet seen succeeding on GitHub: check it), failing on any wrong jump. Remaining chooser causes: indexing (`a[i].b`), smart casts, named-lambda parameters of other calls, Java `Class` arguments against Kotlin `Type` parameters.
+
+Known gaps to list at review: no Go to Type Declaration or Go to Test; Call Hierarchy shows callers only; the index is not refreshed when files change; Go to Declaration and Go to Implementation run on the UI thread (single lookups); no code navigation inside library files; Markdown inline syntax is not highlighted.
+
+Working notes: the owner wants self-contained work delegated to subagents on cheaper models to limit spend, and hates comments (keep only a non-obvious why). Gate every commit on `cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo nextest run`, chained with `&&`. Push at milestone ends and good checkpoints. For screenshots, `wtype` mangles some keys (F7 arrives as `q`, Shift is dropped on Ctrl+Shift+digit): drive Find Usages through Ctrl+B on a declaration.
 
 ## Core rules
 - **Java and Kotlin first** (BRIEF §5). They get IntelliJ-grade navigation, including Java↔Kotlin interop, Gradle/Maven project structure and library source jars. Other languages get highlighting and structure only until M6.
