@@ -18,6 +18,7 @@ tree-sitter-kotlin-sg = { workspace = true, optional = true }
 # export the C symbol `tree_sitter_kotlin`, so only one can be linked at a time.
 tree-sitter-kotlin-ng = { workspace = true, optional = true }
 tree-sitter-xml.workspace = true
+tree-sitter-properties.workspace = true
 tree-sitter-yaml.workspace = true
 
 [features]

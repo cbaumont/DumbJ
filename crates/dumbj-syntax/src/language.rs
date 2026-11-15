@@ -14,10 +14,17 @@ pub enum Language {
     Kotlin,
     Yaml,
     Xml,
+    Properties,
 }
 
 impl Language {
-    pub const ALL: &[Self] = &[Self::Java, Self::Kotlin, Self::Yaml, Self::Xml];
+    pub const ALL: &[Self] = &[
+        Self::Java,
+        Self::Kotlin,
+        Self::Yaml,
+        Self::Xml,
+        Self::Properties,
+    ];
 
     /// Picks the language from a file name's extension.
     #[must_use]
@@ -29,6 +36,7 @@ impl Language {
             "yaml" | "yml" => Some(Self::Yaml),
             // Maven's pom.xml and Android's layouts are XML; so are IDE project files.
             "xml" | "xsd" | "xsl" | "xslt" | "svg" | "wsdl" | "pom" | "fxml" => Some(Self::Xml),
+            "properties" => Some(Self::Properties),
             _ => None,
         }
     }
@@ -41,6 +49,7 @@ impl Language {
             Self::Kotlin => "Kotlin",
             Self::Yaml => "YAML",
             Self::Xml => "XML",
+            Self::Properties => "Properties",
         }
     }
 
@@ -53,6 +62,7 @@ impl Language {
             Self::Kotlin => "kotlin",
             Self::Yaml => "yaml",
             Self::Xml => "xml",
+            Self::Properties => "properties",
         }
     }
 
@@ -74,6 +84,7 @@ impl Language {
             Self::Kotlin => tree_sitter_kotlin_ng::LANGUAGE.into(),
             Self::Yaml => tree_sitter_yaml::LANGUAGE.into(),
             Self::Xml => tree_sitter_xml::LANGUAGE_XML.into(),
+            Self::Properties => tree_sitter_properties::LANGUAGE.into(),
         }
     }
 
@@ -83,6 +94,7 @@ impl Language {
             Self::Kotlin => include_str!("../queries/kotlin/highlights.scm"),
             Self::Yaml => include_str!("../queries/yaml/highlights.scm"),
             Self::Xml => include_str!("../queries/xml/highlights.scm"),
+            Self::Properties => include_str!("../queries/properties/highlights.scm"),
         }
     }
 
