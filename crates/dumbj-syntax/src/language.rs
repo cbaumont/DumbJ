@@ -19,6 +19,7 @@ pub enum Language {
     Toml,
     Groovy,
     Markdown,
+    Shell,
 }
 
 impl Language {
@@ -32,11 +33,17 @@ impl Language {
         Self::Toml,
         Self::Groovy,
         Self::Markdown,
+        Self::Shell,
     ];
 
-    /// Picks the language from a file name's extension.
+    /// Picks the language from a file's name, or else its extension. Only the path is
+    /// looked at, never the content, so a script without extension is recognised by name.
     #[must_use]
     pub fn from_path(path: &Path) -> Option<Self> {
+        let name = path.file_name()?.to_str()?;
+        if let Some(language) = Self::from_file_name(name) {
+            return Some(language);
+        }
         let extension = path.extension()?.to_str()?.to_ascii_lowercase();
         match extension.as_str() {
             "java" => Some(Self::Java),
@@ -49,6 +56,16 @@ impl Language {
             "toml" => Some(Self::Toml),
             "groovy" | "gradle" => Some(Self::Groovy),
             "md" | "markdown" | "mdx" => Some(Self::Markdown),
+            "sh" | "bash" | "zsh" | "ksh" => Some(Self::Shell),
+            _ => None,
+        }
+    }
+
+    /// Files recognised by their whole name, which has no useful extension.
+    fn from_file_name(name: &str) -> Option<Self> {
+        match name {
+            // The Gradle and Maven wrapper scripts have a `#!/bin/sh` line, no extension.
+            "gradlew" | "mvnw" => Some(Self::Shell),
             _ => None,
         }
     }
@@ -66,6 +83,7 @@ impl Language {
             Self::Toml => "TOML",
             Self::Groovy => "Groovy",
             Self::Markdown => "Markdown",
+            Self::Shell => "Shell",
         }
     }
 
@@ -83,6 +101,7 @@ impl Language {
             Self::Toml => "toml",
             Self::Groovy => "groovy",
             Self::Markdown => "markdown",
+            Self::Shell => "shell",
         }
     }
 
@@ -109,6 +128,7 @@ impl Language {
             Self::Toml => tree_sitter_toml_ng::LANGUAGE.into(),
             Self::Groovy => dekobon_tree_sitter_groovy::LANGUAGE.into(),
             Self::Markdown => tree_sitter_md::LANGUAGE.into(),
+            Self::Shell => tree_sitter_bash::LANGUAGE.into(),
         }
     }
 
@@ -123,6 +143,7 @@ impl Language {
             Self::Toml => include_str!("../queries/toml/highlights.scm"),
             Self::Groovy => include_str!("../queries/groovy/highlights.scm"),
             Self::Markdown => include_str!("../queries/markdown/highlights.scm"),
+            Self::Shell => include_str!("../queries/shell/highlights.scm"),
         }
     }
 
@@ -157,6 +178,7 @@ mod tests {
         assert_eq!(detect("config.yaml"), Some(Language::Yaml));
         assert_eq!(detect("pom.xml"), Some(Language::Xml));
         assert_eq!(detect("README.md"), Some(Language::Markdown));
+        assert_eq!(detect("gradlew"), Some(Language::Shell));
         assert_eq!(detect("Makefile"), None);
     }
 

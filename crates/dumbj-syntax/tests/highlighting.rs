@@ -100,6 +100,11 @@ fn markdown_highlights() {
 }
 
 #[test]
+fn shell_highlights() {
+    insta::assert_snapshot!(render("run.sh"));
+}
+
+#[test]
 fn a_range_query_matches_the_same_part_of_a_full_query() {
     for name in [
         "Sample.java",
@@ -111,6 +116,7 @@ fn a_range_query_matches_the_same_part_of_a_full_query() {
         "libs.versions.toml",
         "build.gradle",
         "README.md",
+        "run.sh",
     ] {
         let (language, buffer) = fixture(name);
         let tree = parse(language, &buffer, || false).unwrap().unwrap();

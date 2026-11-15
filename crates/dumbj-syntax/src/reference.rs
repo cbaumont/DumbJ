@@ -161,7 +161,8 @@ impl SyntaxTree {
             | Language::Json
             | Language::Toml
             | Language::Groovy
-            | Language::Markdown => (ReferenceRole::Value, None, false),
+            | Language::Markdown
+            | Language::Shell => (ReferenceRole::Value, None, false),
         };
         let arguments = match (role, self.language()) {
             (ReferenceRole::Call, Language::Java) => crate::java::call_arguments(source, node),
@@ -261,7 +262,8 @@ impl SyntaxTree {
                     | Language::Json
                     | Language::Toml
                     | Language::Groovy
-                    | Language::Markdown => Vec::new(),
+                    | Language::Markdown
+                    | Language::Shell => Vec::new(),
                 };
                 for binder in binders {
                     if binder.name.start_byte() < reference_start

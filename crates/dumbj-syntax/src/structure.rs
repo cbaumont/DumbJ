@@ -320,7 +320,8 @@ impl SyntaxTree {
             | Language::Json
             | Language::Toml
             | Language::Groovy
-            | Language::Markdown => {}
+            | Language::Markdown
+            | Language::Shell => {}
         }
         collector.facts
     }
