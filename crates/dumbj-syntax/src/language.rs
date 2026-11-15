@@ -81,13 +81,10 @@ impl Language {
 
     /// The compiled highlight query, built once per language.
     pub(crate) fn highlights_query(self) -> Result<&'static Query, SyntaxError> {
-        static QUERIES: [OnceLock<Result<Query, String>>; 3] =
-            [OnceLock::new(), OnceLock::new(), OnceLock::new()];
-        let slot = match self {
-            Self::Java => &QUERIES[0],
-            Self::Kotlin => &QUERIES[1],
-            Self::Yaml => &QUERIES[2],
-        };
+        static QUERIES: [OnceLock<Result<Query, String>>; Language::ALL.len()] =
+            [const { OnceLock::new() }; Language::ALL.len()];
+        // `ALL` lists the variants in declaration order (see the test below).
+        let slot = &QUERIES[self as usize];
         slot.get_or_init(|| {
             Query::new(&self.grammar(), self.highlights_source()).map_err(|error| error.to_string())
         })
@@ -121,6 +118,13 @@ mod tests {
             assert_eq!(Language::from_id(language.as_str()), Some(language));
         }
         assert_eq!(Language::from_id("cobol"), None);
+    }
+
+    #[test]
+    fn all_lists_the_languages_in_declaration_order() {
+        for (index, &language) in Language::ALL.iter().enumerate() {
+            assert_eq!(language as usize, index);
+        }
     }
 
     #[test]
