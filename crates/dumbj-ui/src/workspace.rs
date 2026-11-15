@@ -465,6 +465,7 @@ impl Workspace {
     fn submit_goto_line(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let target = parse_line_column(self.goto_line.read(cx).text());
         if let (Some((line, column)), Some(editor)) = (target, self.active_editor()) {
+            self.record_current_location(cx);
             editor.update(cx, |editor, cx| editor.go_to(line, column, cx));
             self.goto_line_open = false;
             self.focus_fallback(window, cx);
