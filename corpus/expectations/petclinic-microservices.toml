@@ -118,8 +118,10 @@ target = "none"
 
 [[case]]
 file = "spring-petclinic-customers-service/src/main/java/org/springframework/samples/petclinic/customers/web/PetResource.java"
+# The caret is on the argument, the local `pet` declared on line 91 (the case first
+# named the PetDetails constructor, which is what `PetDetails` itself would lead to).
 at = 'return new PetDetails(pe§t);'
-target = "spring-petclinic-customers-service/src/main/java/org/springframework/samples/petclinic/customers/web/PetDetails.java:41"
+target = "spring-petclinic-customers-service/src/main/java/org/springframework/samples/petclinic/customers/web/PetResource.java:91"
 
 [[case]]
 file = "spring-petclinic-customers-service/src/main/java/org/springframework/samples/petclinic/customers/web/PetDetails.java"

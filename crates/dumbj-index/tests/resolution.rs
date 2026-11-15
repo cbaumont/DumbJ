@@ -19,6 +19,7 @@ const CART: &str = "app/src/main/java/com/shop/app/Cart.java";
 const CHECKOUT: &str = "app/src/main/kotlin/com/shop/app/Checkout.kt";
 const MONEY: &str = "core/src/main/java/com/shop/core/Money.java";
 const PRICED: &str = "core/src/main/java/com/shop/core/Priced.java";
+const RECEIPT: &str = "core/src/main/java/com/shop/core/Receipt.java";
 const PRODUCT: &str = "core/src/main/kotlin/com/shop/core/Product.kt";
 
 /// Resolves the caret in `snippet` and renders the outcome:
@@ -318,4 +319,32 @@ fn nothing_to_resolve() {
     );
     assert_eq!(go(&index, CART, "new Array§List<>()"), "NotFound");
     assert_eq!(go(&index, CART, "pub§lic class Cart"), "none", "a keyword");
+}
+
+#[test]
+fn record_components_are_accessors() {
+    let index = shop_index();
+    assert_eq!(
+        go(&index, RECEIPT, "int amount = receipt.tot§al().amount();"),
+        "Jump Receipt.java:6 Receipt.total Scope"
+    );
+    assert_eq!(
+        go(&index, RECEIPT, "String label = receipt.stat§us().name();"),
+        "Jump Receipt.java:6 Receipt.status Scope"
+    );
+}
+
+#[test]
+fn members_inherited_from_library_supertypes_are_not_guessed() {
+    let index = shop_index();
+    assert_eq!(
+        go(&index, RECEIPT, "archive.a§dd(receipt);"),
+        "NotFound",
+        "Archive extends java.util.List; Money.add and Cart.add are unrelated"
+    );
+    assert_eq!(
+        go(&index, RECEIPT, "Receipt late§st();"),
+        "NotFound",
+        "a declaration"
+    );
 }

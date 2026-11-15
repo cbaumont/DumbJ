@@ -25,6 +25,7 @@ fn indexes_sources_and_skips_ignored_files() {
             "core/build.gradle.kts",
             "core/src/main/java/com/shop/core/Money.java",
             "core/src/main/java/com/shop/core/Priced.java",
+            "core/src/main/java/com/shop/core/Receipt.java",
             "core/src/main/java/com/shop/util/Money.java",
             "core/src/main/kotlin/com/shop/core/Product.kt",
             "settings.gradle.kts",
@@ -55,7 +56,7 @@ fn looks_symbols_up_by_name_package_and_fqn() {
     assert_eq!(fqns("label"), ["com.shop.core.label"]);
     assert_eq!(fqns("nope"), [] as [String; 0]);
 
-    assert_eq!(index.files_in_package("com.shop.core").len(), 3);
+    assert_eq!(index.files_in_package("com.shop.core").len(), 4);
     assert_eq!(index.files_in_package("com.shop.nope").len(), 0);
 
     let money = index.symbols_by_fqn("com.shop.core.Money");

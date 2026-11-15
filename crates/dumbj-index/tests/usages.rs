@@ -86,6 +86,7 @@ fn usages_of_a_class_cross_languages_and_skip_the_namesake() {
             "Money.java:15 public Money add(Money other) {",
             "Money.java:17 return new Money(sum);",
             "Priced.java:4 Money price();",
+            "Receipt.java:6 public record Receipt(Money total, Status status) {",
             "Product.kt:3 data class Product(val name: String, val cost: Money) : Priced {",
             "Product.kt:4 override fun price(): Money = cost",
             "Product.kt:7 val reduced = Money.of(cost.amount() * (100 - percent) / 100)",

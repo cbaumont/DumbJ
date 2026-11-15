@@ -12,12 +12,10 @@ Done and committed (not pushed): Kotlin grammar evaluation, declaration/referenc
 
 Left to do, in this order:
 1. **Accuracy cases.** `corpus/expectations/kotlinx-coroutines.toml` (92 cases) was written by a subagent that was stopped before reporting: it is well-formed but its expectations are unreviewed. `nowinandroid.toml` does not exist yet (about 25 cases wanted). Spot-check the first, write the second.
-2. **Fix what the benchmark shows** (baseline: 208 cases, 68.8% correct, 23.1% chooser, 7.7% missed, 0.5% wrong). Known causes:
-   - Java record components are not offered for accessor calls (`request.firstName()`).
-   - When the receiver's type is known but the member is not in it or its indexed supertypes (Spring Data `save`, `Enum.name()`), the resolver guesses among unrelated types; it should find nothing.
+2. **Fix what the benchmark shows** (now: 208 cases, 72.6% correct, 23.1% chooser, 4.3% missed, 0 wrong). Known causes of the choosers and misses:
    - A call-result receiver (`getOwner().getFirstName()`) is treated as unknown; follow the callee's return type (`Symbol::type_name`).
    - Overloads always give a chooser; pick by argument count and types.
-   - One wrong jump: `new PetDetails(pe§t)` in petclinic `PetResource.java`. Check whether the case's caret is on the argument (then the case is wrong) before changing the resolver.
+   - Kotlin: a member should beat an extension of the same name; untyped locals initialised from a call (`val paid = Cash.of(…)`) have no type.
 3. **Nightly CI job** for the accuracy benchmark (ARCHITECTURE decision "CI is GitHub Actions").
 4. **Docs.** `docs/FEATURES.md` and the crate map, data flow and decisions in `docs/ARCHITECTURE.md` do not mention `dumbj-index` or anything from M1a yet.
 5. **Milestone review package:** summary, screenshots (`scripts/screenshot.sh`), known gaps; then stop for approval.

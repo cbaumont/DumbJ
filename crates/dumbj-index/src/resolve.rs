@@ -314,10 +314,20 @@ impl<'a> Resolver<'a> {
                 && language.is_some_and(|language| kind_fits(symbol.kind, role, language))
         };
         for type_id in self.with_supertypes(owner) {
+            // A Java record's components are also its accessor methods: `point.x()`.
+            let is_record = self
+                .symbol(type_id)
+                .is_some_and(|s| s.kind == SymbolKind::Record);
+            let is_accessor = |symbol: &Symbol| {
+                is_record
+                    && role == ReferenceRole::Call
+                    && symbol.kind == SymbolKind::Field
+                    && symbol.name == name
+            };
             let mut found: Vec<SymbolId> = self
                 .index
                 .members(type_id)
-                .filter(|(_, symbol)| fits(symbol))
+                .filter(|(_, symbol)| fits(symbol) || is_accessor(symbol))
                 .map(|(id, _)| id)
                 .collect();
             let companions = self
@@ -716,7 +726,10 @@ impl Lookup<'_> {
                 if !extensions.is_empty() {
                     return self.finish(extensions, false);
                 }
-                // Otherwise it may be inherited from a library supertype: fall through.
+                // The receiver's type is known and has no such member: it is inherited from a
+                // library supertype (`JpaRepository.save`, `Enum.name`). Members of unrelated
+                // project types with the same name would only be wrong answers.
+                return self.finish(Vec::new(), true);
             }
             // The receiver's type is written but is not in the project (a library type).
             // Its members are not ours; only an extension on that type can match.
