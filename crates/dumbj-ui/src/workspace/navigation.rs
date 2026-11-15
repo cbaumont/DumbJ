@@ -306,8 +306,8 @@ impl Workspace {
                 window.focus(&focus, cx);
             }
             _ => {
-                self.status_message =
-                    Some(format!("Cannot find declaration of {}", reference.name));
+                let library = editor.read(cx).library_targets_at_caret(&index);
+                self.goto_library(reference.name, library, window, cx);
             }
         }
         cx.notify();

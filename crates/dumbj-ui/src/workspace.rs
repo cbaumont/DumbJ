@@ -18,6 +18,7 @@ use crate::text_input::{TextChanged, TextInput};
 use crate::theme;
 
 mod hierarchy;
+mod library;
 mod navigation;
 mod search_popup;
 mod usages;
@@ -89,6 +90,7 @@ pub(crate) struct Workspace {
     goto_line_open: bool,
     /// The symbol index; `None` until the first indexing run has finished.
     index: Option<std::sync::Arc<dumbj_index::Index>>,
+    jars: Option<std::sync::Arc<dumbj_jars::JarIndex>>,
     indexing: Option<Indexing>,
     history: NavigationHistory,
     chooser: Option<Chooser>,
@@ -182,6 +184,7 @@ impl Workspace {
             goto_line,
             goto_line_open: false,
             index: None,
+            jars: None,
             indexing: None,
             history: NavigationHistory::default(),
             chooser: None,
@@ -268,6 +271,7 @@ impl Workspace {
         let handle = tree.read(cx).focus_handle().clone();
         window.focus(&handle, cx);
         self.start_indexing(root.clone(), cx);
+        self.start_jar_indexing(cx);
         self.project = Some(Project { root, name, tree });
         self.project_window = ToolWindowState::Visible;
         self.update_title(window);

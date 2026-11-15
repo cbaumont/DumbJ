@@ -5,7 +5,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 use dumbj_actions::{Action, MouseStroke};
-use dumbj_index::{Index, Resolution, Site, SymbolId, UsageTarget};
+use dumbj_index::{Index, LibraryTarget, Resolution, Site, SymbolId, UsageTarget};
 use dumbj_settings::UiRole;
 use dumbj_syntax::{HighlightSpan, Language, SyntaxTree};
 use dumbj_text::search::{self, SearchOptions};
@@ -46,7 +46,13 @@ struct Loaded {
 }
 
 fn load(path: &Path, language: Option<Language>, cancelled: &AtomicBool) -> Result<Loaded, String> {
-    let bytes = std::fs::read(path).map_err(|error| error.to_string())?;
+    let bytes = if dumbj_jars::is_virtual_path(path) {
+        dumbj_jars::read_virtual(path)
+            .map_err(|error| error.to_string())?
+            .into_bytes()
+    } else {
+        std::fs::read(path).map_err(|error| error.to_string())?
+    };
     let degraded = bytes.len() as u64 > MAX_HIGHLIGHT_FILE_BYTES;
     let buffer = Buffer::new(&String::from_utf8_lossy(&bytes));
     let syntax = match language.filter(|_| !degraded) {
@@ -420,6 +426,20 @@ impl EditorView {
             },
             self.model.caret(),
         )
+    }
+
+    pub(crate) fn library_targets_at_caret(&self, index: &Index) -> Vec<LibraryTarget> {
+        let (Some(tree), Some(file)) = (self.syntax.as_ref(), index.file_by_path(&self.path))
+        else {
+            return Vec::new();
+        };
+        let site = Site {
+            index,
+            file,
+            tree,
+            buffer: self.model.buffer(),
+        };
+        dumbj_index::library_targets(site, self.model.caret())
     }
 
     pub(crate) fn usage_target_at_caret(&self, index: &Index) -> Option<UsageTarget> {

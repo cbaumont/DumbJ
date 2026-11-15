@@ -13,6 +13,7 @@ publish = false
 [workspace.dependencies]
 dumbj-actions = { path = "crates/dumbj-actions" }
 dumbj-index = { path = "crates/dumbj-index" }
+dumbj-jars = { path = "crates/dumbj-jars" }
 dumbj-settings = { path = "crates/dumbj-settings" }
 dumbj-syntax = { path = "crates/dumbj-syntax" }
 dumbj-text = { path = "crates/dumbj-text" }
