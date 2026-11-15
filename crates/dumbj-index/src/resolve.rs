@@ -1355,6 +1355,15 @@ impl Lookup<'_> {
     }
 }
 
+/// The supertypes of the type `id` that are in the index, resolved in its own file.
+pub(crate) fn resolve_supertypes(index: &Index, id: SymbolId) -> Vec<SymbolId> {
+    let language = index
+        .file(id.file)
+        .and_then(|file| file.language)
+        .unwrap_or(Language::Java);
+    Resolver { index, language }.supertypes(id)
+}
+
 /// Resolves the identifier at `offset`. Returns `None` when there is no identifier there.
 #[must_use]
 pub fn resolve(site: Site<'_>, offset: ByteOffset) -> Option<Resolution> {

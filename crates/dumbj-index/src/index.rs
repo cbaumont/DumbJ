@@ -3,6 +3,7 @@
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 
 use dumbj_syntax::{FileFacts, Language, Symbol};
 
@@ -42,6 +43,8 @@ pub struct Index {
     project: ProjectModel,
     /// The module of each file, parallel to `files`.
     modules: Vec<Option<ModuleId>>,
+    /// Each type's direct subtypes, worked out on first use (see `hierarchy`).
+    pub(crate) subtypes: OnceLock<HashMap<SymbolId, Vec<SymbolId>>>,
 }
 
 fn to_u32(value: usize) -> u32 {
