@@ -5,22 +5,11 @@ A fast, native, keyboard-first **code reading and code review editor** with Inte
 Full spec: `docs/BRIEF.md`. Where it conflicts with the Decisions in `docs/ARCHITECTURE.md`, the Decisions win. Read the sections relevant to your current task, not the whole file every time.
 
 ## Current milestone
-M1a: navigation core (see BRIEF §9), **in progress, not yet reviewed**. M0 was approved on 2026-11-14. Editing lands in M1b. Decisions are in `docs/ARCHITECTURE.md`. Stop after each milestone with a summary, run instructions, test status, known gaps and screenshots, then wait for approval.
+M1a: navigation core (see BRIEF §9), **implemented, awaiting review** (review package sent 2026-11-15). M0 was approved on 2026-11-14. Editing lands in M1b. Decisions are in `docs/ARCHITECTURE.md`. Stop after each milestone with a summary, run instructions, test status, known gaps and screenshots, then wait for approval.
 
-### M1a handover (2026-11-15)
-Done and committed (not pushed): Kotlin grammar evaluation, declaration/reference extraction, `dumbj-index` (index, parallel indexer, SQLite cache, project model, resolver, fuzzy search, Find Usages), and in the window Go to Declaration (Ctrl+B, Ctrl+click) with chooser, Back/Forward, Search Everywhere, Go to Class/File/Symbol, File Structure, Find/Show Usages. The accuracy runner is `cargo run --release -p dumbj-index --example accuracy` (fetch the corpus first with `scripts/fetch-corpus.sh`).
+Accuracy benchmark (2026-11-15): 264 cases, 84.1% correct, 14.4% chooser, 1.5% missed, 0 wrong. Run `scripts/fetch-corpus.sh`, then `cargo run --release -p dumbj-index --example accuracy`; it also runs nightly (`.github/workflows/accuracy.yml`), failing on any wrong jump. Known causes of the remaining choosers, for after the review: lambda parameter types (`it`), indexing (`a[i].b`), smart casts, scope functions (`apply { }`), and Java `Class` arguments not matching a Kotlin `Type` parameter.
 
-Left to do, in this order:
-1. **Accuracy cases.** `corpus/expectations/kotlinx-coroutines.toml` (92 cases) was written by a subagent that was stopped before reporting: it is well-formed but its expectations are unreviewed. `nowinandroid.toml` does not exist yet (about 25 cases wanted). Spot-check the first, write the second.
-2. **Fix what the benchmark shows** (now: 208 cases, 72.6% correct, 23.1% chooser, 4.3% missed, 0 wrong). Known causes of the choosers and misses:
-   - A call-result receiver (`getOwner().getFirstName()`) is treated as unknown; follow the callee's return type (`Symbol::type_name`).
-   - Overloads always give a chooser; pick by argument count and types.
-   - Kotlin: a member should beat an extension of the same name; untyped locals initialised from a call (`val paid = Cash.of(…)`) have no type.
-3. **Nightly CI job** for the accuracy benchmark (ARCHITECTURE decision "CI is GitHub Actions").
-4. **Docs.** `docs/FEATURES.md` and the crate map, data flow and decisions in `docs/ARCHITECTURE.md` do not mention `dumbj-index` or anything from M1a yet.
-5. **Milestone review package:** summary, screenshots (`scripts/screenshot.sh`), known gaps; then stop for approval.
-
-Working notes: the owner wants self-contained work delegated to subagents on cheaper models to limit spend. Gate every commit on `cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo nextest run`, chained with `&&`.
+Working notes: the owner wants self-contained work delegated to subagents on cheaper models to limit spend. Gate every commit on `cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo nextest run`, chained with `&&`. For screenshots, `wtype` sends F7 as `q`: drive Find Usages through Ctrl+B on a declaration instead of Alt+F7.
 
 ## Core rules
 - **Java and Kotlin first** (BRIEF §5). They get IntelliJ-grade navigation, including Java↔Kotlin interop, Gradle/Maven project structure and library source jars. Other languages get highlighting and structure only until M6.
