@@ -624,3 +624,50 @@ fn java_and_kotlin_see_each_others_accessors() {
         "Jump Ledger.java:4 Ledger.getTotal Scope"
     );
 }
+
+#[test]
+fn references_outside_the_project_name_library_classes() {
+    use dumbj_index::{LibraryTarget, library_targets};
+    let index = shop_index();
+    let targets = |file: &str, snippet: &str| {
+        let path = shop_root().join(file);
+        let source = std::fs::read_to_string(&path).unwrap();
+        let plain = snippet.replacen('§', "", 1);
+        let offset = source.find(&plain).unwrap() + snippet.find('§').unwrap();
+        let buffer = Buffer::new(&source);
+        let tree = parse(Language::from_path(&path).unwrap(), &buffer, || false)
+            .unwrap()
+            .unwrap();
+        let site = Site {
+            index: &index,
+            file: index.file_by_path(&path).unwrap(),
+            tree: &tree,
+            buffer: &buffer,
+        };
+        library_targets(site, ByteOffset(offset))
+    };
+    let target = |class: &str, member: Option<&str>| LibraryTarget {
+        class: class.to_owned(),
+        member: member.map(str::to_owned),
+    };
+    assert_eq!(
+        targets(CART, "import java.util.Arr§ayList;"),
+        [
+            target("java.util.ArrayList", None),
+            target("java.util", Some("ArrayList"))
+        ]
+    );
+    assert_eq!(
+        targets(CART, "new Array§List<>()"),
+        [target("java.util.ArrayList", None)]
+    );
+    assert_eq!(
+        targets(CART, "products.ad§d(product);"),
+        [target("java.util.List", Some("add"))],
+        "a member of a field's library type"
+    );
+    assert_eq!(
+        targets(CART, "products.si§ze();"),
+        [target("java.util.List", Some("size"))]
+    );
+}

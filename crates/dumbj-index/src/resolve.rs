@@ -552,6 +552,27 @@ impl Found {
     }
 }
 
+impl<'a> Lookup<'a> {
+    fn new(site: Site<'a>, reference: &Reference) -> Self {
+        let resolver = Resolver {
+            index: site.index,
+            language: site.tree.language(),
+        };
+        let enclosing = resolver.enclosing_types(site.file, reference.range.start);
+        let mut lookup = Lookup {
+            site,
+            resolver,
+            enclosing,
+            extension_receiver: None,
+        };
+        lookup.extension_receiver = site
+            .tree
+            .extension_receiver_at(site.buffer, reference.range.start)
+            .map(|type_name| lookup.receiver_of_written_type(&type_name));
+        lookup
+    }
+}
+
 impl Lookup<'_> {
     fn target(&self, id: SymbolId, tier: Tier) -> Option<Target> {
         let symbol = self.resolver.symbol(id)?;
@@ -1450,21 +1471,7 @@ pub(crate) fn resolve_supertypes(index: &Index, id: SymbolId) -> Vec<SymbolId> {
 #[must_use]
 pub fn resolve(site: Site<'_>, offset: ByteOffset) -> Option<Resolution> {
     let reference = site.tree.reference_at(site.buffer, offset)?;
-    let resolver = Resolver {
-        index: site.index,
-        language: site.tree.language(),
-    };
-    let enclosing = resolver.enclosing_types(site.file, reference.range.start);
-    let mut lookup = Lookup {
-        site,
-        resolver,
-        enclosing,
-        extension_receiver: None,
-    };
-    lookup.extension_receiver = site
-        .tree
-        .extension_receiver_at(site.buffer, reference.range.start)
-        .map(|type_name| lookup.receiver_of_written_type(&type_name));
+    let lookup = Lookup::new(site, &reference);
     let found = if reference.role == ReferenceRole::Declaration {
         Found::sure(Vec::new())
     } else if reference.in_import {
@@ -1480,4 +1487,137 @@ pub fn resolve(site: Site<'_>, offset: ByteOffset) -> Option<Resolution> {
         })
     };
     Some(lookup.finish(reference, found))
+}
+
+/// A declaration outside the project: a class by fully qualified name, and the member
+/// of it the reference names, if any.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LibraryTarget {
+    pub class: String,
+    pub member: Option<String>,
+}
+
+/// Packages every Java or Kotlin file sees without importing them.
+fn implicit_packages(language: Language) -> &'static [&'static str] {
+    match language {
+        Language::Kotlin => &[
+            "kotlin",
+            "kotlin.collections",
+            "kotlin.ranges",
+            "kotlin.sequences",
+            "kotlin.text",
+            "kotlin.io",
+            "kotlin.annotation",
+            "kotlin.comparisons",
+            "kotlin.jvm",
+            "java.lang",
+        ],
+        _ => &["java.lang"],
+    }
+}
+
+impl Lookup<'_> {
+    /// The classes a simple or qualified type name written here may mean, best first.
+    fn library_classes(&self, type_name: &str) -> Vec<String> {
+        let (first, rest) = type_name
+            .split_once('.')
+            .map_or((type_name, None), |(first, rest)| (first, Some(rest)));
+        if !first.starts_with(char::is_uppercase) {
+            return vec![type_name.to_owned()];
+        }
+        let nested = |outer: String| match rest {
+            Some(rest) => format!("{outer}.{rest}"),
+            None => outer,
+        };
+        let facts = self.resolver.facts(self.site.file);
+        let imports = facts.map_or(&[][..], |facts| facts.imports.as_slice());
+        if let Some(import) = imports
+            .iter()
+            .find(|import| import.local_name() == Some(first))
+        {
+            return vec![nested(import.path.clone())];
+        }
+        let own = facts.and_then(|facts| facts.package.clone());
+        let wildcards = imports
+            .iter()
+            .filter(|import| import.wildcard)
+            .map(|import| import.path.clone());
+        own.into_iter()
+            .chain(wildcards)
+            .chain(
+                implicit_packages(self.resolver.language)
+                    .iter()
+                    .map(|package| (*package).to_owned()),
+            )
+            .map(|package| nested(format!("{package}.{first}")))
+            .collect()
+    }
+
+    fn library_targets(&self, reference: &Reference) -> Vec<LibraryTarget> {
+        let class = |class: String, member: Option<&str>| LibraryTarget {
+            class,
+            member: member.map(str::to_owned),
+        };
+        if reference.in_import {
+            let prefix = match &reference.qualifier {
+                Some(Qualifier::Name(prefix) | Qualifier::Path(prefix)) => prefix.clone(),
+                _ => String::new(),
+            };
+            let full = if prefix.is_empty() {
+                reference.name.clone()
+            } else {
+                format!("{prefix}.{}", reference.name)
+            };
+            let mut found = vec![class(full, None)];
+            if !prefix.is_empty() {
+                found.push(class(prefix, Some(&reference.name)));
+            }
+            return found;
+        }
+        let at = reference.range.start;
+        match &reference.qualifier {
+            None if reference.name.starts_with(char::is_uppercase) => self
+                .library_classes(&reference.name)
+                .into_iter()
+                .map(|name| class(name, None))
+                .collect(),
+            None => Vec::new(),
+            Some(qualifier) => {
+                let owner = match self.receiver(qualifier, at, 0) {
+                    Receiver::External(type_name) => Some(type_name),
+                    Receiver::Unknown => match qualifier {
+                        Qualifier::Name(name) | Qualifier::Path(name)
+                            if name
+                                .rsplit('.')
+                                .next()
+                                .is_some_and(|last| last.starts_with(char::is_uppercase)) =>
+                        {
+                            Some(name.clone())
+                        }
+                        _ => None,
+                    },
+                    _ => None,
+                };
+                owner.map_or_else(Vec::new, |owner| {
+                    self.library_classes(&owner)
+                        .into_iter()
+                        .map(|name| class(name, Some(&reference.name)))
+                        .collect()
+                })
+            }
+        }
+    }
+}
+
+/// Where a reference that the project does not declare may lead in a library, best
+/// guess first. Empty when the project declares it or nothing points outside.
+#[must_use]
+pub fn library_targets(site: Site<'_>, offset: ByteOffset) -> Vec<LibraryTarget> {
+    let Some(reference) = site.tree.reference_at(site.buffer, offset) else {
+        return Vec::new();
+    };
+    if reference.role == ReferenceRole::Declaration {
+        return Vec::new();
+    }
+    Lookup::new(site, &reference).library_targets(&reference)
 }
