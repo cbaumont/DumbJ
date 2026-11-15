@@ -72,9 +72,24 @@ fn render(name: &str) -> String {
             .type_name
             .as_ref()
             .map_or_else(String::new, |t| format!(" -> {t}"));
+        let parameters = symbol.parameters.as_ref().map_or_else(String::new, |all| {
+            let shown: Vec<String> = all
+                .iter()
+                .map(|parameter| {
+                    format!(
+                        "{}{}: {}{}",
+                        if parameter.variadic { "*" } else { "" },
+                        parameter.name,
+                        parameter.type_name.as_deref().unwrap_or("?"),
+                        if parameter.optional { " =" } else { "" },
+                    )
+                })
+                .collect();
+            format!("({})", shown.join(", "))
+        });
         writeln!(
             out,
-            "{}:{} {:?} {}{supers}{receiver}{type_name}",
+            "{}:{} {:?} {}{parameters}{supers}{receiver}{type_name}",
             point.line.display_number(),
             point.column + 1,
             symbol.kind,

@@ -1,4 +1,4 @@
-//! Shared helpers for tests that run against the `shop` fixture project.
+//! Shared helpers for tests that run against the fixture projects.
 
 #![expect(
     clippy::unwrap_used,
@@ -20,4 +20,13 @@ pub(crate) fn shop_root() -> PathBuf {
 
 pub(crate) fn shop_index() -> Index {
     index_project(&shop_root(), &AtomicBool::new(false), |_| {}).unwrap()
+}
+
+/// A small project of overloads, constructors and Kotlin called from Java.
+pub(crate) fn freight_root() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/freight")
+}
+
+pub(crate) fn freight_index() -> Index {
+    index_project(&freight_root(), &AtomicBool::new(false), |_| {}).unwrap()
 }

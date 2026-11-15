@@ -11,18 +11,18 @@ import java.util.Collections.* static -> None
 9:30 Field Structure.MAX
 9:39 Field Structure.MIN
 10:26 Field Structure.names -> List
-11:12 Constructor Structure.Structure
-12:27 Method Structure.run
-20:18 Method Structure.foo
+11:12 Constructor Structure.Structure(name: String)
+12:27 Method Structure.run()
+20:18 Method Structure.foo(value: ?, n: ?)
 21:15 Interface Structure.Shape
-21:30 Method Structure.Shape.area
+21:30 Method Structure.Shape.area()
 22:10 Enum Structure.Color
 22:18 EnumConstant Structure.Color.RED
 22:23 EnumConstant Structure.Color.GREEN
-22:35 Method Structure.Color.paint
+22:35 Method Structure.Color.paint()
 23:12 Record Structure.Point
 23:22 Field Structure.Point.x
 23:29 Field Structure.Point.y
 24:16 Annotation Structure.Marker
 25:11 Class Structure.Inner
-25:24 Method Structure.Inner.go
+25:24 Method Structure.Inner.go()

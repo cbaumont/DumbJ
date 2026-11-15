@@ -6,12 +6,13 @@
 //! lookup was a guess. Otherwise the caller shows a chooser sorted by rank. A wrong jump is
 //! worse than a chooser.
 
+use std::cell::OnceCell;
 use std::collections::HashSet;
 use std::path::PathBuf;
 
 use dumbj_syntax::{
-    Argument, FileFacts, Language, LocalDefinition, Qualifier, Reference, ReferenceRole, Symbol,
-    SymbolKind, SyntaxTree,
+    Argument, FileFacts, Language, LocalDefinition, Parameter, Qualifier, Reference, ReferenceRole,
+    Symbol, SymbolKind, SyntaxTree,
 };
 use dumbj_text::{Buffer, ByteOffset, ByteRange};
 
@@ -83,12 +84,16 @@ const MAX_SUPERTYPE_DEPTH: usize = 12;
 /// How many calls and local initialisers are followed to find the type of one expression.
 const MAX_EXPRESSION_DEPTH: usize = 8;
 
+/// Whether a declaration of `kind` can be what a reference with `role`, written in
+/// `language`, names.
 fn kind_fits(kind: SymbolKind, role: ReferenceRole, language: Language) -> bool {
     match role {
         ReferenceRole::Type => kind.is_type(),
-        // In Kotlin `Foo()` constructs a Foo, so a call may name a type.
+        // In Kotlin `Foo()` constructs a Foo, so a call may name a type; its constructors
+        // are reached through the type (see `Lookup::callables_of`).
         ReferenceRole::Call => {
-            kind.is_callable() || (language == Language::Kotlin && kind.is_type())
+            matches!(kind, SymbolKind::Function | SymbolKind::Method)
+                || (language == Language::Kotlin && kind.is_type())
         }
         ReferenceRole::Member | ReferenceRole::Value => {
             matches!(
@@ -103,6 +108,8 @@ fn kind_fits(kind: SymbolKind, role: ReferenceRole, language: Language) -> bool 
 /// Lookups shared by every step of a resolution.
 struct Resolver<'a> {
     index: &'a Index,
+    /// The language of the file the reference is in.
+    language: Language,
 }
 
 impl<'a> Resolver<'a> {
@@ -311,12 +318,20 @@ impl<'a> Resolver<'a> {
 
     /// The members of `owner` called `name` that fit `role`: its own, those of its Kotlin
     /// companion object, or failing that the nearest supertype's.
-    fn members_named(&self, owner: SymbolId, name: &str, role: ReferenceRole) -> Vec<SymbolId> {
-        let language = self.index.file(owner.file).and_then(|file| file.language);
-        let fits = |symbol: &Symbol| {
-            symbol.name == name
-                && language.is_some_and(|language| kind_fits(symbol.kind, role, language))
-        };
+    ///
+    /// `applicable` says whether a member can take the call's arguments. Overloads may be
+    /// spread over a hierarchy, so the nearest type with an applicable member wins; when
+    /// no member is applicable anywhere, the nearest type that has the name does.
+    fn members_named(
+        &self,
+        owner: SymbolId,
+        name: &str,
+        role: ReferenceRole,
+        applicable: &dyn Fn(SymbolId) -> bool,
+    ) -> Vec<SymbolId> {
+        let fits =
+            |symbol: &Symbol| symbol.name == name && kind_fits(symbol.kind, role, self.language);
+        let mut nearest = Vec::new();
         for type_id in self.with_supertypes(owner) {
             // A Java record's components are also its accessor methods: `point.x()`.
             let is_record = self
@@ -347,11 +362,16 @@ impl<'a> Resolver<'a> {
                         .map(|(id, _)| id),
                 );
             }
-            if !found.is_empty() {
-                return found;
+            let fitting: Vec<SymbolId> =
+                found.iter().copied().filter(|id| applicable(*id)).collect();
+            if !fitting.is_empty() {
+                return fitting;
+            }
+            if nearest.is_empty() {
+                nearest = found;
             }
         }
-        Vec::new()
+        nearest
     }
 
     /// The types a value of declared type `type_name` has, resolved where `declared_in`
@@ -369,9 +389,44 @@ impl<'a> Resolver<'a> {
     }
 }
 
+/// Any member will do: the lookup is not a call, or its arguments do not matter.
+fn any_member(_: SymbolId) -> bool {
+    true
+}
+
+/// The group of interchangeable built-in types `name` belongs to: text, numbers (a Java
+/// `char` widens to `int`) or booleans. Values never convert between groups.
+fn scalar_group(name: &str) -> Option<u8> {
+    match name {
+        "String" => Some(0),
+        "Int" | "Long" | "Short" | "Byte" | "Double" | "Float" | "Char" | "int" | "long"
+        | "short" | "byte" | "double" | "float" | "char" | "Integer" | "Character" => Some(1),
+        "Boolean" | "boolean" => Some(2),
+        _ => None,
+    }
+}
+
+fn simple_name(type_name: &str) -> &str {
+    type_name.rsplit('.').next().unwrap_or(type_name)
+}
+
+/// How well a call's arguments suit one callable. Later variants are better.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum Fit {
+    /// The call cannot be to this callable: wrong argument count, an unknown parameter
+    /// name, or an argument whose type certainly does not convert.
+    No,
+    /// Nothing rules it out.
+    Maybe,
+    /// Every argument has exactly the declared type of its parameter.
+    Exact,
+}
+
 /// What an expression denotes, as far as the index can tell.
 #[derive(PartialEq, Eq)]
 enum Receiver {
+    /// A lambda or a function reference.
+    Function,
     /// Values of these indexed types.
     Types(Vec<SymbolId>),
     /// A value whose declared type is not in the index: a library type such as `List`.
@@ -393,12 +448,19 @@ struct Query<'q> {
     name: &'q str,
     role: ReferenceRole,
     qualifier: Option<&'q Qualifier>,
-    /// The arguments of a call. Not used to pick an overload yet.
-    #[expect(dead_code, reason = "overload selection reads it")]
+    /// The arguments of a call; they pick the overload.
     arguments: Option<&'q [Argument]>,
     /// Where the name is written; locals are looked up from here.
     at: ByteOffset,
     /// How many expressions deep this lookup is.
+    depth: usize,
+}
+
+/// The arguments of the call being resolved, with their types worked out on first use.
+struct CallSite<'q> {
+    arguments: &'q [Argument],
+    types: OnceCell<Vec<Receiver>>,
+    at: ByteOffset,
     depth: usize,
 }
 
@@ -515,7 +577,7 @@ impl Lookup<'_> {
             .iter()
             .flat_map(|owner| {
                 self.resolver
-                    .members_named(*owner, name, ReferenceRole::Value)
+                    .members_named(*owner, name, ReferenceRole::Value, &any_member)
             })
             .find(|id| !self.resolver.is_type(*id));
         if let Some(field) = field {
@@ -553,13 +615,20 @@ impl Lookup<'_> {
             .iter()
             .flat_map(|owner| {
                 self.resolver
-                    .members_named(*owner, name, ReferenceRole::Member)
+                    .members_named(*owner, name, ReferenceRole::Member, &any_member)
             })
             .next();
-        match member {
-            None => Receiver::Unknown,
-            Some(member) if self.resolver.is_type(member) => Receiver::Types(vec![member]),
-            Some(member) => self.receiver_of_symbol(member),
+        let kind = member.and_then(|member| self.resolver.symbol(member).map(|s| s.kind));
+        match (member, kind) {
+            (Some(member), Some(kind)) if kind.is_type() => Receiver::Types(vec![member]),
+            // `Color.RED` is a `Color`.
+            (Some(member), Some(SymbolKind::EnumConstant)) => self
+                .site
+                .index
+                .parent(member)
+                .map_or(Receiver::Unknown, |owner| Receiver::Types(vec![owner])),
+            (Some(member), _) => self.receiver_of_symbol(member),
+            (None, _) => Receiver::Unknown,
         }
     }
 
@@ -658,7 +727,8 @@ impl Lookup<'_> {
             }
             Qualifier::Call(call) => self.receiver_of_call(call, at, depth + 1),
             Qualifier::Typed(type_name) => self.receiver_of_written_type(type_name),
-            Qualifier::Lambda | Qualifier::Other => Receiver::Unknown,
+            Qualifier::Lambda => Receiver::Function,
+            Qualifier::Other => Receiver::Unknown,
         }
     }
 
@@ -670,12 +740,221 @@ impl Lookup<'_> {
             .iter()
             .copied()
             .filter(|id| {
-                let language = self.site.index.file(id.file).and_then(|file| file.language);
-                self.resolver.symbol(*id).is_some_and(|symbol| {
-                    language.is_some_and(|language| kind_fits(symbol.kind, role, language))
-                })
+                self.resolver
+                    .symbol(*id)
+                    .is_some_and(|symbol| kind_fits(symbol.kind, role, self.resolver.language))
             })
             .collect()
+    }
+
+    /// The type of an argument. Unlike a receiver, a bare type name is not a value of
+    /// that type (`foo(Job)` passes a companion object), unless it names an `object`.
+    fn argument_type(&self, value: &Qualifier, at: ByteOffset, depth: usize) -> Receiver {
+        let receiver = self.receiver(value, at, depth);
+        let (Qualifier::Name(name) | Qualifier::Path(name), Receiver::Types(types)) =
+            (value, &receiver)
+        else {
+            return receiver;
+        };
+        let names_them = self
+            .resolver
+            .resolve_type(self.site.file, &self.enclosing, name)
+            == *types;
+        let all_objects = types.iter().all(|id| {
+            self.resolver
+                .symbol(*id)
+                .is_some_and(|symbol| symbol.kind == SymbolKind::Object)
+        });
+        if names_them && !all_objects {
+            Receiver::Unknown
+        } else {
+            receiver
+        }
+    }
+
+    /// Whether a value of type `argument` can be passed for `parameter` of `callee`.
+    /// Only a certain mismatch is `No`: library types are not known to the index.
+    fn type_fit(&self, argument: &Receiver, callee: SymbolId, parameter: &Parameter) -> Fit {
+        let Some(written) = &parameter.type_name else {
+            return Fit::Maybe;
+        };
+        let simple = simple_name(written);
+        let declared = self
+            .resolver
+            .types_named(callee, Some(written))
+            .unwrap_or_default();
+        let kind = |id: &SymbolId| self.resolver.symbol(*id).map(|symbol| symbol.kind);
+        let is_alias =
+            |ids: &[SymbolId]| ids.iter().any(|id| kind(id) == Some(SymbolKind::TypeAlias));
+        // A value of a library type is never an instance of a project type, and nothing
+        // but text, a number or a boolean is passed for one.
+        let unless = |ruled_out: bool| if ruled_out { Fit::No } else { Fit::Maybe };
+        match argument {
+            Receiver::Unknown => Fit::Maybe,
+            Receiver::Function if declared.is_empty() => unless(scalar_group(simple).is_some()),
+            // A lambda converts to an interface or a function type alias, not to a class.
+            Receiver::Function => unless(declared.iter().all(|id| {
+                !matches!(
+                    kind(id),
+                    Some(SymbolKind::Interface | SymbolKind::TypeAlias) | None
+                )
+            })),
+            Receiver::External(name) if simple_name(name) == simple => Fit::Exact,
+            Receiver::External(_) if !declared.is_empty() => unless(!is_alias(&declared)),
+            Receiver::External(name) => {
+                let groups = (scalar_group(simple_name(name)), scalar_group(simple));
+                unless(matches!(groups, (Some(a), Some(b)) if a != b))
+            }
+            Receiver::Types(types) if is_alias(types) || is_alias(&declared) => Fit::Maybe,
+            Receiver::Types(_) if declared.is_empty() => unless(scalar_group(simple).is_some()),
+            Receiver::Types(types) if types.iter().all(|id| declared.contains(id)) => Fit::Exact,
+            Receiver::Types(types) => {
+                let converts = types.iter().any(|id| {
+                    self.resolver
+                        .with_supertypes(*id)
+                        .iter()
+                        .any(|ancestor| declared.contains(ancestor))
+                });
+                unless(!converts)
+            }
+        }
+    }
+
+    /// How well the arguments of `call` suit the callable `id`.
+    fn fit(&self, call: &CallSite<'_>, id: SymbolId) -> Fit {
+        let Some(symbol) = self.resolver.symbol(id) else {
+            return Fit::No;
+        };
+        // No parameter list to check: a Java class without a constructor, a property of a
+        // function type, a record accessor.
+        let Some(declared) = &symbol.parameters else {
+            return Fit::Maybe;
+        };
+        // Java calls a Kotlin extension with the receiver as the first argument.
+        let receiver = symbol
+            .receiver
+            .as_ref()
+            .filter(|_| self.resolver.language == Language::Java)
+            .map(|receiver| Parameter {
+                name: String::new(),
+                type_name: Some(receiver.clone()),
+                optional: false,
+                variadic: false,
+            });
+        let parameters: Vec<&Parameter> = receiver.iter().chain(declared).collect();
+        let types = call.types.get_or_init(|| {
+            call.arguments
+                .iter()
+                .map(|argument| self.argument_type(&argument.value, call.at, call.depth + 1))
+                .collect()
+        });
+        let mut bound = vec![false; parameters.len()];
+        let mut next_positional = Some(0);
+        let mut fit = Fit::Exact;
+        for (argument, argument_type) in call.arguments.iter().zip(types) {
+            let slot = if argument.trailing {
+                parameters.len().checked_sub(1)
+            } else if let Some(name) = &argument.name {
+                next_positional = None;
+                parameters.iter().position(|p| p.name == *name)
+            } else if let Some(slot) = next_positional {
+                // A variadic parameter takes every remaining positional argument.
+                if parameters.get(slot).is_some_and(|p| !p.variadic) {
+                    next_positional = Some(slot + 1);
+                }
+                Some(slot).filter(|slot| *slot < parameters.len())
+            } else {
+                // A positional argument after a named one: not worth modelling.
+                return Fit::Maybe;
+            };
+            let Some((parameter, is_bound)) =
+                slot.and_then(|slot| parameters.get(slot).copied().zip(bound.get_mut(slot)))
+            else {
+                return Fit::No;
+            };
+            *is_bound = true;
+            fit = fit.min(self.type_fit(argument_type, id, parameter));
+            if fit == Fit::No {
+                return Fit::No;
+            }
+        }
+        let missing = parameters
+            .iter()
+            .zip(&bound)
+            .any(|(parameter, bound)| !bound && !parameter.optional && !parameter.variadic);
+        if missing { Fit::No } else { fit }
+    }
+
+    /// What calling the candidate `id` runs: itself, or for a type its constructors. A
+    /// class with a primary constructor (or none at all) stands for that constructor.
+    fn callables_of(&self, id: SymbolId) -> Vec<SymbolId> {
+        if !self.resolver.is_type(id) {
+            return vec![id];
+        }
+        let constructors: Vec<SymbolId> = self
+            .site
+            .index
+            .members(id)
+            .filter(|(_, symbol)| symbol.kind == SymbolKind::Constructor)
+            .map(|(id, _)| id)
+            .collect();
+        let has_own = self
+            .resolver
+            .symbol(id)
+            .is_some_and(|symbol| symbol.parameters.is_some());
+        let own = (has_own || constructors.is_empty()).then_some(id);
+        own.into_iter().chain(constructors).collect()
+    }
+
+    /// Whether `id` is a type that `Name(…)` cannot construct: an interface, an object.
+    /// Calling it can only mean a SAM constructor or an `invoke` operator.
+    fn is_uncallable_type(&self, id: SymbolId) -> bool {
+        self.resolver.symbol(id).is_some_and(|symbol| {
+            symbol.parameters.is_none()
+                && matches!(
+                    symbol.kind,
+                    SymbolKind::Interface
+                        | SymbolKind::Object
+                        | SymbolKind::Companion
+                        | SymbolKind::TypeAlias
+                )
+        })
+    }
+
+    /// Narrows the candidates of a call to those its arguments can be passed to.
+    fn select_overload(&self, found: &mut Found, call: &CallSite<'_>) {
+        let mut fits: Vec<(SymbolId, Tier, Fit)> = found
+            .ranked
+            .iter()
+            .flat_map(|(id, tier)| {
+                self.callables_of(*id)
+                    .into_iter()
+                    .map(|callable| (callable, *tier, self.fit(call, callable)))
+            })
+            .collect();
+        // If nothing fits, the model is missing something: keep every candidate.
+        if fits.iter().any(|(_, _, fit)| *fit != Fit::No) {
+            fits.retain(|(_, _, fit)| *fit != Fit::No);
+        }
+        // `Job()` is the function `Job`, not the interface next to it.
+        let callable_tier = fits
+            .iter()
+            .filter(|(id, _, _)| !self.is_uncallable_type(*id))
+            .map(|(_, tier, _)| *tier)
+            .min();
+        fits.retain(|(id, tier, _)| {
+            !(self.is_uncallable_type(*id) && callable_tier.is_some_and(|best| best <= *tier))
+        });
+        // Among overloads in the best tier, one whose parameter types are exactly the
+        // argument types is the most specific and wins.
+        if let Some(best) = fits.iter().map(|(_, tier, _)| *tier).min() {
+            let exact =
+                |(_, tier, fit): &(SymbolId, Tier, Fit)| *tier == best && *fit == Fit::Exact;
+            if !call.arguments.is_empty() && fits.iter().filter(|c| exact(c)).count() == 1 {
+                fits.retain(|candidate| candidate.1 != best || exact(candidate));
+            }
+        }
+        found.ranked = fits.into_iter().map(|(id, tier, _)| (id, tier)).collect();
     }
 
     fn is_extension(&self, id: SymbolId) -> bool {
@@ -691,13 +970,33 @@ impl Lookup<'_> {
 
     /// Looks `query` up among locals and in the index.
     fn find(&self, query: Query<'_>) -> Found {
-        match query.qualifier {
-            Some(qualifier) => self.find_qualified(query, qualifier),
-            None => self.find_unqualified(query),
+        let call = query
+            .arguments
+            .filter(|_| query.role == ReferenceRole::Call)
+            .map(|arguments| CallSite {
+                arguments,
+                types: OnceCell::new(),
+                at: query.at,
+                depth: query.depth,
+            });
+        let applicable = |id: SymbolId| {
+            call.as_ref().is_none_or(|call| {
+                self.callables_of(id)
+                    .into_iter()
+                    .any(|callable| self.fit(call, callable) != Fit::No)
+            })
+        };
+        let mut found = match query.qualifier {
+            Some(qualifier) => self.find_qualified(query, qualifier, &applicable),
+            None => self.find_unqualified(query, &applicable),
+        };
+        if let Some(call) = call.as_ref().filter(|_| found.local.is_none()) {
+            self.select_overload(&mut found, call);
         }
+        found
     }
 
-    fn find_unqualified(&self, query: Query<'_>) -> Found {
+    fn find_unqualified(&self, query: Query<'_>, applicable: &dyn Fn(SymbolId) -> bool) -> Found {
         let Site {
             tree, buffer, file, ..
         } = self.site;
@@ -729,7 +1028,7 @@ impl Lookup<'_> {
         let in_scope: Vec<SymbolId> = self
             .enclosing
             .iter()
-            .flat_map(|owner| self.resolver.members_named(*owner, name, role))
+            .flat_map(|owner| self.resolver.members_named(*owner, name, role, applicable))
             .collect();
         if let Some(first) = in_scope.first() {
             // The innermost type that declares the name wins; overloads there tie.
@@ -769,7 +1068,12 @@ impl Lookup<'_> {
         }
     }
 
-    fn find_qualified(&self, query: Query<'_>, qualifier: &Qualifier) -> Found {
+    fn find_qualified(
+        &self,
+        query: Query<'_>,
+        qualifier: &Qualifier,
+        applicable: &dyn Fn(SymbolId) -> bool,
+    ) -> Found {
         let Query { name, role, .. } = query;
         let file = self.site.file;
         if role == ReferenceRole::Type
@@ -805,7 +1109,7 @@ impl Lookup<'_> {
             Receiver::Types(owners) => {
                 let members: Vec<SymbolId> = owners
                     .iter()
-                    .flat_map(|owner| self.resolver.members_named(*owner, name, role))
+                    .flat_map(|owner| self.resolver.members_named(*owner, name, role, applicable))
                     .collect();
                 if !members.is_empty() {
                     return Found::sure(members.into_iter().map(|id| (id, Tier::Scope)).collect());
@@ -833,7 +1137,7 @@ impl Lookup<'_> {
                 Found::guess(extensions_on(&HashSet::from([simple])))
             }
             // Unknown receiver: every member or extension with this name is a guess.
-            Receiver::Unknown => Found::guess(
+            Receiver::Unknown | Receiver::Function => Found::guess(
                 self.named_candidates(name, role)
                     .into_iter()
                     .filter(|id| self.is_member(*id) || self.is_extension(*id))
@@ -901,7 +1205,10 @@ impl Lookup<'_> {
 #[must_use]
 pub fn resolve(site: Site<'_>, offset: ByteOffset) -> Option<Resolution> {
     let reference = site.tree.reference_at(site.buffer, offset)?;
-    let resolver = Resolver { index: site.index };
+    let resolver = Resolver {
+        index: site.index,
+        language: site.tree.language(),
+    };
     let enclosing = resolver.enclosing_types(site.file, reference.range.start);
     let lookup = Lookup {
         site,

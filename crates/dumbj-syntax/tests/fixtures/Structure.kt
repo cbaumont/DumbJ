@@ -35,3 +35,8 @@ data class User(val name: String, private var age: Int) {
         return Alias.make(n).shout(2) + Base.create().area() + max(1, 2)
     }
 }
+
+class Multi {
+    constructor(a: Int)
+    constructor(vararg names: String, block: () -> Unit = {})
+}

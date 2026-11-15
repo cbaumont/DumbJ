@@ -105,9 +105,8 @@ fn usages_of_a_method_from_a_reference() {
         [
             "Cart.java:16 total = total.add(cost);",
             "Checkout.kt:19 return paid.add(cart.price())",
-            "Product.kt:26 items.add(product) ?",
         ],
-        "`paid` has the type its initialiser returns; `items` is a library list, so only a maybe"
+        "`paid` has the type its initialiser returns; `items.add(product)` does not pass a Money"
     );
     assert_eq!(
         usages(&index, PRODUCT, "fun sam§ple(): Product"),

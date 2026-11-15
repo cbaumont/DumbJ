@@ -132,6 +132,23 @@ pub struct Symbol {
     /// The declared type of a field or property, or the return type of a function, without
     /// type arguments. `None` when it is not written, is primitive or is `void`.
     pub type_name: Option<String>,
+    /// The parameters of a function, method or constructor, or of the primary constructor
+    /// of a Kotlin class (empty when the class declares no constructor at all). `None`
+    /// for everything that cannot be called as written.
+    pub parameters: Option<Vec<Parameter>>,
+}
+
+/// One parameter of a callable.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Parameter {
+    pub name: String,
+    /// The declared type without type arguments. `None` when it is a type parameter, a
+    /// function type or a primitive Java type.
+    pub type_name: Option<String>,
+    /// Whether a call may leave it out: it has a default value.
+    pub optional: bool,
+    /// `vararg` or `...`: takes any number of arguments.
+    pub variadic: bool,
 }
 
 /// One import statement.
@@ -240,6 +257,13 @@ impl Collector<'_> {
         }
     }
 
+    /// Sets the parameters of the callable at `index`.
+    pub(crate) fn set_parameters(&mut self, index: usize, parameters: Option<Vec<Parameter>>) {
+        if let Some(symbol) = self.facts.symbols.get_mut(index) {
+            symbol.parameters = parameters;
+        }
+    }
+
     /// Adds a symbol and returns its index.
     pub(crate) fn push(
         &mut self,
@@ -257,6 +281,7 @@ impl Collector<'_> {
             supertypes: Vec::new(),
             receiver: None,
             type_name: None,
+            parameters: None,
         });
         self.facts.symbols.len() - 1
     }

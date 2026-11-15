@@ -5,8 +5,8 @@ use tree_sitter::Node;
 
 use crate::reference::{Argument, Binder, Call, Qualifier, ReferenceRole, qualifier_from_text};
 use crate::structure::{
-    Collector, Import, Source, SymbolKind, all_children, child_of_kind, is_type_parameter,
-    named_children,
+    Collector, Import, Parameter, Source, SymbolKind, all_children, child_of_kind,
+    is_type_parameter, named_children,
 };
 
 /// The dotted name of a `user_type` without type arguments: `java.io.Serializable`.
@@ -89,6 +89,56 @@ fn import(collector: &Collector<'_>, node: Node<'_>) -> Option<Import> {
     })
 }
 
+fn is_vararg(source: &Source<'_>, modifiers: Node<'_>) -> bool {
+    named_children(modifiers)
+        .into_iter()
+        .any(|modifier| source.text(modifier) == "vararg")
+}
+
+/// The parameters in a `function_value_parameters` node. Modifiers and default values
+/// are siblings of the parameter they belong to.
+fn function_parameters(source: &Source<'_>, list: Node<'_>) -> Vec<Parameter> {
+    let mut found: Vec<Parameter> = Vec::new();
+    let mut variadic = false;
+    for child in all_children(list) {
+        match child.kind() {
+            "parameter_modifiers" => variadic = is_vararg(source, child),
+            "parameter" => {
+                let name = child_of_kind(child, "simple_identifier");
+                found.push(Parameter {
+                    name: name.map_or_else(String::new, |name| source.text(name)),
+                    type_name: declared_type(source, child),
+                    optional: false,
+                    variadic: std::mem::take(&mut variadic),
+                });
+            }
+            "=" => {
+                if let Some(last) = found.last_mut() {
+                    last.optional = true;
+                }
+            }
+            _ => {}
+        }
+    }
+    found
+}
+
+/// The parameters of a primary constructor.
+fn class_parameters(source: &Source<'_>, constructor: Node<'_>) -> Vec<Parameter> {
+    named_children(constructor)
+        .into_iter()
+        .filter(|child| child.kind() == "class_parameter")
+        .map(|parameter| Parameter {
+            name: child_of_kind(parameter, "simple_identifier")
+                .map_or_else(String::new, |name| source.text(name)),
+            type_name: declared_type(source, parameter),
+            optional: all_children(parameter).iter().any(|c| c.kind() == "="),
+            variadic: child_of_kind(parameter, "modifiers")
+                .is_some_and(|modifiers| is_vararg(source, modifiers)),
+        })
+        .collect()
+}
+
 /// A class, interface, object or companion: its symbol, supertypes, constructor
 /// properties and members.
 fn collect_type(
@@ -119,6 +169,19 @@ fn collect_type(
         .collect();
     if let Some(symbol) = collector.facts.symbols.get_mut(index) {
         symbol.supertypes = supers;
+    }
+    // What `Name(…)` calls: the primary constructor, or the implicit one of a class that
+    // declares none. A class with only secondary constructors is called through those.
+    if matches!(kind, SymbolKind::Class | SymbolKind::Annotation) {
+        let primary = child_of_kind(node, "primary_constructor")
+            .map(|constructor| class_parameters(&collector.source, constructor));
+        let has_secondary = child_of_kind(node, "class_body").is_some_and(|body| {
+            named_children(body)
+                .iter()
+                .any(|member| member.kind() == "secondary_constructor")
+        });
+        let parameters = primary.or_else(|| (!has_secondary).then(Vec::new));
+        collector.set_parameters(index, parameters);
     }
     for child in named_children(node) {
         match child.kind() {
@@ -181,9 +244,12 @@ pub(crate) fn collect(collector: &mut Collector<'_>, node: Node<'_>, parent: Opt
                 // The return type is the type written directly in the declaration; the
                 // receiver's type sits inside `receiver_type` and is not picked up here.
                 let type_name = declared_type(&collector.source, node);
+                let parameters = child_of_kind(node, "function_value_parameters")
+                    .map(|list| function_parameters(&collector.source, list));
                 if let Some(symbol) = collector.facts.symbols.get_mut(index) {
                     symbol.receiver = receiver;
                     symbol.type_name = type_name;
+                    symbol.parameters = parameters;
                 }
             }
         }
@@ -222,9 +288,12 @@ pub(crate) fn collect(collector: &mut Collector<'_>, node: Node<'_>, parent: Opt
                 .map(|s| s.name.clone());
             if let Some(class_name) = class_name {
                 let index = collector.push(SymbolKind::Constructor, node, node, parent);
+                let parameters = child_of_kind(node, "function_value_parameters")
+                    .map(|list| function_parameters(&collector.source, list));
                 if let Some(symbol) = collector.facts.symbols.get_mut(index) {
                     symbol.name = class_name;
                     symbol.name_range.end = symbol.name_range.start;
+                    symbol.parameters = parameters;
                 }
             }
         }
@@ -332,12 +401,17 @@ fn arguments(source: &Source<'_>, call: Node<'_>) -> Vec<Argument> {
                         .into_iter()
                         .last()
                         .map_or(Qualifier::Other, |value| expression(source, value));
-                    found.push(Argument { name, value });
+                    found.push(Argument {
+                        name,
+                        value,
+                        trailing: false,
+                    });
                 }
             }
             "annotated_lambda" => found.push(Argument {
                 name: None,
                 value: Qualifier::Lambda,
+                trailing: true,
             }),
             _ => {}
         }

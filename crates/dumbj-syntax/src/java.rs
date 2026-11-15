@@ -4,7 +4,8 @@ use tree_sitter::Node;
 
 use crate::reference::{Argument, Binder, Call, Qualifier, ReferenceRole, qualifier_from_text};
 use crate::structure::{
-    Collector, Import, Source, SymbolKind, all_children, is_type_parameter, named_children,
+    Collector, Import, Parameter, Source, SymbolKind, all_children, is_type_parameter,
+    named_children,
 };
 
 /// Type names in a `superclass`, `super_interfaces` or `extends_interfaces` clause.
@@ -35,6 +36,40 @@ fn import(collector: &Collector<'_>, node: Node<'_>) -> Option<Import> {
         is_static: children.iter().any(|child| child.kind() == "static"),
         alias: None,
     })
+}
+
+/// The parameters of a method or constructor declaration.
+fn parameters(source: &Source<'_>, declaration: Node<'_>) -> Option<Vec<Parameter>> {
+    let list = declaration.child_by_field_name("parameters")?;
+    let found = named_children(list)
+        .into_iter()
+        .filter_map(|parameter| match parameter.kind() {
+            "formal_parameter" => Some(Parameter {
+                name: parameter
+                    .child_by_field_name("name")
+                    .map_or_else(String::new, |name| source.text(name)),
+                type_name: declared_type(source, parameter, None),
+                optional: false,
+                variadic: false,
+            }),
+            // `String... rest`: the name sits in a variable_declarator.
+            "spread_parameter" => Some(Parameter {
+                name: named_children(parameter)
+                    .into_iter()
+                    .find(|part| part.kind() == "variable_declarator")
+                    .and_then(|declarator| declarator.child_by_field_name("name"))
+                    .map_or_else(String::new, |name| source.text(name)),
+                type_name: named_children(parameter)
+                    .into_iter()
+                    .find_map(|part| type_name(source, part))
+                    .filter(|name| !is_type_parameter(source, parameter, name)),
+                optional: false,
+                variadic: true,
+            }),
+            _ => None,
+        })
+        .collect();
+    Some(found)
 }
 
 /// Walks `node` and records the declarations below it.
@@ -99,11 +134,16 @@ pub(crate) fn collect(collector: &mut Collector<'_>, node: Node<'_>, parent: Opt
                 let method = collector.push(SymbolKind::Method, node, name, parent);
                 let type_name = declared_type(&collector.source, node, None);
                 collector.set_type(method, type_name);
+                // An annotation element has no parameter list but is called as `name()`.
+                let parameters = parameters(&collector.source, node).or_else(|| Some(Vec::new()));
+                collector.set_parameters(method, parameters);
             }
         }
         "constructor_declaration" | "compact_constructor_declaration" => {
             if let Some(name) = node.child_by_field_name("name") {
-                collector.push(SymbolKind::Constructor, node, name, parent);
+                let constructor = collector.push(SymbolKind::Constructor, node, name, parent);
+                let parameters = parameters(&collector.source, node);
+                collector.set_parameters(constructor, parameters);
             }
         }
         "field_declaration" | "constant_declaration" => {
@@ -231,6 +271,7 @@ fn arguments(source: &Source<'_>, call: Node<'_>) -> Vec<Argument> {
         .map(|argument| Argument {
             name: None,
             value: expression(source, argument),
+            trailing: false,
         })
         .collect()
 }

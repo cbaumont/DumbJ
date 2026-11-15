@@ -537,6 +537,7 @@ mod tests {
             supertypes: Vec::new(),
             receiver: None,
             type_name: None,
+            parameters: None,
         };
         let facts = FileFacts {
             package: Some("com.shop".to_owned()),

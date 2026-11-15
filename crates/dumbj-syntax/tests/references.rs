@@ -60,6 +60,7 @@ fn show_arguments(arguments: &[Argument]) -> String {
         .iter()
         .map(|argument| match &argument.name {
             Some(name) => format!("{name}={}", show(&argument.value)),
+            None if argument.trailing => format!("trailing {}", show(&argument.value)),
             None => show(&argument.value),
         })
         .collect();
@@ -106,8 +107,8 @@ fn kotlin_calls_and_their_arguments() {
         call("fo§o(\"s\", 'c', true, 1.5, 2L, x, a.b, limit = 3, block = { it })"),
         "foo(String, Char, Boolean, Double, Long, x, a.b, limit=Int, block={})"
     );
-    assert_eq!(call("fo§o(1) { it }"), "foo(Int, {})");
-    assert_eq!(call("x.fo§o { it }"), "x.foo({})");
+    assert_eq!(call("fo§o(1) { it }"), "foo(Int, trailing {})");
+    assert_eq!(call("x.fo§o { it }"), "x.foo(trailing {})");
     assert_eq!(call("fo§o(::m, a + b, null)"), "foo({}, ?, ?)");
     assert_eq!(call("val v = x.na§me"), "x.name(no call)");
 }

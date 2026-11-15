@@ -59,6 +59,8 @@ pub struct Argument {
     /// The parameter name of a Kotlin named argument (`limit = 3`).
     pub name: Option<String>,
     pub value: Qualifier,
+    /// A Kotlin lambda written after the parentheses; it goes to the last parameter.
+    pub trailing: bool,
 }
 
 impl Qualifier {

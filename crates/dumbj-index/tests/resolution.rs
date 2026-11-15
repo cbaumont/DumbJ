@@ -1,4 +1,4 @@
-//! Go to Declaration against the `shop` fixture project. A `§` in a snippet marks the
+//! Go to Declaration against the `shop` and `freight` fixture projects. A `§` in a snippet marks the
 //! caret; the snippet (without the marker) must occur exactly once in the file.
 
 #![expect(
@@ -10,7 +10,9 @@ mod common;
 
 use std::fmt::Write as _;
 
-use common::{shop_index, shop_root};
+use std::path::Path;
+
+use common::{freight_index, freight_root, shop_index, shop_root};
 use dumbj_index::{Decision, Index, Site, resolve};
 use dumbj_syntax::{Language, parse};
 use dumbj_text::{Buffer, ByteOffset};
@@ -21,11 +23,18 @@ const MONEY: &str = "core/src/main/java/com/shop/core/Money.java";
 const PRICED: &str = "core/src/main/java/com/shop/core/Priced.java";
 const RECEIPT: &str = "core/src/main/java/com/shop/core/Receipt.java";
 const PRODUCT: &str = "core/src/main/kotlin/com/shop/core/Product.kt";
+const SHIPPING: &str = "src/main/kotlin/freight/Shipping.kt";
+const DISPATCH: &str = "src/main/java/freight/app/Dispatch.java";
 
 /// Resolves the caret in `snippet` and renders the outcome:
 /// `Jump file:line name` or `Choose [file:line name, …]` or `NotFound`.
 fn go(index: &Index, file: &str, snippet: &str) -> String {
-    let path = shop_root().join(file);
+    go_in(&shop_root(), index, file, snippet)
+}
+
+/// Like [`go`], in the project at `root`.
+fn go_in(root: &Path, index: &Index, file: &str, snippet: &str) -> String {
+    let path = root.join(file);
     let source = std::fs::read_to_string(&path).unwrap();
     let plain = snippet.replacen('§', "", 1);
     assert_eq!(
@@ -346,5 +355,105 @@ fn members_inherited_from_library_supertypes_are_not_guessed() {
         go(&index, RECEIPT, "Receipt late§st();"),
         "NotFound",
         "a declaration"
+    );
+}
+
+#[test]
+fn overloads_are_picked_by_their_arguments() {
+    let index = freight_index();
+    let go = |snippet: &str| go_in(&freight_root(), &index, SHIPPING, snippet);
+    assert_eq!(
+        go("ra§te(product)\n"),
+        "Jump Shipping.kt:34 Shipping.rate Scope"
+    );
+    assert_eq!(
+        go("ra§te(product.price())"),
+        "Jump Shipping.kt:36 Shipping.rate Scope",
+        "the argument is a call result"
+    );
+    assert_eq!(
+        go("ra§te(\"EU\")\n"),
+        "Jump Shipping.kt:38 Shipping.rate Scope",
+        "a default value may be left out"
+    );
+    assert_eq!(
+        go("ra§te(\"EU\", express = true)"),
+        "Jump Shipping.kt:38 Shipping.rate Scope"
+    );
+    assert_eq!(
+        go("ra§te(product, product, discount = 5)"),
+        "Jump Shipping.kt:40 Shipping.rate Scope",
+        "vararg and a named argument"
+    );
+    assert_eq!(
+        go("ra§te(unknown())"),
+        "Choose [Shipping.kt:34 Shipping.rate Scope] [Shipping.kt:36 Shipping.rate Scope] \
+         [Shipping.kt:38 Shipping.rate Scope]",
+        "an argument of unknown type only rules out by count"
+    );
+    assert_eq!(
+        go("tra§ck(\"a\") {"),
+        "Jump Shipping.kt:42 Shipping.track Scope",
+        "a trailing lambda is not a Parcel"
+    );
+    assert_eq!(
+        go("tra§ck(\"b\", crate)"),
+        "Choose [Shipping.kt:42 Shipping.track Scope] [Shipping.kt:44 Shipping.track Scope]",
+        "a function type is not recorded, so it cannot be ruled out"
+    );
+    assert_eq!(
+        go("crate.se§nd(\"home\")"),
+        "Jump Shipping.kt:24 Parcel.send Scope",
+        "the overload that fits is inherited"
+    );
+    assert_eq!(
+        go("crate.se§nd(\"away\", free)"),
+        "Jump Shipping.kt:28 Crate.send Scope"
+    );
+}
+
+#[test]
+fn kotlin_calls_to_types_reach_constructors_and_factory_functions() {
+    let index = freight_index();
+    let go = |snippet: &str| go_in(&freight_root(), &index, SHIPPING, snippet);
+    assert_eq!(
+        go("Carr§ier(\"fast\")"),
+        "Jump Shipping.kt:15 Carrier SameFile",
+        "an interface cannot be called; the function of the same name can"
+    );
+    assert_eq!(
+        go("Carrier(\"fast\").quo§te(product)"),
+        "Jump Shipping.kt:12 Carrier.quote Scope"
+    );
+    assert_eq!(
+        go("NamedCarr§ier(\"slow\", free)"),
+        "Jump Shipping.kt:18 NamedCarrier.NamedCarrier SameFile",
+        "the secondary constructor"
+    );
+    assert_eq!(
+        go("NamedCarr§ier(\"slower\")"),
+        "Jump Shipping.kt:17 NamedCarrier SameFile",
+        "the primary constructor is the class"
+    );
+    assert_eq!(
+        go("NamedCarrier(\"slow\", free).na§me"),
+        "Jump Shipping.kt:17 NamedCarrier.name Scope",
+        "a constructor call has the type of its class"
+    );
+}
+
+#[test]
+fn java_calls_kotlin_with_the_receiver_as_an_argument() {
+    let index = freight_index();
+    let go = |snippet: &str| go_in(&freight_root(), &index, DISPATCH, snippet);
+    assert_eq!(
+        go("ShippingKt.lab§el(product)"),
+        "Choose [Shipping.kt:9 label SameModule]",
+        "the file facade class is not in the index, so this stays a guess"
+    );
+    assert_eq!(
+        go("Shipping.INSTANCE.ra§te(label, true)"),
+        "Choose [Shipping.kt:38 Shipping.rate ExplicitImport]",
+        "a guess, but narrowed to the overload that takes a String and a boolean"
     );
 }

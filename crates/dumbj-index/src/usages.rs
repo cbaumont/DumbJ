@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
-use dumbj_syntax::{Language, ReferenceRole, SyntaxTree};
+use dumbj_syntax::{Language, ReferenceRole, SymbolKind, SyntaxTree};
 use dumbj_text::{Buffer, ByteOffset, ByteRange};
 
 use crate::index::{FileId, Index, SymbolId};
@@ -168,7 +168,14 @@ fn usages_in_file(
             continue;
         };
         let hits = |candidate: &crate::resolve::Target| match target {
-            UsageTarget::Symbol(id) => candidate.symbol == Some(*id),
+            // Calling a constructor is a usage of its class.
+            UsageTarget::Symbol(id) => candidate.symbol.is_some_and(|found| {
+                found == *id
+                    || (index.parent(found) == Some(*id)
+                        && index
+                            .symbol(found)
+                            .is_some_and(|symbol| symbol.kind == SymbolKind::Constructor))
+            }),
             UsageTarget::Local { name_range, .. } => {
                 candidate.symbol.is_none() && candidate.range == *name_range
             }

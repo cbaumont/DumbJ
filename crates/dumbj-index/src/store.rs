@@ -7,14 +7,14 @@ use std::fs;
 use std::path::Path;
 use std::time::UNIX_EPOCH;
 
-use dumbj_syntax::{FileFacts, Import, Language, Symbol, SymbolKind};
+use dumbj_syntax::{FileFacts, Import, Language, Parameter, Symbol, SymbolKind};
 use dumbj_text::ByteOffset;
 use rusqlite::{Connection, params};
 
 use crate::index::IndexedFile;
 
 /// Bumped whenever the schema or the meaning of a column changes.
-const SCHEMA_VERSION: i64 = 2;
+const SCHEMA_VERSION: i64 = 3;
 
 const SCHEMA: &str = "
 CREATE TABLE files (
@@ -38,6 +38,7 @@ CREATE TABLE symbols (
     receiver TEXT,
     type_name TEXT,
     supertypes TEXT NOT NULL,
+    parameters TEXT,
     PRIMARY KEY (file_id, idx)
 );
 CREATE INDEX symbols_name ON symbols(name);
@@ -194,7 +195,7 @@ impl IndexStore {
         {
             let mut statement = self.connection.prepare(
                 "SELECT file_id, name, kind, range_start, range_end, name_start, name_end,
-                        parent, receiver, type_name, supertypes
+                        parent, receiver, type_name, supertypes, parameters
                  FROM symbols ORDER BY file_id, idx",
             )?;
             let mut rows = statement.query([])?;
@@ -202,6 +203,7 @@ impl IndexStore {
                 let file_id: i64 = row.get(0)?;
                 let kind: String = row.get(2)?;
                 let supertypes: String = row.get(10)?;
+                let parameters: Option<String> = row.get(11)?;
                 let symbol = SymbolKind::from_name(&kind).map(|kind| {
                     Ok::<_, rusqlite::Error>(Symbol {
                         name: row.get(1)?,
@@ -218,6 +220,7 @@ impl IndexStore {
                             .collect(),
                         receiver: row.get(8)?,
                         type_name: row.get(9)?,
+                        parameters: parameters.as_deref().map(decode_parameters),
                     })
                 });
                 let Some(entry) = files.get_mut(&file_id) else {
@@ -273,8 +276,8 @@ impl IndexStore {
             let mut insert_symbol = transaction.prepare_cached(
                 "INSERT INTO symbols (file_id, idx, name, kind, range_start, range_end,
                                       name_start, name_end, parent, receiver, type_name,
-                                      supertypes)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+                                      supertypes, parameters)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
             )?;
             let mut insert_import = transaction.prepare_cached(
                 "INSERT INTO imports (file_id, idx, path, wildcard, is_static, alias)
@@ -304,6 +307,7 @@ impl IndexStore {
                         symbol.receiver,
                         symbol.type_name,
                         symbol.supertypes.join("\n"),
+                        symbol.parameters.as_deref().map(encode_parameters),
                     ])?;
                 }
                 for (idx, import) in file.facts.imports.iter().enumerate() {
@@ -329,6 +333,41 @@ impl IndexStore {
             .query_row("SELECT count(*) FROM files", [], |row| row.get(0))?;
         Ok(usize::try_from(count).unwrap_or(0))
     }
+}
+
+/// One parameter per line as `name<TAB>type<TAB>flags`: `o` for optional, `v` for
+/// variadic. Names and types are identifiers, so they contain neither separator.
+fn encode_parameters(parameters: &[Parameter]) -> String {
+    let lines: Vec<String> = parameters
+        .iter()
+        .map(|parameter| {
+            format!(
+                "{}\t{}\t{}{}",
+                parameter.name,
+                parameter.type_name.as_deref().unwrap_or(""),
+                if parameter.optional { "o" } else { "" },
+                if parameter.variadic { "v" } else { "" },
+            )
+        })
+        .collect();
+    lines.join("\n")
+}
+
+fn decode_parameters(text: &str) -> Vec<Parameter> {
+    text.lines()
+        .map(|line| {
+            let mut fields = line.split('\t');
+            let name = fields.next().unwrap_or("").to_owned();
+            let type_name = fields.next().filter(|name| !name.is_empty());
+            let flags = fields.next().unwrap_or("");
+            Parameter {
+                name,
+                type_name: type_name.map(str::to_owned),
+                optional: flags.contains('o'),
+                variadic: flags.contains('v'),
+            }
+        })
+        .collect()
 }
 
 fn to_i64(value: usize) -> i64 {
