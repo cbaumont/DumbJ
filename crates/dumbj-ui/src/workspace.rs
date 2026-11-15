@@ -13,12 +13,16 @@ use gpui::{
     WindowOptions, div, prelude::*, px, size, svg,
 };
 
-use crate::editor::EditorView;
+use crate::editor::{EditorView, MousePressed};
 use crate::editor_model::parse_line_column;
 use crate::file_tree::{FileTree, OpenFile};
 use crate::keys::{modifiers_from_gpui, stroke_from_gpui};
 use crate::text_input::{TextChanged, TextInput};
 use crate::theme;
+
+mod navigation;
+
+use navigation::{Chooser, Indexing, NavigationHistory};
 
 const HEADER_HEIGHT: Pixels = px(40.);
 const STRIPE_WIDTH: Pixels = px(40.);
@@ -52,6 +56,7 @@ enum ToolWindowState {
 /// Which part of the window has keyboard focus.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum FocusArea {
+    Chooser,
     GotoLine,
     Find,
     Tree,
@@ -72,6 +77,13 @@ pub(crate) struct Workspace {
     find_open: bool,
     goto_line: Entity<TextInput>,
     goto_line_open: bool,
+    /// The symbol index; `None` until the first indexing run has finished.
+    index: Option<std::sync::Arc<dumbj_index::Index>>,
+    indexing: Option<Indexing>,
+    history: NavigationHistory,
+    chooser: Option<Chooser>,
+    /// A one-off notice in the status bar, cleared by the next action.
+    status_message: Option<String>,
     subscriptions: Vec<Subscription>,
 }
 
@@ -149,6 +161,11 @@ impl Workspace {
             find_open: false,
             goto_line,
             goto_line_open: false,
+            index: None,
+            indexing: None,
+            history: NavigationHistory::default(),
+            chooser: None,
+            status_message: None,
             subscriptions: vec![on_find_changed],
         }
     }
@@ -173,7 +190,9 @@ impl Workspace {
         let editor_focused = self
             .active_tab()
             .is_some_and(|tab| tab.editor.read(cx).focus_handle().is_focused(window));
-        if self.goto_line_open && self.goto_line.read(cx).focus_handle().is_focused(window) {
+        if self.chooser.is_some() {
+            FocusArea::Chooser
+        } else if self.goto_line_open && self.goto_line.read(cx).focus_handle().is_focused(window) {
             FocusArea::GotoLine
         } else if self.find_open && self.find.read(cx).focus_handle().is_focused(window) {
             FocusArea::Find
@@ -210,6 +229,7 @@ impl Workspace {
         ));
         let handle = tree.read(cx).focus_handle().clone();
         window.focus(&handle, cx);
+        self.start_indexing(root.clone(), cx);
         self.project = Some(Project { root, name, tree });
         self.project_window = ToolWindowState::Visible;
         self.update_title(window);
@@ -227,6 +247,13 @@ impl Workspace {
                     |name| name.to_string_lossy().into_owned(),
                 );
                 let editor = cx.new(|cx| EditorView::open(path.clone(), cx));
+                self.subscriptions.push(cx.subscribe_in(
+                    &editor,
+                    window,
+                    |this, _, MousePressed(stroke), window, cx| {
+                        this.on_editor_mouse(*stroke, window, cx);
+                    },
+                ));
                 // Repaint the status bar when the caret moves.
                 self.subscriptions
                     .push(cx.observe(&editor, |_, _, cx| cx.notify()));
@@ -355,7 +382,7 @@ impl Workspace {
     /// shortcut falls through to text input.
     fn is_enabled(&self, action: Action, window: &Window, cx: &App) -> bool {
         let has_editor = self.active.is_some();
-        let popup_open = self.goto_line_open;
+        let popup_open = self.goto_line_open || self.chooser.is_some();
         match action {
             Action::OpenFolder => !popup_open,
             Action::CloseTab => has_editor && !popup_open,
@@ -363,6 +390,9 @@ impl Workspace {
             Action::ActivateProjectToolWindow | Action::HideAllToolWindows => {
                 self.project.is_some() && !popup_open
             }
+            Action::GotoDeclaration => has_editor && self.index.is_some() && !popup_open,
+            Action::Back => self.history.can_go_back() && !popup_open,
+            Action::Forward => self.history.can_go_forward() && !popup_open,
             Action::FindNext | Action::FindPrevious => {
                 !popup_open
                     && self
@@ -386,7 +416,11 @@ impl Workspace {
 
     fn perform(&mut self, action: Action, window: &mut Window, cx: &mut Context<Self>) {
         tracing::debug!(%action, "perform");
+        self.status_message = None;
         match action {
+            Action::GotoDeclaration => self.goto_declaration(window, cx),
+            Action::Back => self.go_back(window, cx),
+            Action::Forward => self.go_forward(window, cx),
             Action::OpenFolder => Self::prompt_for_folder(window, cx),
             Action::CloseTab => {
                 if let Some(active) = self.active {
@@ -472,6 +506,7 @@ impl Workspace {
     /// Routes editor and text actions to whatever has focus.
     fn perform_in_focus(&mut self, action: Action, window: &mut Window, cx: &mut Context<Self>) {
         match self.focus_area(window, cx) {
+            FocusArea::Chooser => self.chooser_action(action, window, cx),
             FocusArea::GotoLine => match action {
                 Action::Enter => self.submit_goto_line(window, cx),
                 Action::Escape => {
@@ -917,6 +952,8 @@ impl Workspace {
         if self.dispatcher.is_chord_pending() {
             right.push("Waiting for second key…".to_owned());
         }
+        right.extend(self.status_message.clone());
+        right.extend(self.index_status());
         if let Some(tab) = tab {
             let editor = tab.editor.read(cx);
             let (line, column) = editor.caret_line_column();
@@ -1037,9 +1074,12 @@ impl Render for Workspace {
             .children(stripe)
             .children(project_window)
             .child(self.render_editor_area(cx));
-        let popup = self
-            .goto_line_open
-            .then(|| self.render_goto_line_popup(cx).into_any_element());
+        let popup = match &self.chooser {
+            Some(chooser) => Some(Self::render_chooser(chooser, cx).into_any_element()),
+            None => self
+                .goto_line_open
+                .then(|| self.render_goto_line_popup(cx).into_any_element()),
+        };
         div()
             .id("workspace")
             .track_focus(&self.focus)
@@ -1068,16 +1108,28 @@ impl Render for Workspace {
     }
 }
 
-/// The project folder and file to open for a path given on the command line.
-pub(crate) fn resolve_cli_path(path: &Path) -> (Option<PathBuf>, Vec<PathBuf>) {
-    let absolute = std::path::absolute(path).unwrap_or_else(|_| path.to_path_buf());
-    if absolute.is_dir() {
-        (Some(absolute), Vec::new())
-    } else if absolute.is_file() {
-        (absolute.parent().map(Path::to_path_buf), vec![absolute])
-    } else {
-        (None, Vec::new())
-    }
+/// The project folder and the files to open for the paths given on the command line: the
+/// first folder is the project; without one, the folder of the first file is.
+pub(crate) fn resolve_cli_paths(paths: &[PathBuf]) -> (Option<PathBuf>, Vec<PathBuf>) {
+    let absolute: Vec<PathBuf> = paths
+        .iter()
+        .map(|path| std::path::absolute(path).unwrap_or_else(|_| path.clone()))
+        .collect();
+    let files: Vec<PathBuf> = absolute
+        .iter()
+        .filter(|path| path.is_file())
+        .cloned()
+        .collect();
+    let folder = absolute
+        .iter()
+        .find(|path| path.is_dir())
+        .cloned()
+        .or_else(|| {
+            files
+                .first()
+                .and_then(|file| file.parent().map(Path::to_path_buf))
+        });
+    (folder, files)
 }
 
 #[cfg(test)]
@@ -1106,12 +1158,26 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let file = dir.join("A.java");
         std::fs::write(&file, "").unwrap();
-        assert_eq!(resolve_cli_path(&dir), (Some(dir.clone()), Vec::new()));
+        let sub = dir.join("sub");
+        std::fs::create_dir_all(&sub).unwrap();
+        let nested = sub.join("B.kt");
+        std::fs::write(&nested, "").unwrap();
+        let resolve = |paths: &[&PathBuf]| {
+            resolve_cli_paths(&paths.iter().map(|path| (*path).clone()).collect::<Vec<_>>())
+        };
+        assert_eq!(resolve(&[&dir]), (Some(dir.clone()), Vec::new()));
+        assert_eq!(resolve(&[&file]), (Some(dir.clone()), vec![file.clone()]));
         assert_eq!(
-            resolve_cli_path(&file),
-            (Some(dir.clone()), vec![file.clone()])
+            resolve(&[&nested, &dir, &file]),
+            (Some(dir.clone()), vec![nested.clone(), file.clone()]),
+            "an explicit folder wins over the first file's folder"
         );
-        assert_eq!(resolve_cli_path(&dir.join("missing")), (None, Vec::new()));
+        assert_eq!(
+            resolve(&[&nested]),
+            (Some(sub.clone()), vec![nested.clone()])
+        );
+        assert_eq!(resolve(&[&dir.join("missing")]), (None, Vec::new()));
+        assert_eq!(resolve(&[]), (None, Vec::new()));
         std::fs::remove_dir_all(&dir).unwrap();
     }
 }

@@ -10,6 +10,7 @@ publish.workspace = true
 
 [dependencies]
 dumbj-actions.workspace = true
+dumbj-index.workspace = true
 dumbj-settings.workspace = true
 dumbj-syntax.workspace = true
 dumbj-text.workspace = true

@@ -1244,6 +1244,7 @@ name = "dumbj-ui"
 version = "0.1.0"
 dependencies = [
  "dumbj-actions",
+ "dumbj-index",
  "dumbj-settings",
  "dumbj-syntax",
  "dumbj-text",

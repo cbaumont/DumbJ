@@ -29,8 +29,9 @@ pub enum UiError {
 /// What to show at start-up.
 #[derive(Debug, Default)]
 pub struct RunOptions {
-    /// A folder to open as a project, or a file to open (its folder becomes the project).
-    pub path: Option<PathBuf>,
+    /// Paths from the command line: the first folder is opened as the project and files
+    /// are opened in tabs. With only files, the first file's folder becomes the project.
+    pub paths: Vec<PathBuf>,
     /// Measure frame times while scrolling through the opened file, log them and quit.
     pub scroll_benchmark: bool,
 }
@@ -46,12 +47,10 @@ pub fn run(options: RunOptions) -> Result<(), UiError> {
         "keymap loaded; IntelliJ actions without a DumbJ action are ignored"
     );
     let RunOptions {
-        path,
+        paths,
         scroll_benchmark,
     } = options;
-    let (folder, files) = path
-        .as_deref()
-        .map_or_else(Default::default, workspace::resolve_cli_path);
+    let (folder, files) = workspace::resolve_cli_paths(&paths);
 
     gpui_platform::application()
         .with_assets(assets::Assets)

@@ -7,21 +7,24 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
-use dumbj_actions::Action;
+use dumbj_actions::{Action, MouseStroke};
+use dumbj_index::{Index, Resolution, Site};
 use dumbj_settings::UiRole;
 use dumbj_syntax::{HighlightSpan, Language, SyntaxTree};
 use dumbj_text::search::{self, SearchOptions};
 use dumbj_text::{Buffer, ByteOffset, ByteRange, LineIndex, Point as TextPoint};
 use gpui::{
     App, Bounds, ClipboardItem, ContentMask, Context, CursorStyle, DispatchPhase, Element,
-    ElementId, Entity, FocusHandle, Font, FontFeatures, GlobalElementId, Hitbox, HitboxBehavior,
-    Hsla, InspectorElementId, IntoElement, LayoutId, MouseButton, MouseDownEvent, MouseMoveEvent,
-    MouseUpEvent, PaintQuad, Pixels, Point, Render, ScrollEvent, ShapedLine, SharedString, Style,
-    Task, TextAlign, TextRun, Window, div, fill, font, point, prelude::*, px, relative, size,
+    ElementId, Entity, EventEmitter, FocusHandle, Font, FontFeatures, GlobalElementId, Hitbox,
+    HitboxBehavior, Hsla, InspectorElementId, IntoElement, LayoutId, MouseButton, MouseDownEvent,
+    MouseMoveEvent, MouseUpEvent, NavigationDirection, PaintQuad, Pixels, Point, Render,
+    ScrollEvent, ShapedLine, SharedString, Style, Task, TextAlign, TextRun, Window, div, fill,
+    font, point, prelude::*, px, relative, size,
 };
 
 use crate::assets::EDITOR_FONT;
 use crate::editor_model::{DisplayLine, EditorModel, Motion, scroll_to_center, scroll_to_reveal};
+use crate::keys::modifiers_from_gpui;
 use crate::theme;
 
 const FONT_SIZE: Pixels = px(13.);
@@ -131,6 +134,10 @@ enum Drag {
     },
 }
 
+/// Emitted for every mouse press in the editor, after the caret has moved there, so the
+/// workspace can run a mouse shortcut bound to it.
+pub(crate) struct MousePressed(pub(crate) MouseStroke);
+
 /// A read-only editor for one file.
 pub(crate) struct EditorView {
     path: PathBuf,
@@ -147,10 +154,14 @@ pub(crate) struct EditorView {
     highlights: Option<HighlightCache>,
     painted: Option<PaintedLines>,
     drag: Option<Drag>,
+    /// Where to put the caret once the file has loaded.
+    pending_offset: Option<ByteOffset>,
     benchmark: Option<ScrollBenchmark>,
     load_cancel: Arc<AtomicBool>,
     _load: Task<()>,
 }
+
+impl EventEmitter<MousePressed> for EditorView {}
 
 impl Drop for EditorView {
     fn drop(&mut self) {
@@ -175,6 +186,9 @@ impl EditorView {
                         this.model = EditorModel::new(loaded.buffer);
                         this.syntax = loaded.syntax;
                         this.state = LoadState::Ready;
+                        if let Some(offset) = this.pending_offset.take() {
+                            this.go_to_offset(offset, cx);
+                        }
                     }
                     Err(message) => this.state = LoadState::Failed(message),
                 }
@@ -195,6 +209,7 @@ impl EditorView {
             highlights: None,
             painted: None,
             drag: None,
+            pending_offset: None,
             benchmark: None,
             load_cancel,
             _load: task,
@@ -361,6 +376,40 @@ impl EditorView {
         true
     }
 
+    /// Where the caret is.
+    pub(crate) fn caret_offset(&self) -> ByteOffset {
+        self.model.caret()
+    }
+
+    /// Moves the caret to `offset` and centres it. If the file is still loading, this
+    /// happens as soon as it has loaded.
+    pub(crate) fn go_to_offset(&mut self, offset: ByteOffset, cx: &mut Context<Self>) {
+        if matches!(self.state, LoadState::Loading) {
+            self.pending_offset = Some(offset);
+            return;
+        }
+        self.model.move_to(offset, false);
+        self.reveal = Some(Reveal::Center);
+        cx.notify();
+    }
+
+    /// Resolves the identifier at the caret against `index` (dumb Go to Declaration).
+    /// `None` when the file is not indexed, not parsed, or the caret is not on a name.
+    pub(crate) fn resolve_at_caret(&self, index: &Index) -> Option<Resolution> {
+        let tree = self.syntax.as_ref()?;
+        let buffer = self.model.buffer();
+        let file = index.file_by_path(&self.path)?;
+        dumbj_index::resolve(
+            Site {
+                index,
+                file,
+                tree,
+                buffer,
+            },
+            self.model.caret(),
+        )
+    }
+
     /// Moves the caret to a one-based line and column and centres it.
     pub(crate) fn go_to(&mut self, line: usize, column: Option<usize>, cx: &mut Context<Self>) {
         self.model.go_to(line, column);
@@ -472,6 +521,21 @@ impl EditorView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        let stroke = MouseStroke {
+            modifiers: modifiers_from_gpui(event.modifiers),
+            button: match event.button {
+                MouseButton::Left => 1,
+                MouseButton::Middle => 2,
+                MouseButton::Right => 3,
+                MouseButton::Navigate(NavigationDirection::Back) => 4,
+                MouseButton::Navigate(NavigationDirection::Forward) => 5,
+            },
+            clicks: u8::try_from(event.click_count.min(2)).unwrap_or(1),
+        };
+        if event.button != MouseButton::Left {
+            cx.emit(MousePressed(stroke));
+            return;
+        }
         window.focus(&self.focus, cx);
         if let Some(scrollbar) = self.painted.as_ref().and_then(|painted| painted.scrollbar)
             && event.position.x >= scrollbar.left()
@@ -501,6 +565,9 @@ impl EditorView {
         }
         self.drag = (event.click_count == 1).then_some(Drag::Selecting);
         cx.notify();
+        // The caret is already under the pointer, so a bound mouse shortcut such as
+        // Ctrl+click acts on what was clicked.
+        cx.emit(MousePressed(stroke));
     }
 
     fn drag_scrollbar(&mut self, position: Point<Pixels>, grab: Pixels, cx: &mut Context<Self>) {
@@ -969,10 +1036,7 @@ impl Element for EditorElement {
         let editor = self.editor.clone();
         let hovered = hitbox.clone();
         window.on_mouse_event(move |event: &MouseDownEvent, phase, window, cx| {
-            if phase == DispatchPhase::Bubble
-                && event.button == MouseButton::Left
-                && hovered.is_hovered(window)
-            {
+            if phase == DispatchPhase::Bubble && hovered.is_hovered(window) {
                 editor.update(cx, |editor, cx| editor.on_mouse_down(event, window, cx));
             }
         });

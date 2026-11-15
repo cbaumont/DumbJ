@@ -1,6 +1,7 @@
 //! DumbJ application entry point.
 //!
-//! Usage: `dumbj [PATH]`, where `PATH` is a folder to open as a project or a file to open.
+//! Usage: `dumbj [PATH]...`. A folder is opened as the project and files are opened in
+//! tabs; with only files, the first file's folder becomes the project.
 //! Set `DUMBJ_LOG` to a `tracing` filter (for example `debug` or `dumbj_ui=trace`) for
 //! more log output on stderr. `DUMBJ_SCROLL_BENCHMARK=1` scrolls through the opened file,
 //! logs frame-time statistics and exits.
@@ -21,13 +22,13 @@ fn init_logging() {
 
 fn main() -> anyhow::Result<()> {
     init_logging();
-    let path = std::env::args_os().nth(1).map(PathBuf::from);
-    if let Some(path) = &path {
+    let paths: Vec<PathBuf> = std::env::args_os().skip(1).map(PathBuf::from).collect();
+    for path in &paths {
         anyhow::ensure!(path.exists(), "{} does not exist", path.display());
     }
     let scroll_benchmark = std::env::var_os("DUMBJ_SCROLL_BENCHMARK").is_some();
     dumbj_ui::run(dumbj_ui::RunOptions {
-        path,
+        paths,
         scroll_benchmark,
     })
     .context("DumbJ could not start")
