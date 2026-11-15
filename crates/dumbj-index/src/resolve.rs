@@ -373,6 +373,136 @@ fn fits_reference(symbol: &Symbol, name: &str, role: ReferenceRole, language: La
     renamed || (symbol.name == name && kind_fits(symbol.kind, role, language))
 }
 
+const ELEMENT_LAMBDAS: &[&str] = &[
+    "forEach",
+    "onEach",
+    "map",
+    "mapNotNull",
+    "flatMap",
+    "filter",
+    "filterNot",
+    "first",
+    "firstOrNull",
+    "last",
+    "lastOrNull",
+    "find",
+    "findLast",
+    "single",
+    "singleOrNull",
+    "any",
+    "all",
+    "none",
+    "count",
+    "sumOf",
+    "maxBy",
+    "maxByOrNull",
+    "minBy",
+    "minByOrNull",
+    "maxOf",
+    "minOf",
+    "sortedBy",
+    "sortedByDescending",
+    "groupBy",
+    "associateBy",
+    "associateWith",
+    "associate",
+    "partition",
+    "distinctBy",
+    "takeWhile",
+    "dropWhile",
+    "indexOfFirst",
+    "indexOfLast",
+    "collect",
+    "collectLatest",
+    "mapLatest",
+    "flatMapLatest",
+    "flatMapConcat",
+    "flatMapMerge",
+    "transformLatest",
+];
+
+const ELEMENT_PRESERVING: &[&str] = &[
+    "filter",
+    "filterNot",
+    "filterNotNull",
+    "sorted",
+    "sortedBy",
+    "sortedByDescending",
+    "sortedWith",
+    "distinct",
+    "distinctBy",
+    "reversed",
+    "shuffled",
+    "take",
+    "takeLast",
+    "takeWhile",
+    "drop",
+    "dropLast",
+    "dropWhile",
+    "toList",
+    "toMutableList",
+    "toSet",
+    "toMutableSet",
+    "asSequence",
+    "asIterable",
+    "asFlow",
+    "onEach",
+    "plus",
+    "minus",
+    "flowOn",
+    "distinctUntilChanged",
+    "distinctUntilChangedBy",
+    "catch",
+    "onStart",
+    "onCompletion",
+    "buffer",
+    "conflate",
+    "debounce",
+    "sample",
+    "retry",
+    "stateIn",
+    "shareIn",
+    "filterIsInstance",
+];
+
+/// Library calls that return one element of their receiver.
+const ELEMENT_RETURNING: &[&str] = &[
+    "first",
+    "firstOrNull",
+    "last",
+    "lastOrNull",
+    "single",
+    "singleOrNull",
+    "find",
+    "findLast",
+    "get",
+    "getOrNull",
+    "elementAt",
+    "elementAtOrNull",
+    "random",
+    "randomOrNull",
+    "maxBy",
+    "maxByOrNull",
+    "minBy",
+    "minByOrNull",
+    "removeFirst",
+    "removeLast",
+];
+
+const ELEMENT_BUILDERS: &[&str] = &[
+    "listOf",
+    "listOfNotNull",
+    "mutableListOf",
+    "arrayListOf",
+    "setOf",
+    "mutableSetOf",
+    "hashSetOf",
+    "linkedSetOf",
+    "arrayOf",
+    "sequenceOf",
+    "flowOf",
+];
+
 fn capitalise(name: &str) -> String {
     let mut chars = name.chars();
     chars.next().map_or_else(String::new, |first| {
@@ -512,8 +642,10 @@ struct Lookup<'a> {
     extension_receiver: Option<Receiver>,
     /// `this` inside `apply { }`, `run { }` and `with(x) { }`, innermost first.
     lambda_receivers: Vec<Receiver>,
-    /// What `it` is inside `let { }`, `also { }`, `takeIf { }` and `takeUnless { }`.
+    /// What `it` is inside `let { }`, `also { }`, `map { }` and the like.
     it_receiver: Option<Receiver>,
+    /// Named first parameters of such lambdas, by where they are declared.
+    lambda_parameters: Vec<(ByteRange, Receiver)>,
 }
 
 #[derive(Clone, Copy)]
@@ -582,6 +714,7 @@ impl<'a> Lookup<'a> {
             extension_receiver: None,
             lambda_receivers: Vec::new(),
             it_receiver: None,
+            lambda_parameters: Vec::new(),
         };
         let at = reference.range.start;
         lookup.extension_receiver = site
@@ -600,17 +733,27 @@ impl<'a> Lookup<'a> {
                 lambda_receivers.push(lookup.receiver(target, at, 1));
             }
         }
-        lookup.it_receiver = lambdas
+        let parameter_of = |lambda: &dumbj_syntax::LambdaCall| {
+            let receiver = lambda.receiver.as_ref()?;
+            let callee = lambda.callee.as_str();
+            if matches!(callee, "let" | "also" | "takeIf" | "takeUnless") {
+                Some(lookup.receiver(receiver, at, 1))
+            } else if ELEMENT_LAMBDAS.contains(&callee) {
+                Some(lookup.element_of(receiver, at, 1))
+            } else {
+                None
+            }
+        };
+        let it_receiver = lambdas
             .iter()
             .find(|lambda| !lambda.has_parameters)
-            .filter(|lambda| {
-                matches!(
-                    lambda.callee.as_str(),
-                    "let" | "also" | "takeIf" | "takeUnless"
-                )
-            })
-            .and_then(|lambda| lambda.receiver.as_ref())
-            .map(|receiver| lookup.receiver(receiver, at, 1));
+            .and_then(parameter_of);
+        let lambda_parameters = lambdas
+            .iter()
+            .filter_map(|lambda| Some((lambda.first_parameter.clone()?, parameter_of(lambda)?)))
+            .collect();
+        lookup.it_receiver = it_receiver;
+        lookup.lambda_parameters = lambda_parameters;
         lookup.lambda_receivers = lambda_receivers;
         lookup
     }
@@ -677,6 +820,13 @@ impl Lookup<'_> {
             return it.clone();
         }
         if let Some(local) = tree.resolve_local(buffer, at, name, ReferenceRole::Value) {
+            if let Some((_, parameter)) = self
+                .lambda_parameters
+                .iter()
+                .find(|(range, _)| *range == local.name_range)
+            {
+                return parameter.clone();
+            }
             return match (&local.type_name, &local.initialiser) {
                 (Some(type_name), _) => self.receiver_of_written_type(type_name),
                 // Evaluated where the local is declared.
@@ -771,6 +921,13 @@ impl Lookup<'_> {
             depth,
         });
         let in_best_tier = found.rank();
+        if found.ranked.is_empty()
+            && found.local.is_none()
+            && ELEMENT_RETURNING.contains(&call.name.as_str())
+            && let Some(receiver) = &call.receiver
+        {
+            return self.element_of(receiver, at, depth + 1);
+        }
         if found.local.is_some() || !found.confident {
             return Receiver::Unknown;
         }
@@ -803,6 +960,108 @@ impl Lookup<'_> {
             first
         } else {
             Receiver::Unknown
+        }
+    }
+
+    fn element_of_symbol(&self, symbol: SymbolId) -> Receiver {
+        let argument = self
+            .resolver
+            .symbol(symbol)
+            .and_then(|symbol| symbol.type_argument.as_ref());
+        Self::receiver_of_type(argument, |name| {
+            self.resolver
+                .types_named(symbol, Some(&name.to_owned()))
+                .unwrap_or_default()
+        })
+    }
+
+    fn element_of_member(&self, owner: &Receiver, name: &str) -> Receiver {
+        let Receiver::Types(owners) = owner else {
+            return Receiver::Unknown;
+        };
+        owners
+            .iter()
+            .flat_map(|owner| {
+                self.resolver
+                    .members_named(*owner, name, ReferenceRole::Member, &any_member)
+            })
+            .next()
+            .map_or(Receiver::Unknown, |member| self.element_of_symbol(member))
+    }
+
+    /// What one element of the collection or Flow `expression` is.
+    fn element_of(&self, expression: &Qualifier, at: ByteOffset, depth: usize) -> Receiver {
+        if depth > MAX_EXPRESSION_DEPTH {
+            return Receiver::Unknown;
+        }
+        let Site { tree, buffer, .. } = self.site;
+        match expression {
+            Qualifier::Name(name) => {
+                if let Some(local) = tree.resolve_local(buffer, at, name, ReferenceRole::Value) {
+                    return match (&local.type_argument, &local.initialiser) {
+                        (Some(argument), _) => self.receiver_of_written_type(argument),
+                        (None, Some(initialiser)) => {
+                            self.element_of(initialiser, local.name_range.start, depth + 1)
+                        }
+                        (None, None) => Receiver::Unknown,
+                    };
+                }
+                let field = self
+                    .enclosing
+                    .iter()
+                    .flat_map(|owner| {
+                        self.resolver
+                            .members_named(*owner, name, ReferenceRole::Value, &any_member)
+                    })
+                    .find(|id| !self.resolver.is_type(*id));
+                field.map_or(Receiver::Unknown, |field| self.element_of_symbol(field))
+            }
+            Qualifier::Path(path) => match path.rsplit_once('.') {
+                Some((prefix, last)) => {
+                    let owner = if prefix.contains('.') {
+                        Qualifier::Path(prefix.to_owned())
+                    } else {
+                        Qualifier::Name(prefix.to_owned())
+                    };
+                    self.element_of_member(&self.receiver(&owner, at, depth + 1), last)
+                }
+                None => Receiver::Unknown,
+            },
+            Qualifier::Member(inner, name) => {
+                self.element_of_member(&self.receiver(inner, at, depth + 1), name)
+            }
+            Qualifier::Call(call) => {
+                let name = call.name.as_str();
+                if ELEMENT_BUILDERS.contains(&name) {
+                    return call
+                        .arguments
+                        .first()
+                        .map_or(Receiver::Unknown, |argument| {
+                            self.argument_type(&argument.value, at, depth + 1)
+                        });
+                }
+                if ELEMENT_PRESERVING.contains(&name)
+                    && let Some(receiver) = &call.receiver
+                {
+                    return self.element_of(receiver, at, depth + 1);
+                }
+                let mut found = self.find(Query {
+                    name,
+                    role: ReferenceRole::Call,
+                    qualifier: call.receiver.as_ref(),
+                    arguments: Some(&call.arguments),
+                    at,
+                    depth: depth + 1,
+                });
+                found.rank();
+                match found.ranked.as_slice() {
+                    [(only, _)] if found.confident && found.local.is_none() => {
+                        self.element_of_symbol(*only)
+                    }
+                    _ => Receiver::Unknown,
+                }
+            }
+            _ => Receiver::Unknown,
         }
     }
 

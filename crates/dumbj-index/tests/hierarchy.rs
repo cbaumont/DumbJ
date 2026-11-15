@@ -99,6 +99,7 @@ fn callers_are_grouped_by_enclosing_declaration() {
     assert_eq!(
         grouped,
         [
+            ("Desk.work".to_owned(), 1),
             ("NamedCarrier.quote".to_owned(), 1),
             ("Shipping.demo".to_owned(), 1),
             ("Shipping.rate".to_owned(), 1),

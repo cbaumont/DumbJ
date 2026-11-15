@@ -13,5 +13,11 @@ class Desk {
         ledger?.apply { close() }
         with(carrier) { describe() + name }
         listOf(carrier).forEach { it.name }
+        products.filter { it.cost.amount > 0 }.map { p -> p.price() }
+        catalogue().first().label()
     }
+
+    val products: List<Product> = emptyList()
+
+    fun catalogue(): List<Product> = products
 }

@@ -46,6 +46,8 @@ pub struct LambdaCall {
     pub first_argument: Option<Qualifier>,
     /// Whether it names its parameters (`{ v -> … }`) instead of using `it`.
     pub has_parameters: bool,
+    /// Where the first parameter is named, for `{ v -> … }`.
+    pub first_parameter: Option<ByteRange>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

@@ -757,9 +757,24 @@ fn kotlin_scope_functions() {
         "Jump Shipping.kt:17 NamedCarrier.name Scope",
         "`with(x)` makes x the receiver"
     );
-    let unknown = go("forEach { it.na§me }");
-    assert!(
-        unknown.starts_with("Choose"),
-        "an element type is not known: {unknown}"
+    assert_eq!(
+        go("forEach { it.na§me }"),
+        "Jump Shipping.kt:17 NamedCarrier.name Scope",
+        "`listOf(x)` holds elements of x's type"
+    );
+    assert_eq!(
+        go("filter { it.co§st.amount"),
+        "Jump Shipping.kt:5 Product.cost Scope",
+        "`it` in `filter` is an element of a `List<Product>`"
+    );
+    assert_eq!(
+        go("map { p -> p.pri§ce() }"),
+        "Jump Shipping.kt:6 Product.price Scope",
+        "a named parameter, through an element-preserving `filter`"
+    );
+    assert_eq!(
+        go("catalogue().first().lab§el()"),
+        "Jump Shipping.kt:9 label SamePackage",
+        "the element type of a function's return type"
     );
 }

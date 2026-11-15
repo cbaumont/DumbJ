@@ -529,6 +529,10 @@ pub(crate) fn enclosing_lambdas(source: &Source<'_>, node: Node<'_>) -> Vec<Lamb
                     .find(|argument| !argument.trailing)
                     .map(|argument| argument.value),
                 has_parameters: child_of_kind(lambda, "lambda_parameters").is_some(),
+                first_parameter: child_of_kind(lambda, "lambda_parameters")
+                    .and_then(|parameters| named_children(parameters).into_iter().next())
+                    .and_then(|first| child_of_kind(first, "simple_identifier"))
+                    .map(crate::structure::range_of),
             })
         })
         .collect()
