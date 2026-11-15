@@ -1,10 +1,6 @@
-//! The data behind the Project tool window: a flat list of the visible rows of a lazily
-//! loaded directory tree. No GPUI types, so it can be tested headless.
-
 use std::cmp::Ordering;
 use std::path::{Path, PathBuf};
 
-/// One directory entry.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Entry {
     pub(crate) path: PathBuf,
@@ -37,7 +33,6 @@ pub(crate) fn read_dir_sorted(dir: &Path) -> std::io::Result<Vec<Entry>> {
     Ok(entries)
 }
 
-/// A visible row of the tree.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Row {
     pub(crate) entry: Entry,
@@ -45,7 +40,6 @@ pub(crate) struct Row {
     pub(crate) expanded: bool,
 }
 
-/// The visible rows of a directory tree, in display order.
 #[derive(Debug, Default)]
 pub(crate) struct TreeModel {
     rows: Vec<Row>,
@@ -56,7 +50,6 @@ impl TreeModel {
         &self.rows
     }
 
-    /// Replaces the whole tree with the children of the project root.
     pub(crate) fn set_root_children(&mut self, children: Vec<Entry>) {
         self.rows = children
             .into_iter()
@@ -72,7 +65,6 @@ impl TreeModel {
         self.rows.iter().position(|row| row.entry.path == path)
     }
 
-    /// The index one past the last descendant of the row at `index`.
     fn subtree_end(&self, index: usize) -> usize {
         let Some(row) = self.rows.get(index) else {
             return index;
@@ -104,7 +96,6 @@ impl TreeModel {
         self.rows.splice(index + 1..end, children);
     }
 
-    /// Hides everything under the directory at `index`.
     pub(crate) fn collapse(&mut self, index: usize) {
         let end = self.subtree_end(index);
         if let Some(row) = self.rows.get_mut(index) {
@@ -113,7 +104,6 @@ impl TreeModel {
         }
     }
 
-    /// The index of the parent directory of the row at `index`, if it has one.
     pub(crate) fn parent_of(&self, index: usize) -> Option<usize> {
         let depth = self.rows.get(index)?.depth;
         (0..index).rev().find(|candidate| {

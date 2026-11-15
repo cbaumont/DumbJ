@@ -1,5 +1,3 @@
-//! Converts GPUI key events into the toolkit-independent types of `dumbj-actions`.
-
 use dumbj_actions::{Key, KeyStroke, Modifiers};
 
 pub(crate) fn modifiers_from_gpui(modifiers: gpui::Modifiers) -> Modifiers {
@@ -133,7 +131,6 @@ mod tests {
 
     #[test]
     fn shifted_symbols_map_back_to_their_key() {
-        // GPUI clears the Shift flag for symbols and reports the shifted character.
         assert_eq!(
             stroke_from_gpui(&gpui_stroke(true, false, false, "}")),
             expect("control shift CLOSE_BRACKET")

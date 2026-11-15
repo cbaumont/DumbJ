@@ -1,6 +1,3 @@
-//! The search popup: Search Everywhere with its All / Classes / Files / Symbols tabs, and
-//! File Structure for the current file. Matching runs in the background.
-
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -22,12 +19,9 @@ const ROW_HEIGHT: f32 = 26.;
 const MAX_RESULTS: usize = 80;
 const MAX_VISIBLE_ROWS: f32 = 14.;
 
-/// What the popup searches.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum SearchMode {
-    /// The whole project, in the given scope.
     Project(SearchScope),
-    /// The declarations of one file.
     Structure(FileId),
 }
 
@@ -38,14 +32,10 @@ const SCOPES: [(SearchScope, &str); 4] = [
     (SearchScope::Symbols, "Symbols"),
 ];
 
-/// One result row, ready to draw.
 struct Row {
-    /// A short kind tag: `class`, `fun`, `file`, …
     kind: &'static str,
     name: String,
-    /// Byte offsets of the matched characters in `name`.
     positions: Vec<usize>,
-    /// Where the hit lives: container, package or folder.
     detail: String,
     location: Location,
 }
@@ -55,7 +45,6 @@ pub(super) struct SearchPopup {
     rows: Vec<Row>,
     selected: usize,
     scroll: UniformListScrollHandle,
-    /// Stops the running search when the query or scope changes.
     cancel: Arc<AtomicBool>,
 }
 
@@ -167,7 +156,6 @@ fn find_rows(
 }
 
 impl Workspace {
-    /// Opens the search popup in `mode`, or switches an open popup to it.
     pub(super) fn open_search(
         &mut self,
         mode: SearchMode,
@@ -192,7 +180,6 @@ impl Workspace {
         cx.notify();
     }
 
-    /// Opens File Structure for the active editor's file.
     pub(super) fn open_file_structure(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let file = self
             .index
@@ -204,7 +191,6 @@ impl Workspace {
         }
     }
 
-    /// Starts a background search for the current query; replaces any running one.
     pub(super) fn run_search(&mut self, cx: &mut Context<Self>) {
         let (Some(index), Some(popup)) = (self.index.clone(), self.search.as_mut()) else {
             return;
@@ -219,7 +205,6 @@ impl Workspace {
                 .background_spawn(async move { find_rows(&index, mode, &query, &flag) })
                 .await;
             let _ = this.update(cx, |this, cx| {
-                // A newer search owns the popup now; drop this result.
                 let Some(popup) = this
                     .search
                     .as_mut()
@@ -255,7 +240,6 @@ impl Workspace {
         cx.notify();
     }
 
-    /// Handles a text action while the search popup is open.
     pub(super) fn search_action(
         &mut self,
         action: Action,
@@ -282,7 +266,6 @@ impl Workspace {
                 self.accept_search(selected, window, cx);
             }
             Action::Escape => self.close_search(window, cx),
-            // Tab walks the scopes, as in IDEA.
             Action::Tab => {
                 if let SearchMode::Project(scope) = popup.mode {
                     let position = SCOPES.iter().position(|(candidate, _)| *candidate == scope);
@@ -308,7 +291,6 @@ impl Workspace {
         cx: &Context<Self>,
     ) -> impl IntoElement {
         let selected = index == popup.selected;
-        // The name split into matched and unmatched runs, matched ones accented.
         let mut runs: Vec<(String, bool)> = Vec::new();
         for (offset, c) in row.name.char_indices() {
             let matched = row.positions.contains(&offset);
@@ -367,7 +349,6 @@ impl Workspace {
             )
     }
 
-    /// The scope tabs of a project search, or the title of File Structure.
     fn render_search_header(&self, mode: SearchMode, cx: &mut Context<Self>) -> gpui::Div {
         match mode {
             SearchMode::Project(scope) => {
@@ -488,7 +469,6 @@ impl Workspace {
                     .items_center()
                     .justify_between()
                     .child(header)
-                    // Results come from the tree-sitter index, not a language server.
                     .child(
                         div()
                             .text_size(px(11.))

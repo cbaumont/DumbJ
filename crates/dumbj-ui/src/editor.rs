@@ -1,6 +1,3 @@
-//! The editor view: a read-only code viewer with a caret, selection, search highlights and
-//! tree-sitter colours. Only the visible lines are shaped and painted.
-
 use std::ops::Range;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -43,7 +40,6 @@ const MAX_LINE_BYTES: usize = 10_000;
 /// Larger files open without syntax highlighting (degraded mode, BRIEF §4.2).
 const MAX_HIGHLIGHT_FILE_BYTES: u64 = 20 * 1024 * 1024;
 
-/// What a background load produced.
 struct Loaded {
     buffer: Buffer,
     syntax: Option<SyntaxTree>,
@@ -74,12 +70,9 @@ enum LoadState {
     Ready,
 }
 
-/// How to bring the caret into view at the next layout, once the viewport size is known.
 #[derive(Clone, Copy)]
 enum Reveal {
-    /// Scroll just enough.
     Minimal,
-    /// Put the caret line in the middle.
     Center,
 }
 
@@ -112,7 +105,6 @@ struct PaintedLines {
     scrollbar: Option<Bounds<Pixels>>,
 }
 
-/// Scrolls through the file one step per frame and records how long each frame took.
 struct ScrollBenchmark {
     last_frame: Option<Instant>,
     /// Time from one frame's layout to the next: what the user sees.
@@ -138,7 +130,6 @@ enum Drag {
 /// workspace can run a mouse shortcut bound to it.
 pub(crate) struct MousePressed(pub(crate) MouseStroke);
 
-/// A read-only editor for one file.
 pub(crate) struct EditorView {
     path: PathBuf,
     focus: FocusHandle,
@@ -154,7 +145,6 @@ pub(crate) struct EditorView {
     highlights: Option<HighlightCache>,
     painted: Option<PaintedLines>,
     drag: Option<Drag>,
-    /// Where to put the caret once the file has loaded.
     pending_offset: Option<ByteOffset>,
     benchmark: Option<ScrollBenchmark>,
     load_cancel: Arc<AtomicBool>,
@@ -171,7 +161,6 @@ impl Drop for EditorView {
 }
 
 impl EditorView {
-    /// Opens `path`, reading and parsing it on a background thread.
     pub(crate) fn open(path: PathBuf, cx: &mut Context<Self>) -> Self {
         let language = Language::from_path(&path);
         let load_cancel = Arc::new(AtomicBool::new(false));
@@ -216,7 +205,6 @@ impl EditorView {
         }
     }
 
-    /// Starts the scroll benchmark; it runs once the file has loaded.
     pub(crate) fn start_scroll_benchmark(&mut self) {
         self.benchmark = Some(ScrollBenchmark {
             last_frame: None,
@@ -225,7 +213,6 @@ impl EditorView {
         });
     }
 
-    /// Advances the scroll benchmark by one frame. Logs the result and quits when done.
     fn step_scroll_benchmark(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some(benchmark) = self.benchmark.as_mut() else {
             return;
@@ -287,7 +274,6 @@ impl EditorView {
         )
     }
 
-    /// The text to seed the Find field with: a single-line selection, if there is one.
     pub(crate) fn selection_for_search(&self) -> Option<String> {
         let selected = self.model.selected_text();
         (!selected.is_empty() && !selected.contains('\n')).then_some(selected)
@@ -376,7 +362,6 @@ impl EditorView {
         true
     }
 
-    /// Where the caret is.
     pub(crate) fn caret_offset(&self) -> ByteOffset {
         self.model.caret()
     }
@@ -410,7 +395,6 @@ impl EditorView {
         )
     }
 
-    /// What Find Usages should look for at the caret.
     pub(crate) fn usage_target_at_caret(&self, index: &Index) -> Option<UsageTarget> {
         let tree = self.syntax.as_ref()?;
         let buffer = self.model.buffer();
@@ -426,13 +410,11 @@ impl EditorView {
         )
     }
 
-    /// The word the caret is on or next to.
     pub(crate) fn word_at_caret(&self) -> Option<String> {
         let buffer = self.model.buffer();
         buffer.text(buffer.word_range_at(self.model.caret())?).ok()
     }
 
-    /// Moves the caret to a one-based line and column and centres it.
     pub(crate) fn go_to(&mut self, line: usize, column: Option<usize>, cx: &mut Context<Self>) {
         self.model.go_to(line, column);
         self.reveal = Some(Reveal::Center);
@@ -492,7 +474,6 @@ impl EditorView {
         }
     }
 
-    /// Selects the next (`forward`) or previous match relative to the selection, wrapping.
     pub(crate) fn find_next(&mut self, forward: bool, cx: &mut Context<Self>) {
         let selection = self.model.selection();
         let matches = &self.search.matches;
@@ -562,7 +543,6 @@ impl EditorView {
         if let Some(scrollbar) = self.painted.as_ref().and_then(|painted| painted.scrollbar)
             && event.position.x >= scrollbar.left()
         {
-            // Clicking the track outside the thumb jumps the thumb's middle to the pointer.
             let on_thumb = scrollbar.contains(&event.position);
             let grab = if on_thumb {
                 event.position.y - scrollbar.top()
@@ -625,7 +605,6 @@ impl EditorView {
         }
     }
 
-    /// The highlight spans covering `lines`, from the cache when it still applies.
     fn highlights_for(&mut self, lines: Range<usize>) -> &[HighlightSpan] {
         let buffer = self.model.buffer();
         let version = buffer.version();
@@ -661,7 +640,6 @@ impl EditorView {
             .map_or(&[], |cache| cache.spans.as_slice())
     }
 
-    /// Shapes the visible lines and computes everything `paint` draws.
     #[expect(
         clippy::too_many_lines,
         reason = "one pass over the visible lines; splitting it would thread a dozen locals through helpers"
@@ -781,7 +759,6 @@ impl EditorView {
                 )
             };
 
-            // Text runs: highlighted spans with default-coloured gaps between them.
             let mut runs = Vec::new();
             let mut position = 0;
             while let Some(span) = spans
@@ -865,7 +842,6 @@ impl EditorView {
             lines.push((display, shaped));
         }
 
-        // Keep horizontal scrolling within the widest visible line.
         let text_width = bounds.right() - text_left - SCROLLBAR_WIDTH;
         self.scroll_x = self.scroll_x.min((max_width - text_width / 2.).max(px(0.)));
 
@@ -952,15 +928,12 @@ impl Render for EditorView {
     }
 }
 
-/// Paints the visible part of an [`EditorView`].
 struct EditorElement {
     editor: Entity<EditorView>,
 }
 
 struct EditorLayout {
-    /// The area right of the gutter; text and its backgrounds are clipped to it.
     text_bounds: Bounds<Pixels>,
-    /// The top-left corner of the first visible line's text.
     text_origin: Point<Pixels>,
     lines: Arc<Vec<(DisplayLine, ShapedLine)>>,
     numbers: Vec<(Point<Pixels>, ShapedLine)>,
@@ -1079,7 +1052,6 @@ impl Element for EditorElement {
         window.on_mouse_event(move |event: &ScrollEvent, phase, window, cx| {
             if phase == DispatchPhase::Bubble && hovered.is_hovered(window) {
                 let delta = event.delta.pixel_delta(LINE_HEIGHT);
-                // Holding Shift turns a vertical wheel into horizontal scrolling.
                 let (dx, dy) = if event.modifiers.shift && delta.x == px(0.) {
                     (delta.y, px(0.))
                 } else {

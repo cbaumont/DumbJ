@@ -1,5 +1,3 @@
-//! Find Usages (results in the Find tool window) and Show Usages (results in a popup).
-
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -18,10 +16,11 @@ use crate::theme;
 const ROW_HEIGHT: f32 = 22.;
 pub(super) const FIND_WINDOW_HEIGHT: f32 = 240.;
 
-/// A row of the Find tool window.
 enum FindRow {
-    /// A file heading with the number of usages in it.
-    File { relative: String, count: usize },
+    File {
+        relative: String,
+        count: usize,
+    },
     Usage {
         location: Location,
         line: usize,
@@ -30,7 +29,6 @@ enum FindRow {
     },
 }
 
-/// The Find tool window: the result of the last Find Usages.
 pub(super) struct FindWindow {
     title: String,
     rows: Vec<FindRow>,
@@ -55,7 +53,6 @@ fn location(usage: &Usage) -> Location {
     }
 }
 
-/// Groups usages (already sorted by file and position) under file headings.
 fn find_rows(index: &Index, usages: &[Usage]) -> Vec<FindRow> {
     let mut rows = Vec::new();
     for group in usages.chunk_by(|a, b| a.path == b.path) {
@@ -145,7 +142,6 @@ impl Workspace {
                     this.find_window = Some(FindWindow {
                         title: summary(&name, &usages),
                         rows: find_rows(&index, &usages),
-                        // The first row is a file heading; start on the first usage.
                         selected: 1,
                         scroll: UniformListScrollHandle::new(),
                         visible: true,
@@ -159,7 +155,6 @@ impl Workspace {
         .detach();
     }
 
-    /// Shows and focuses the Find tool window, or hides it when it already has focus.
     pub(super) fn toggle_find_window(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let focused = self.find_window_focus.is_focused(window);
         let Some(find) = self.find_window.as_mut() else {
@@ -188,7 +183,6 @@ impl Workspace {
         cx.notify();
     }
 
-    /// Handles a text action while the Find tool window has focus.
     pub(super) fn find_window_action(
         &mut self,
         action: Action,
@@ -333,7 +327,6 @@ impl Workspace {
             .px(px(12.))
             .text_color(theme::ui(cx, UiRole::TextMuted))
             .child(format!("Find: {}", find.title))
-            // Dumb-mode usages are heuristic (BRIEF §4.3.1).
             .child(
                 div()
                     .text_size(px(11.))

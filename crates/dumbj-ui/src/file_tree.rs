@@ -1,6 +1,3 @@
-//! The Project tool window's file tree. Directories are listed on a background thread
-//! when they are first expanded.
-
 use std::path::{Path, PathBuf};
 
 use dumbj_actions::Action;
@@ -17,7 +14,6 @@ use crate::tree_model::{Row, TreeModel, read_dir_sorted};
 const ROW_HEIGHT: f32 = 22.;
 const INDENT: f32 = 16.;
 
-/// Emitted when the user opens a file from the tree.
 pub(crate) struct OpenFile(pub(crate) PathBuf);
 
 pub(crate) struct FileTree {
@@ -47,7 +43,6 @@ impl FileTree {
         &self.focus
     }
 
-    /// Lists `dir` in the background and shows its children when the listing arrives.
     fn load(dir: PathBuf, cx: &mut Context<Self>) {
         cx.spawn(async move |this, cx| {
             let listing_dir = dir.clone();
@@ -80,7 +75,6 @@ impl FileTree {
         cx.notify();
     }
 
-    /// Opens the file at `index`, or expands or collapses the directory there.
     fn activate(&mut self, index: usize, cx: &mut Context<Self>) {
         let Some(row) = self.model.rows().get(index) else {
             return;
@@ -95,7 +89,6 @@ impl FileTree {
         }
     }
 
-    /// Runs a text action as tree navigation. Returns `false` if it does not apply.
     pub(crate) fn handle_action(&mut self, action: Action, cx: &mut Context<Self>) -> bool {
         let Some(index) = self.selected else {
             return false;

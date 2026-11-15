@@ -1,6 +1,3 @@
-//! The state of a single-line text field: text, selection and IME composition.
-//! No GPUI types, so it can be tested headless.
-
 use std::ops::Range;
 
 /// A caret movement within one line of text.
@@ -18,11 +15,8 @@ pub(crate) enum LineMotion {
 #[derive(Debug, Default, Clone)]
 pub(crate) struct LineEdit {
     text: String,
-    /// The fixed end of the selection.
     anchor: usize,
-    /// The moving end of the selection, where the caret is drawn.
     caret: usize,
-    /// The text being composed by an input method, if any.
     marked: Option<Range<usize>>,
 }
 
@@ -43,7 +37,6 @@ impl LineEdit {
         self.anchor.min(self.caret)..self.anchor.max(self.caret)
     }
 
-    /// Whether the caret is at the start of the selection.
     pub(crate) fn is_reversed(&self) -> bool {
         self.caret < self.anchor
     }
@@ -56,7 +49,6 @@ impl LineEdit {
         self.marked = None;
     }
 
-    /// Snaps an offset into the text and down to a `char` boundary.
     fn clamp(&self, offset: usize) -> usize {
         let mut offset = offset.min(self.text.len());
         while !self.text.is_char_boundary(offset) {
@@ -70,7 +62,6 @@ impl LineEdit {
         start.min(end)..start.max(end)
     }
 
-    /// Replaces the whole text and selects all of it or puts the caret at the end.
     pub(crate) fn set_text(&mut self, text: &str, select_all: bool) {
         self.text = text.replace(['\n', '\r'], " ");
         self.caret = self.text.len();
@@ -87,7 +78,6 @@ impl LineEdit {
         (self.anchor, self.caret) = (0, self.text.len());
     }
 
-    /// Moves the caret to `offset`, extending the selection when `extend` is set.
     pub(crate) fn move_to(&mut self, offset: usize, extend: bool) {
         self.caret = self.clamp(offset);
         if !extend {
@@ -185,14 +175,12 @@ impl LineEdit {
         self.text.get(self.selection()).unwrap_or("")
     }
 
-    /// Converts a UTF-8 byte offset to a UTF-16 code unit offset, for input methods.
     pub(crate) fn offset_to_utf16(&self, offset: usize) -> usize {
         self.text
             .get(..self.clamp(offset))
             .map_or(0, |prefix| prefix.encode_utf16().count())
     }
 
-    /// Converts a UTF-16 code unit offset to a UTF-8 byte offset.
     pub(crate) fn utf16_to_offset(&self, offset_utf16: usize) -> usize {
         let mut units = 0;
         for (index, c) in self.text.char_indices() {

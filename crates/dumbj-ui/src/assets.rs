@@ -1,5 +1,3 @@
-//! Assets embedded in the binary: icons and fonts.
-
 use std::borrow::Cow;
 
 use gpui::{AssetSource, Result, SharedString};
@@ -13,7 +11,6 @@ macro_rules! icons {
     };
 }
 
-/// Icon paths as GPUI sees them (`icons/<name>.svg`) with their SVG bytes.
 const ICONS: &[(&str, &[u8])] = icons![
     "chevron-down",
     "chevron-right",
@@ -28,7 +25,6 @@ const ICONS: &[(&str, &[u8])] = icons![
     "x",
 ];
 
-/// The fonts bundled with DumbJ.
 pub(crate) fn fonts() -> Vec<Cow<'static, [u8]>> {
     vec![
         Cow::Borrowed(include_bytes!(
@@ -43,10 +39,8 @@ pub(crate) fn fonts() -> Vec<Cow<'static, [u8]>> {
     ]
 }
 
-/// The family name of the bundled editor font.
 pub(crate) const EDITOR_FONT: &str = "JetBrains Mono";
 
-/// Serves the embedded icons to GPUI's `svg()` element.
 pub(crate) struct Assets;
 
 impl AssetSource for Assets {

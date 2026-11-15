@@ -1,5 +1,3 @@
-//! A single-line text field with input-method (IME) support.
-//!
 //! The element and the `EntityInputHandler` wiring are adapted from Zed's GPUI example
 //! `crates/gpui/examples/input.rs` (Apache-2.0) at revision
 //! e8bc16acee5ae1937600d571d441c4b5d7b0d288.
@@ -19,10 +17,8 @@ use gpui::{
 use crate::line_edit::{LineEdit, LineMotion};
 use crate::theme;
 
-/// Emitted when the text of a [`TextInput`] changes.
 pub(crate) struct TextChanged;
 
-/// A focusable single-line text field.
 pub(crate) struct TextInput {
     focus: FocusHandle,
     edit: LineEdit,
@@ -259,7 +255,6 @@ impl Render for TextInput {
     }
 }
 
-/// Paints the text, selection and caret of a [`TextInput`] and registers its IME handler.
 struct TextInputElement {
     input: Entity<TextInput>,
 }
@@ -330,7 +325,6 @@ impl Element for TextInputElement {
             underline: None,
             strikethrough: None,
         };
-        // Underline the text an input method is still composing.
         let runs = match input
             .edit
             .marked()

@@ -1,5 +1,3 @@
-//! GPUI front end for DumbJ. This is the only crate that depends on GPUI.
-
 mod assets;
 mod editor;
 mod editor_model;
@@ -17,7 +15,6 @@ use dumbj_actions::builtin::{self, BuiltinError, Platform};
 use dumbj_settings::{Theme, ThemeError};
 use thiserror::Error;
 
-/// Why the UI could not start.
 #[derive(Debug, Error)]
 pub enum UiError {
     #[error("the built-in theme is invalid: {0}")]
@@ -26,17 +23,14 @@ pub enum UiError {
     Keymap(#[from] BuiltinError),
 }
 
-/// What to show at start-up.
 #[derive(Debug, Default)]
 pub struct RunOptions {
     /// Paths from the command line: the first folder is opened as the project and files
     /// are opened in tabs. With only files, the first file's folder becomes the project.
     pub paths: Vec<PathBuf>,
-    /// Measure frame times while scrolling through the opened file, log them and quit.
     pub scroll_benchmark: bool,
 }
 
-/// Runs the application until its last window closes.
 pub fn run(options: RunOptions) -> Result<(), UiError> {
     let theme = Theme::catppuccin_mocha()?;
     let platform = Platform::current();

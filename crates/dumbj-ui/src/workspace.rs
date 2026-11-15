@@ -1,6 +1,3 @@
-//! A project window: tool-window stripe, Project tool window, editor tabs, status bar and
-//! popups. It owns the key dispatcher and routes every action.
-
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
@@ -34,7 +31,6 @@ const STRIPE_WIDTH: Pixels = px(40.);
 const TOOL_WINDOW_WIDTH: Pixels = px(280.);
 const TAB_BAR_HEIGHT: Pixels = px(36.);
 const STATUS_BAR_HEIGHT: Pixels = px(26.);
-/// The width of the invisible resize border of a client-decorated window.
 const RESIZE_BORDER: Pixels = px(6.);
 
 struct Project {
@@ -49,7 +45,6 @@ struct Tab {
     editor: Entity<EditorView>,
 }
 
-/// Whether the Project tool window is shown.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum ToolWindowState {
     Visible,
@@ -58,7 +53,6 @@ enum ToolWindowState {
     HiddenByHideAll,
 }
 
-/// Which part of the window has keyboard focus.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum FocusArea {
     FindWindow,
@@ -91,7 +85,6 @@ pub(crate) struct Workspace {
     chooser: Option<Chooser>,
     search_input: Entity<TextInput>,
     search: Option<SearchPopup>,
-    /// The Find tool window with the last Find Usages result.
     find_window: Option<FindWindow>,
     find_window_focus: FocusHandle,
     /// Stops a usage search that a newer one replaces.
@@ -103,16 +96,13 @@ pub(crate) struct Workspace {
     subscriptions: Vec<Subscription>,
 }
 
-/// What a new project window shows.
 #[derive(Default)]
 pub(crate) struct OpenOptions {
     pub(crate) folder: Option<PathBuf>,
     pub(crate) files: Vec<PathBuf>,
-    /// Run the scroll benchmark on the first opened file.
     pub(crate) scroll_benchmark: bool,
 }
 
-/// Opens a project window, optionally on a folder and with files already open.
 pub(crate) fn open_window(
     cx: &mut App,
     bindings: Bindings,
@@ -285,7 +275,6 @@ impl Workspace {
                         this.on_editor_mouse(*stroke, window, cx);
                     },
                 ));
-                // Repaint the status bar when the caret moves.
                 self.subscriptions
                     .push(cx.observe(&editor, |_, _, cx| cx.notify()));
                 self.tabs.push(Tab {
@@ -332,7 +321,6 @@ impl Workspace {
         }
     }
 
-    /// Focuses the editor if there is one, else the tree, else the window itself.
     fn focus_fallback(&self, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(tab) = self.active_tab() {
             let handle = tab.editor.read(cx).focus_handle().clone();
@@ -370,7 +358,6 @@ impl Workspace {
                 if this.project.is_none() {
                     this.set_project(folder, window, cx);
                 } else {
-                    // One window per project: a second folder gets its own window.
                     let (bindings, style) = (this.bindings.clone(), this.shortcut_style);
                     cx.defer(move |cx| {
                         open_window(
@@ -525,7 +512,6 @@ impl Workspace {
         cx.notify();
     }
 
-    /// Hides every tool window, or brings back the ones the last call hid.
     fn hide_all_tool_windows(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let hiding = self.project_window == ToolWindowState::Visible
             || self.find_window.as_ref().is_some_and(|find| find.visible);
@@ -565,7 +551,6 @@ impl Workspace {
         cx.notify();
     }
 
-    /// Opens the find bar, seeded with a single-line selection if there is one.
     fn open_find(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some(editor) = self.active_editor() else {
             return;
@@ -583,7 +568,6 @@ impl Workspace {
         cx.notify();
     }
 
-    /// Routes editor and text actions to whatever has focus.
     fn perform_in_focus(&mut self, action: Action, window: &mut Window, cx: &mut Context<Self>) {
         match self.focus_area(window, cx) {
             FocusArea::FindWindow => self.find_window_action(action, window, cx),
@@ -671,7 +655,6 @@ impl Workspace {
         }
     }
 
-    /// The first displayable shortcut of `action` in the active keymap.
     fn shortcut(&self, action: Action) -> Option<String> {
         self.bindings
             .shortcuts(action)
@@ -743,7 +726,6 @@ impl Workspace {
             .border_color(theme::ui(cx, UiRole::Border))
             .text_color(theme::ui(cx, UiRole::Text))
             .when(client_decorated, |header| {
-                // Without server decorations the header is the title bar.
                 header
                     .on_mouse_down(MouseButton::Left, |event: &MouseDownEvent, window, _| {
                         if event.click_count == 2 {
@@ -926,7 +908,6 @@ impl Workspace {
             .child(div().text_color(theme::ui(cx, role)).child(status))
     }
 
-    /// What the editor area shows when no file is open: the shortcuts worth knowing.
     fn render_empty_state(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let hints = [
             Action::ActivateProjectToolWindow,
@@ -1014,7 +995,6 @@ impl Workspace {
 
     fn render_status_bar(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let tab = self.active_tab();
-        // The breadcrumb: project name, then the file's path inside the project.
         let breadcrumb = match (&self.project, tab) {
             (Some(project), Some(tab)) => {
                 let relative = tab.path.strip_prefix(&project.root).unwrap_or(&tab.path);
@@ -1119,7 +1099,6 @@ impl Workspace {
     }
 }
 
-/// The window edge or corner under `position`, for resizing a client-decorated window.
 fn resize_edge(position: Point<Pixels>, window_size: Size<Pixels>) -> Option<ResizeEdge> {
     let (left, top) = (position.x < RESIZE_BORDER, position.y < RESIZE_BORDER);
     let right = position.x > window_size.width - RESIZE_BORDER;
@@ -1155,7 +1134,6 @@ impl Render for Workspace {
             .filter(|find| find.visible)
             .map(|find| self.render_find_window(find, window, cx).into_any_element());
         if std::mem::take(&mut self.focus_results) {
-            // Usage results arrived: keys go to the popup, or to the Find tool window.
             let focus = if self.chooser.is_some() {
                 self.focus.clone()
             } else {

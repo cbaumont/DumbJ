@@ -1,9 +1,5 @@
-//! Caret, selection and scrolling logic of the editor. No GPUI types, so it can be tested
-//! headless.
-
 use dumbj_text::{Buffer, ByteOffset, ByteRange, LineIndex, Point};
 
-/// A caret movement.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Motion {
     Left,
@@ -15,9 +11,7 @@ pub(crate) enum Motion {
     LineEnd,
     TextStart,
     TextEnd,
-    /// Up by this many lines.
     PageUp(usize),
-    /// Down by this many lines.
     PageDown(usize),
     WordLeft,
     WordRight,
@@ -27,11 +21,9 @@ fn is_word(c: char) -> bool {
     c.is_alphanumeric() || c == '_'
 }
 
-/// A buffer with one caret and selection.
 #[derive(Debug, Default)]
 pub(crate) struct EditorModel {
     buffer: Buffer,
-    /// The fixed end of the selection.
     anchor: ByteOffset,
     /// The moving end of the selection, where the caret is drawn.
     caret: ByteOffset,
@@ -71,7 +63,6 @@ impl EditorModel {
         self.buffer.text(self.selection()).unwrap_or_default()
     }
 
-    /// Moves the caret to `offset`, extending the selection when `extend` is set.
     pub(crate) fn move_to(&mut self, offset: ByteOffset, extend: bool) {
         self.caret = self.buffer.clamp(offset);
         if !extend {
@@ -80,7 +71,6 @@ impl EditorModel {
         self.goal_column = None;
     }
 
-    /// Selects `range` with the caret at its end.
     pub(crate) fn select(&mut self, range: ByteRange) {
         self.anchor = self.buffer.clamp(range.start);
         self.caret = self.buffer.clamp(range.end);
@@ -91,7 +81,6 @@ impl EditorModel {
         self.select(ByteOffset::ZERO..self.buffer.len());
     }
 
-    /// Selects a whole line including its line break, like a triple click.
     pub(crate) fn select_line(&mut self, line: LineIndex) {
         let next = LineIndex(line.get() + 1);
         let end = if next.get() < self.buffer.line_count() {
@@ -102,7 +91,6 @@ impl EditorModel {
         self.select(self.buffer.line_start(line)..end);
     }
 
-    /// Selects the word touching `offset`. Returns whether there was one.
     pub(crate) fn select_word_at(&mut self, offset: ByteOffset) -> bool {
         let word = self.buffer.word_range_at(offset);
         if let Some(range) = word.clone() {
@@ -111,8 +99,6 @@ impl EditorModel {
         word.is_some()
     }
 
-    /// Extend Selection, word level only: selects the word at the caret when nothing is
-    /// selected. Syntax-aware growth comes with the navigation milestone.
     pub(crate) fn extend_selection(&mut self) -> bool {
         !self.has_selection() && self.select_word_at(self.caret)
     }
@@ -230,11 +216,8 @@ impl EditorModel {
     }
 }
 
-/// The number of columns between tab stops.
 const TAB_WIDTH: usize = 4;
 
-/// A line as it is drawn: tabs expanded to spaces, with a mapping between byte columns in
-/// the buffer line and byte columns in the drawn text.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct DisplayLine {
     pub(crate) text: String,
@@ -274,7 +257,6 @@ impl DisplayLine {
         Self { text, tabs }
     }
 
-    /// Maps a byte column of the buffer line to a byte column of the drawn text.
     pub(crate) fn to_display(&self, column: usize) -> usize {
         let extra: usize = self
             .tabs
@@ -318,8 +300,6 @@ pub(crate) fn parse_line_column(text: &str) -> Option<(usize, Option<usize>)> {
     Some((line, column))
 }
 
-/// The first visible line after scrolling just enough to show `line`, keeping
-/// `margin` lines of context where possible.
 pub(crate) fn scroll_to_reveal(
     scroll_top: f64,
     visible_lines: f64,
@@ -343,7 +323,6 @@ pub(crate) fn scroll_to_reveal(
     top.clamp(0.0, max_top)
 }
 
-/// The first visible line that puts `line` in the middle of the viewport.
 pub(crate) fn scroll_to_center(visible_lines: f64, line: usize, line_count: usize) -> f64 {
     #[expect(
         clippy::cast_precision_loss,

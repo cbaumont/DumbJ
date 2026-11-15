@@ -1,6 +1,3 @@
-//! Navigation in a project window: background indexing, Go to Declaration, the chooser
-//! popup, and the Back/Forward history.
-
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -21,22 +18,18 @@ use gpui::{
 use super::Workspace;
 use crate::theme;
 
-/// A place in a file.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct Location {
     pub(super) path: PathBuf,
     pub(super) offset: ByteOffset,
 }
 
-/// The places navigation has been, for Back and Forward.
 #[derive(Debug, Default)]
 pub(super) struct NavigationHistory {
     entries: Vec<Location>,
-    /// The index of the entry the user is at.
     current: usize,
 }
 
-/// Long sessions should not grow the history without bound.
 const MAX_HISTORY: usize = 200;
 
 impl NavigationHistory {
@@ -61,13 +54,11 @@ impl NavigationHistory {
         self.current + 1 < self.entries.len()
     }
 
-    /// Steps back and returns where to go.
     pub(super) fn back(&mut self) -> Option<Location> {
         self.current = self.current.checked_sub(1)?;
         self.entries.get(self.current).cloned()
     }
 
-    /// Steps forward and returns where to go.
     pub(super) fn forward(&mut self) -> Option<Location> {
         let next = self.entries.get(self.current + 1)?.clone();
         self.current += 1;
@@ -77,11 +68,8 @@ impl NavigationHistory {
 
 const CHOOSER_ROW_HEIGHT: f32 = 26.;
 
-/// One row of the chooser popup.
 pub(super) struct ChooserItem {
-    /// The declaration, e.g. `Money.add`, or a usage's `File.java:12`.
     label: String,
-    /// Where it is, e.g. `com.shop.core · Money.java`, or a usage's line of code.
     detail: String,
     location: Location,
 }
@@ -96,7 +84,6 @@ impl ChooserItem {
     }
 }
 
-/// A list of candidate targets to pick from, shown when a jump would be a guess.
 pub(super) struct Chooser {
     title: String,
     items: Vec<ChooserItem>,
@@ -115,7 +102,6 @@ impl Chooser {
     }
 }
 
-/// Indexing that is still running.
 pub(super) struct Indexing {
     done: Arc<AtomicUsize>,
     cancel: Arc<AtomicBool>,
@@ -129,7 +115,6 @@ impl Drop for Indexing {
 }
 
 impl Workspace {
-    /// Indexes the project in the background. Navigation becomes available when it ends.
     pub(super) fn start_indexing(&mut self, root: PathBuf, cx: &mut Context<Self>) {
         let done = Arc::new(AtomicUsize::new(0));
         let cancel = Arc::new(AtomicBool::new(false));
@@ -175,7 +160,6 @@ impl Workspace {
             cancel,
             _task: task,
         });
-        // Repaint the progress in the status bar while indexing runs.
         cx.spawn(async move |this, cx| {
             loop {
                 cx.background_executor()
@@ -193,14 +177,12 @@ impl Workspace {
         .detach();
     }
 
-    /// The status-bar text for the navigation engine: indexing progress, or the mode.
     pub(super) fn index_status(&self) -> Option<String> {
         match (&self.indexing, &self.index) {
             (Some(indexing), _) => Some(format!(
                 "Indexing… {} files",
                 indexing.done.load(Ordering::Relaxed)
             )),
-            // Results come from tree-sitter, not a language server (BRIEF §4.3.1).
             (None, Some(_)) => Some("dumb".to_owned()),
             (None, None) => None,
         }
@@ -222,7 +204,6 @@ impl Workspace {
         }
     }
 
-    /// Jumps to `to` and remembers where the user came from.
     pub(super) fn navigate_to(
         &mut self,
         to: Location,
@@ -275,7 +256,6 @@ impl Workspace {
         }
     }
 
-    /// Go to Declaration at the caret: jump, offer a chooser, or say nothing was found.
     pub(super) fn goto_declaration(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let (Some(index), Some(editor)) = (self.index.clone(), self.active_editor()) else {
             return;
@@ -321,7 +301,6 @@ impl Workspace {
         cx.notify();
     }
 
-    /// Runs the action bound to a mouse press in the editor, if any.
     pub(super) fn on_editor_mouse(
         &mut self,
         stroke: MouseStroke,
@@ -356,7 +335,6 @@ impl Workspace {
         cx.notify();
     }
 
-    /// Handles a text action while the chooser is open.
     pub(super) fn chooser_action(
         &mut self,
         action: Action,
@@ -458,7 +436,6 @@ impl Workspace {
             .pb(px(6.))
             .text_color(theme::ui(cx, UiRole::TextMuted))
             .child(chooser.title.clone())
-            // Dumb-mode results are heuristic; say so wherever a choice is offered.
             .child(
                 div()
                     .px(px(6.))
