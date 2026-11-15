@@ -296,12 +296,12 @@ fn members_through_a_receiver_with_a_known_type() {
 }
 
 #[test]
-fn extensions_get_a_chooser() {
+fn top_level_functions_and_extensions() {
     let index = shop_index();
-    // An extension function is never a sure thing, even with a single candidate.
     assert_eq!(
         go(&index, CHECKOUT, "first.lab§el()"),
-        "Choose [Product.kt:18 label ExplicitImport]"
+        "Jump Product.kt:18 label ExplicitImport",
+        "`first` is a Product and the extension on Product is imported"
     );
     assert_eq!(
         go(&index, PRODUCT, "${formatMon§ey(cost)}"),
@@ -455,5 +455,54 @@ fn java_calls_kotlin_with_the_receiver_as_an_argument() {
         go("Shipping.INSTANCE.ra§te(label, true)"),
         "Choose [Shipping.kt:38 Shipping.rate ExplicitImport]",
         "a guess, but narrowed to the overload that takes a String and a boolean"
+    );
+}
+
+#[test]
+fn kotlin_extensions_and_their_receivers() {
+    let index = freight_index();
+    let go = |snippet: &str| go_in(&freight_root(), &index, SHIPPING, snippet);
+    assert_eq!(
+        go("= na§me + this"),
+        "Jump Shipping.kt:17 NamedCarrier.name Scope",
+        "the members of the extension receiver are in scope"
+    );
+    assert_eq!(
+        go("this.quo§te(sample())"),
+        "Jump Shipping.kt:20 NamedCarrier.quote Scope",
+        "`this` is the extension receiver"
+    );
+    assert_eq!(
+        go("= quo§te(product).amount"),
+        "Jump Shipping.kt:12 Carrier.quote Scope"
+    );
+    assert_eq!(
+        go("carrier.descr§ibe()"),
+        "Jump Shipping.kt:65 describe SameFile"
+    );
+    assert_eq!(
+        go("carrier.che§ap(sample())"),
+        "Jump Shipping.kt:67 cheap SameFile",
+        "an extension on a supertype of the receiver"
+    );
+    assert_eq!(
+        go("text.sho§ut()"),
+        "Jump Shipping.kt:69 shout SameFile",
+        "an extension on a library type"
+    );
+    assert_eq!(
+        go("text.che§ap(sample())"),
+        "NotFound",
+        "the only `cheap` is an extension on another type"
+    );
+    assert_eq!(
+        go_in(
+            &freight_root(),
+            &index,
+            "src/main/kotlin/freight/app/Labels.kt",
+            "product.lab§el()"
+        ),
+        "Choose [Shipping.kt:9 label SameModule]",
+        "an extension the file neither imports nor shares a package with is a guess"
     );
 }

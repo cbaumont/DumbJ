@@ -133,9 +133,9 @@ fn usages_of_fields_and_properties() {
         [
             "Product.kt:4 override fun price(): Money = cost",
             "Product.kt:7 val reduced = Money.of(cost.amount() * (100 - percent) / 100)",
-            "Product.kt:18 fun Product.label(): String = \"$name: ${formatMoney(cost)}\" ?",
+            "Product.kt:18 fun Product.label(): String = \"$name: ${formatMoney(cost)}\"",
         ],
-        "inside the extension function the receiver is implicit, so it is a maybe"
+        "inside the extension function its receiver is the implicit `this`"
     );
 }
 

@@ -182,6 +182,17 @@ impl SyntaxTree {
         Some(self.classify(&Source { buffer }, node))
     }
 
+    /// The receiver type, as written and without type arguments, of the Kotlin extension
+    /// function or property that encloses `offset`.
+    #[must_use]
+    pub fn extension_receiver_at(&self, buffer: &Buffer, offset: ByteOffset) -> Option<String> {
+        if self.language() != Language::Kotlin {
+            return None;
+        }
+        let node = self.identifier_node(offset)?;
+        crate::kotlin::extension_receiver(&Source { buffer }, node)
+    }
+
     /// Every identifier in the file spelled `name`, in source order. Comments and strings
     /// are never included because they contain no identifier nodes.
     #[must_use]

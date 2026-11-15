@@ -59,3 +59,18 @@ object Shipping {
         crate.send("away", free)
     }
 }
+
+fun sample(): Product = Product("p", Money(1))
+
+fun NamedCarrier.describe(): String = name + this.quote(sample()).amount
+
+fun Carrier.cheap(product: Product): Boolean = quote(product).amount < 5
+
+fun String.shout(): String = this
+
+fun demoExtensions(carrier: NamedCarrier, text: String) {
+    carrier.describe()
+    carrier.cheap(sample())
+    text.shout()
+    text.cheap(sample())
+}

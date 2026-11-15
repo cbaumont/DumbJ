@@ -440,6 +440,9 @@ struct Lookup<'a> {
     site: Site<'a>,
     resolver: Resolver<'a>,
     enclosing: Vec<SymbolId>,
+    /// What `this` is inside a Kotlin extension function: its receiver. It is the
+    /// innermost implicit receiver, ahead of the enclosing types.
+    extension_receiver: Option<Receiver>,
 }
 
 /// A name to look up: the reference under the caret, or a callee inside its qualifier.
@@ -697,7 +700,11 @@ impl Lookup<'_> {
             }
         };
         match expression {
-            Qualifier::This => types(self.enclosing.clone()),
+            Qualifier::This => match &self.extension_receiver {
+                Some(Receiver::Types(receiver)) => Receiver::Types(receiver.clone()),
+                Some(Receiver::External(name)) => Receiver::External(name.clone()),
+                _ => types(self.enclosing.clone()),
+            },
             Qualifier::Super => types(
                 self.enclosing
                     .first()
@@ -1024,9 +1031,9 @@ impl Lookup<'_> {
                     .collect(),
             );
         }
-        // Members of the enclosing types and of their supertypes.
+        // Members of the implicit receivers and of their supertypes.
         let in_scope: Vec<SymbolId> = self
-            .enclosing
+            .implicit_receivers()
             .iter()
             .flat_map(|owner| self.resolver.members_named(*owner, name, role, applicable))
             .collect();
@@ -1059,12 +1066,94 @@ impl Lookup<'_> {
         if visible.is_empty() {
             return Found::guess(guesses);
         }
-        // An extension function's receiver is not checked, so it is never a sure thing.
-        let confident = !visible.iter().any(|(id, _)| self.is_extension(*id));
-        Found {
-            local: None,
-            ranked: visible,
-            confident,
+        // An extension needs an implicit receiver of its receiver type. The ones the dumb
+        // engine sees are the enclosing types and an enclosing extension's receiver; a
+        // lambda with a receiver (`apply { … }`, `flow { … }`) is invisible to it, so
+        // other extensions are only offered when nothing surer is in sight.
+        let receivers = self.implicit_receiver_names();
+        let (sure, unsure): (Vec<_>, Vec<_>) = visible.into_iter().partition(|(id, _)| {
+            self.extension_receiver_name(*id)
+                .is_none_or(|receiver| receivers.contains(&receiver))
+        });
+        if sure.is_empty() {
+            Found::guess(unsure)
+        } else {
+            Found::sure(sure)
+        }
+    }
+
+    /// The types whose members can be named without a qualifier, innermost first.
+    fn implicit_receivers(&self) -> Vec<SymbolId> {
+        let extension = match &self.extension_receiver {
+            Some(Receiver::Types(types)) => types.as_slice(),
+            _ => &[],
+        };
+        extension.iter().chain(&self.enclosing).copied().collect()
+    }
+
+    /// The simple names of the implicit receivers and of their supertypes, nearest first.
+    fn implicit_receiver_names(&self) -> Vec<&str> {
+        let external = match &self.extension_receiver {
+            Some(Receiver::External(name)) => Some(simple_name(name)),
+            _ => None,
+        };
+        let indexed = self.type_names(&self.implicit_receivers());
+        external.into_iter().chain(indexed).collect()
+    }
+
+    /// The names of `types` and of their supertypes, nearest first.
+    fn type_names(&self, types: &[SymbolId]) -> Vec<&str> {
+        types
+            .iter()
+            .flat_map(|owner| self.resolver.with_supertypes(*owner))
+            .filter_map(|id| self.resolver.symbol(id))
+            .map(|symbol| symbol.name.as_str())
+            .collect()
+    }
+
+    /// The simple name of the receiver type of the extension `id`.
+    fn extension_receiver_name(&self, id: SymbolId) -> Option<&str> {
+        let receiver = self.resolver.symbol(id)?.receiver.as_deref()?;
+        Some(simple_name(receiver))
+    }
+
+    /// The Kotlin extensions called `name` on a receiver whose type, or one of its
+    /// supertypes, has one of `receiver_names` (nearest first). The extensions on the
+    /// nearest type win. The match is by simple name, which is a sure thing only for an
+    /// extension the file can see: imported, or in its package.
+    fn extensions_on(&self, name: &str, role: ReferenceRole, receiver_names: &[&str]) -> Found {
+        if self.resolver.language != Language::Kotlin {
+            return Found::sure(Vec::new());
+        }
+        let extensions: Vec<(SymbolId, Tier, &str)> = self
+            .named_candidates(name, role)
+            .into_iter()
+            .filter_map(|id| {
+                let tier = self
+                    .resolver
+                    .tier(self.site.file, &self.enclosing, id, false);
+                Some((id, tier, self.extension_receiver_name(id)?))
+            })
+            .collect();
+        let on = |receiver_name: &str, visible_only: bool| -> Vec<(SymbolId, Tier)> {
+            extensions
+                .iter()
+                .filter(|(_, tier, on)| {
+                    *on == receiver_name && !(visible_only && *tier > Tier::WildcardImport)
+                })
+                .map(|(id, tier, _)| (*id, *tier))
+                .collect()
+        };
+        let nearest = |visible_only: bool| {
+            receiver_names
+                .iter()
+                .map(|receiver_name| on(receiver_name, visible_only))
+                .find(|found| !found.is_empty())
+        };
+        match (nearest(true), nearest(false)) {
+            (Some(visible), _) => Found::sure(visible),
+            (None, Some(unseen)) => Found::guess(unseen),
+            (None, None) => Found::sure(Vec::new()),
         }
     }
 
@@ -1089,22 +1178,6 @@ impl Lookup<'_> {
                     .collect(),
             );
         }
-        // Kotlin extensions declared on a type with one of these simple names.
-        let extensions_on = |receiver_names: &HashSet<&str>| -> Vec<(SymbolId, Tier)> {
-            self.named_candidates(name, role)
-                .into_iter()
-                .filter(|id| {
-                    let receiver = self
-                        .resolver
-                        .symbol(*id)
-                        .and_then(|s| s.receiver.as_deref());
-                    receiver.is_some_and(|receiver| {
-                        receiver_names.contains(receiver.rsplit('.').next().unwrap_or(receiver))
-                    })
-                })
-                .map(|id| (id, self.resolver.tier(file, &self.enclosing, id, false)))
-                .collect()
-        };
         match self.receiver(qualifier, query.at, query.depth) {
             Receiver::Types(owners) => {
                 let members: Vec<SymbolId> = owners
@@ -1114,27 +1187,16 @@ impl Lookup<'_> {
                 if !members.is_empty() {
                     return Found::sure(members.into_iter().map(|id| (id, Tier::Scope)).collect());
                 }
-                // Not a member: perhaps a Kotlin extension on the receiver's type.
-                let owner_names: HashSet<&str> = owners
-                    .iter()
-                    .flat_map(|owner| self.resolver.with_supertypes(*owner))
-                    .filter_map(|id| self.resolver.symbol(id))
-                    .map(|symbol| symbol.name.as_str())
-                    .collect();
-                let extensions = extensions_on(&owner_names);
-                if !extensions.is_empty() {
-                    return Found::guess(extensions);
-                }
-                // The receiver's type is known and has no such member: it is inherited from a
-                // library supertype (`JpaRepository.save`, `Enum.name`). Members of unrelated
-                // project types with the same name would only be wrong answers.
-                Found::sure(Vec::new())
+                // Not a member: perhaps a Kotlin extension on the receiver's type. Failing
+                // that, the member is inherited from a library supertype
+                // (`JpaRepository.save`, `Enum.name`): members of unrelated project types
+                // with the same name would only be wrong answers.
+                self.extensions_on(name, role, &self.type_names(&owners))
             }
             // The receiver's type is written but is not in the project (a library type).
             // Its members are not ours; only an extension on that type can match.
             Receiver::External(type_name) => {
-                let simple = type_name.rsplit('.').next().unwrap_or(&type_name);
-                Found::guess(extensions_on(&HashSet::from([simple])))
+                self.extensions_on(name, role, &[simple_name(&type_name)])
             }
             // Unknown receiver: every member or extension with this name is a guess.
             Receiver::Unknown | Receiver::Function => Found::guess(
@@ -1210,11 +1272,16 @@ pub fn resolve(site: Site<'_>, offset: ByteOffset) -> Option<Resolution> {
         language: site.tree.language(),
     };
     let enclosing = resolver.enclosing_types(site.file, reference.range.start);
-    let lookup = Lookup {
+    let mut lookup = Lookup {
         site,
         resolver,
         enclosing,
+        extension_receiver: None,
     };
+    lookup.extension_receiver = site
+        .tree
+        .extension_receiver_at(site.buffer, reference.range.start)
+        .map(|type_name| lookup.receiver_of_written_type(&type_name));
     let found = if reference.role == ReferenceRole::Declaration {
         Found::sure(Vec::new())
     } else if reference.in_import {

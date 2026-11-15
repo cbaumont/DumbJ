@@ -324,7 +324,8 @@ pub(crate) fn expression(source: &Source<'_>, node: Node<'_>) -> Qualifier {
     let typed = |name: &str| Qualifier::Typed(name.to_owned());
     match node.kind() {
         "simple_identifier" => Qualifier::Name(source.text(node)),
-        "this_expression" => Qualifier::This,
+        // `this@Outer` names some enclosing receiver; only a bare `this` is followed.
+        "this_expression" if source.text(node) == "this" => Qualifier::This,
         "super_expression" => Qualifier::Super,
         "parenthesized_expression" => node
             .named_child(0)
@@ -417,6 +418,25 @@ fn arguments(source: &Source<'_>, call: Node<'_>) -> Vec<Argument> {
         }
     }
     found
+}
+
+/// The receiver type of the innermost extension function or property around `node`:
+/// `Foo` inside `fun Foo.bar() { … }`. Inside it, `this` is a `Foo` and the members of
+/// `Foo` are in scope.
+pub(crate) fn extension_receiver(source: &Source<'_>, node: Node<'_>) -> Option<String> {
+    std::iter::successors(Some(node), Node::parent)
+        .filter(|scope| {
+            matches!(
+                scope.kind(),
+                "function_declaration" | "property_declaration"
+            )
+        })
+        .find_map(|declaration| {
+            let receiver = child_of_kind(declaration, "receiver_type")?;
+            find_user_type(receiver)
+                .map(|user_type| user_type_name(source, user_type))
+                .filter(|name| !is_type_parameter(source, declaration, name))
+        })
 }
 
 /// The arguments of the call whose callee name is `node`.
