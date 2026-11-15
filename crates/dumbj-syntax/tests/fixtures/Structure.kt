@@ -40,3 +40,9 @@ class Multi {
     constructor(a: Int)
     constructor(vararg names: String, block: () -> Unit = {})
 }
+
+expect class Plat {
+    fun go()
+}
+
+actual fun act() {}

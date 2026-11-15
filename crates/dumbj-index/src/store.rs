@@ -7,14 +7,14 @@ use std::fs;
 use std::path::Path;
 use std::time::UNIX_EPOCH;
 
-use dumbj_syntax::{FileFacts, Import, Language, Parameter, Symbol, SymbolKind};
+use dumbj_syntax::{FileFacts, Import, Language, Parameter, Platform, Symbol, SymbolKind};
 use dumbj_text::ByteOffset;
 use rusqlite::{Connection, params};
 
 use crate::index::IndexedFile;
 
 /// Bumped whenever the schema or the meaning of a column changes.
-const SCHEMA_VERSION: i64 = 3;
+const SCHEMA_VERSION: i64 = 4;
 
 const SCHEMA: &str = "
 CREATE TABLE files (
@@ -39,6 +39,7 @@ CREATE TABLE symbols (
     type_name TEXT,
     supertypes TEXT NOT NULL,
     parameters TEXT,
+    platform TEXT,
     PRIMARY KEY (file_id, idx)
 );
 CREATE INDEX symbols_name ON symbols(name);
@@ -195,7 +196,7 @@ impl IndexStore {
         {
             let mut statement = self.connection.prepare(
                 "SELECT file_id, name, kind, range_start, range_end, name_start, name_end,
-                        parent, receiver, type_name, supertypes, parameters
+                        parent, receiver, type_name, supertypes, parameters, platform
                  FROM symbols ORDER BY file_id, idx",
             )?;
             let mut rows = statement.query([])?;
@@ -204,6 +205,7 @@ impl IndexStore {
                 let kind: String = row.get(2)?;
                 let supertypes: String = row.get(10)?;
                 let parameters: Option<String> = row.get(11)?;
+                let platform: Option<String> = row.get(12)?;
                 let symbol = SymbolKind::from_name(&kind).map(|kind| {
                     Ok::<_, rusqlite::Error>(Symbol {
                         name: row.get(1)?,
@@ -221,6 +223,11 @@ impl IndexStore {
                         receiver: row.get(8)?,
                         type_name: row.get(9)?,
                         parameters: parameters.as_deref().map(decode_parameters),
+                        platform: match platform.as_deref() {
+                            Some("expect") => Some(Platform::Expect),
+                            Some("actual") => Some(Platform::Actual),
+                            _ => None,
+                        },
                     })
                 });
                 let Some(entry) = files.get_mut(&file_id) else {
@@ -276,8 +283,8 @@ impl IndexStore {
             let mut insert_symbol = transaction.prepare_cached(
                 "INSERT INTO symbols (file_id, idx, name, kind, range_start, range_end,
                                       name_start, name_end, parent, receiver, type_name,
-                                      supertypes, parameters)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+                                      supertypes, parameters, platform)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
             )?;
             let mut insert_import = transaction.prepare_cached(
                 "INSERT INTO imports (file_id, idx, path, wildcard, is_static, alias)
@@ -308,6 +315,10 @@ impl IndexStore {
                         symbol.type_name,
                         symbol.supertypes.join("\n"),
                         symbol.parameters.as_deref().map(encode_parameters),
+                        symbol.platform.map(|platform| match platform {
+                            Platform::Expect => "expect",
+                            Platform::Actual => "actual",
+                        }),
                     ])?;
                 }
                 for (idx, import) in file.facts.imports.iter().enumerate() {

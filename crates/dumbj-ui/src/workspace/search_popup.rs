@@ -538,6 +538,7 @@ mod tests {
             receiver: None,
             type_name: None,
             parameters: None,
+            platform: None,
         };
         let facts = FileFacts {
             package: Some("com.shop".to_owned()),

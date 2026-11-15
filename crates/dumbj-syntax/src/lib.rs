@@ -17,7 +17,7 @@ use tree_sitter::{ParseOptions, Parser, Tree};
 pub use highlight::{HighlightKind, HighlightSpan};
 pub use language::Language;
 pub use reference::{Argument, Call, LocalDefinition, Qualifier, Reference, ReferenceRole};
-pub use structure::{FileFacts, Import, Parameter, Symbol, SymbolKind};
+pub use structure::{FileFacts, Import, Parameter, Platform, Symbol, SymbolKind};
 
 /// A failure in the syntax layer. These indicate a bug in a bundled grammar or query.
 #[derive(Debug, Error)]

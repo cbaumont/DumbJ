@@ -506,3 +506,48 @@ fn kotlin_extensions_and_their_receivers() {
         "an extension the file neither imports nor shares a package with is a guess"
     );
 }
+
+#[test]
+fn kotlin_multiplatform_pairs_are_one_target() {
+    let index = freight_index();
+    let go =
+        |file: &str, snippet: &str| go_in(&freight_root(), &index, &format!("kmp/{file}"), snippet);
+    assert_eq!(
+        go("common/src/Clock.kt", "+ no§w() +"),
+        "Jump Clock.kt:3 now SameFile",
+        "common code sees the `expect` declaration"
+    );
+    assert_eq!(
+        go("common/src/Clock.kt", "no§w(\"utc\")"),
+        "Jump Clock.kt:5 now SameFile",
+        "pairs are matched by signature"
+    );
+    let jvm_name = go("jvm/src/Report.kt", "Zone.na§me");
+    assert_eq!(jvm_name, "Jump Clock.kt:8 Zone.name Scope");
+    assert_eq!(
+        go("jvm/src/Report.kt", "no§w(\"local\")"),
+        "Jump Clock.kt:5 now SamePackage",
+        "a file in a platform source set sees that platform's `actual`"
+    );
+    // Both land in a file called Clock.kt; make sure they are different files.
+    let target = |file: &str, snippet: &str| {
+        let path = freight_root().join("kmp").join(file);
+        let source = std::fs::read_to_string(&path).unwrap();
+        let plain = snippet.replacen('§', "", 1);
+        let offset = source.find(&plain).unwrap() + snippet.find('§').unwrap();
+        let buffer = Buffer::new(&source);
+        let tree = parse(Language::Kotlin, &buffer, || false).unwrap().unwrap();
+        let site = Site {
+            index: &index,
+            file: index.file_by_path(&path).unwrap(),
+            tree: &tree,
+            buffer: &buffer,
+        };
+        let resolution = resolve(site, ByteOffset(offset)).unwrap();
+        assert_eq!(resolution.decision, Decision::Jump);
+        resolution.targets[0].path.clone()
+    };
+    assert!(target("common/src/Clock.kt", "+ no§w() +").ends_with("common/src/Clock.kt"));
+    assert!(target("jvm/src/Report.kt", "no§w(\"local\")").ends_with("jvm/src/Clock.kt"));
+    assert!(target("jvm/src/Report.kt", "Zone.na§me").ends_with("jvm/src/Clock.kt"));
+}

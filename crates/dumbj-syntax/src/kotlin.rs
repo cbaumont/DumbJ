@@ -5,7 +5,7 @@ use tree_sitter::Node;
 
 use crate::reference::{Argument, Binder, Call, Qualifier, ReferenceRole, qualifier_from_text};
 use crate::structure::{
-    Collector, Import, Parameter, Source, SymbolKind, all_children, child_of_kind,
+    Collector, Import, Parameter, Platform, Source, SymbolKind, all_children, child_of_kind,
     is_type_parameter, named_children,
 };
 
@@ -183,6 +183,8 @@ fn collect_type(
         let parameters = primary.or_else(|| (!has_secondary).then(Vec::new));
         collector.set_parameters(index, parameters);
     }
+    // Before the members are walked: they inherit `expect` from the type.
+    mark_platform(collector, node, parent, index);
     for child in named_children(node) {
         match child.kind() {
             "primary_constructor" => {
@@ -204,8 +206,47 @@ fn collect_type(
     }
 }
 
+/// Marks the symbols added since `first` that `declaration` declares as `expect` or
+/// `actual`. Members of an `expect` type are `expect` without saying so.
+fn mark_platform(
+    collector: &mut Collector<'_>,
+    declaration: Node<'_>,
+    parent: Option<usize>,
+    first: usize,
+) {
+    let inherited = parent
+        .and_then(|parent| collector.facts.symbols.get(parent))
+        .and_then(|parent| parent.platform)
+        .filter(|platform| *platform == Platform::Expect);
+    let platform = if has_modifier(collector, declaration, "expect") {
+        Some(Platform::Expect)
+    } else if has_modifier(collector, declaration, "actual") {
+        Some(Platform::Actual)
+    } else {
+        inherited
+    };
+    // Only the declaration's own symbols: its members are marked when they are walked,
+    // which happens after this for types because `collect_type` marks before descending.
+    for symbol in collector.facts.symbols.iter_mut().skip(first) {
+        if symbol.parent == parent {
+            symbol.platform = platform;
+        }
+    }
+}
+
 /// Walks `node` and records the declarations below it.
 pub(crate) fn collect(collector: &mut Collector<'_>, node: Node<'_>, parent: Option<usize>) {
+    let first = collector.facts.symbols.len();
+    collect_declaration(collector, node, parent);
+    if matches!(
+        node.kind(),
+        "function_declaration" | "property_declaration" | "secondary_constructor"
+    ) {
+        mark_platform(collector, node, parent, first);
+    }
+}
+
+fn collect_declaration(collector: &mut Collector<'_>, node: Node<'_>, parent: Option<usize>) {
     match node.kind() {
         "package_header" => {
             collector.facts.package = child_of_kind(node, "identifier").map(|path| {

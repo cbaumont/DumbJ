@@ -136,6 +136,17 @@ pub struct Symbol {
     /// of a Kotlin class (empty when the class declares no constructor at all). `None`
     /// for everything that cannot be called as written.
     pub parameters: Option<Vec<Parameter>>,
+    /// Which side of a Kotlin multiplatform `expect`/`actual` pair this is, if any.
+    pub platform: Option<Platform>,
+}
+
+/// A side of a Kotlin multiplatform declaration pair.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Platform {
+    /// `expect`: the declaration common code sees. Members of an `expect` type are too.
+    Expect,
+    /// `actual`: the implementation in one platform's source set.
+    Actual,
 }
 
 /// One parameter of a callable.
@@ -282,6 +293,7 @@ impl Collector<'_> {
             receiver: None,
             type_name: None,
             parameters: None,
+            platform: None,
         });
         self.facts.symbols.len() - 1
     }

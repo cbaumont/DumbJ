@@ -33,3 +33,6 @@ import com.example.Other as Alias -> Some("Alias")
 39:7 Class Multi
 40:5 Constructor Multi.Multi(a: Int)
 41:5 Constructor Multi.Multi(*names: String, block: ? =)
+44:14 expect Class Plat()
+45:9 expect Method Plat.go()
+48:12 actual Function act()

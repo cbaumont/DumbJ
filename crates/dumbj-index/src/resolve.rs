@@ -11,8 +11,8 @@ use std::collections::HashSet;
 use std::path::PathBuf;
 
 use dumbj_syntax::{
-    Argument, FileFacts, Language, LocalDefinition, Parameter, Qualifier, Reference, ReferenceRole,
-    Symbol, SymbolKind, SyntaxTree,
+    Argument, FileFacts, Language, LocalDefinition, Parameter, Platform, Qualifier, Reference,
+    ReferenceRole, Symbol, SymbolKind, SyntaxTree,
 };
 use dumbj_text::{Buffer, ByteOffset, ByteRange};
 
@@ -1000,7 +1000,80 @@ impl Lookup<'_> {
         if let Some(call) = call.as_ref().filter(|_| found.local.is_none()) {
             self.select_overload(&mut found, call);
         }
+        self.select_platform(&mut found);
         found
+    }
+
+    /// The source set directory of `path` as seen from `other`: the path up to and
+    /// including the first directory where the two part ways (`core/jvm` for
+    /// `core/jvm/src/A.kt` against `core/common/src/A.kt`).
+    fn source_set<'p>(path: &'p str, other: &str) -> &'p str {
+        let shared: usize = path
+            .split('/')
+            .zip(other.split('/'))
+            .take_while(|(a, b)| a == b)
+            .map(|(part, _)| part.len() + 1)
+            .sum();
+        let end = path
+            .get(shared..)
+            .and_then(|rest| rest.find('/'))
+            .map_or(path.len(), |slash| shared + slash);
+        path.get(..end).unwrap_or(path)
+    }
+
+    /// Collapses a Kotlin multiplatform declaration and its implementations into one
+    /// target: the `actual` in the source set the reference is written in, otherwise the
+    /// `expect`, which is the declaration common code compiles against.
+    fn select_platform(&self, found: &mut Found) {
+        let platform = |id: SymbolId| self.resolver.symbol(id).and_then(|s| s.platform);
+        let relative = |id: SymbolId| {
+            self.site
+                .index
+                .file(id.file)
+                .map_or("", |file| file.relative.as_str())
+        };
+        // Declarations pair up by qualified name and signature.
+        let signature = |id: SymbolId| {
+            let symbol = self.resolver.symbol(id);
+            let parameters: Option<Vec<Option<&str>>> = symbol
+                .and_then(|symbol| symbol.parameters.as_ref())
+                .map(|all| all.iter().map(|p| p.type_name.as_deref()).collect());
+            (
+                self.site.index.fqn(id),
+                symbol.and_then(|symbol| symbol.receiver.as_deref()),
+                parameters,
+            )
+        };
+        let expects: Vec<SymbolId> = found
+            .ranked
+            .iter()
+            .map(|(id, _)| *id)
+            .filter(|id| platform(*id) == Some(Platform::Expect))
+            .collect();
+        let here = self
+            .site
+            .index
+            .file(self.site.file)
+            .map_or("", |file| file.relative.as_str());
+        for expect in expects {
+            let key = signature(expect);
+            let actuals: Vec<SymbolId> = found
+                .ranked
+                .iter()
+                .map(|(id, _)| *id)
+                .filter(|id| platform(*id) == Some(Platform::Actual) && signature(*id) == key)
+                .collect();
+            // The implementation for the platform this file is compiled for, if any.
+            let local = actuals.iter().copied().find(|actual| {
+                let source_set = Self::source_set(relative(*actual), relative(expect));
+                here.strip_prefix(source_set)
+                    .is_some_and(|rest| rest.starts_with('/'))
+            });
+            let keep = local.unwrap_or(expect);
+            found
+                .ranked
+                .retain(|(id, _)| *id == keep || (*id != expect && !actuals.contains(id)));
+        }
     }
 
     fn find_unqualified(&self, query: Query<'_>, applicable: &dyn Fn(SymbolId) -> bool) -> Found {

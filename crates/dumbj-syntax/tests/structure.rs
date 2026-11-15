@@ -8,7 +8,7 @@
 use std::fmt::Write as _;
 use std::path::Path;
 
-use dumbj_syntax::{FileFacts, Language, SymbolKind, parse};
+use dumbj_syntax::{FileFacts, Language, Platform, SymbolKind, parse};
 use dumbj_text::Buffer;
 
 fn facts_of(language: Language, source: &str) -> (Buffer, FileFacts) {
@@ -89,9 +89,14 @@ fn render(name: &str) -> String {
         });
         writeln!(
             out,
-            "{}:{} {:?} {}{parameters}{supers}{receiver}{type_name}",
+            "{}:{} {}{:?} {}{parameters}{supers}{receiver}{type_name}",
             point.line.display_number(),
             point.column + 1,
+            match symbol.platform {
+                Some(Platform::Expect) => "expect ",
+                Some(Platform::Actual) => "actual ",
+                None => "",
+            },
             symbol.kind,
             facts.qualified_name(index),
         )
