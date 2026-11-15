@@ -181,7 +181,12 @@ impl Workspace {
     }
 
     /// Jumps to `to` and remembers where the user came from.
-    fn navigate_to(&mut self, to: Location, window: &mut Window, cx: &mut Context<Self>) {
+    pub(super) fn navigate_to(
+        &mut self,
+        to: Location,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         if let Some(from) = self.current_location(cx) {
             self.history.record_jump(from, to.clone());
         }

@@ -153,12 +153,14 @@ fn default_linux_bindings_dispatch() {
         dispatcher.mouse_down(click("ctrl button1"), |_| false),
         None
     );
-    // Nothing in M0 is bound to double Shift, so it must not fire.
+    // Double Shift: Search Everywhere fires on the second release.
     let now = std::time::Instant::now();
     let shift = Modifiers::only(Modifier::Shift);
-    for modifiers in [shift, Modifiers::NONE, shift, Modifiers::NONE] {
-        assert_eq!(dispatcher.modifiers_changed(modifiers, now, |_| true), None);
-    }
+    let fired: Vec<_> = [shift, Modifiers::NONE, shift, Modifiers::NONE]
+        .into_iter()
+        .map(|modifiers| dispatcher.modifiers_changed(modifiers, now, |_| true))
+        .collect();
+    assert_eq!(fired, [None, None, None, Some(Action::SearchEverywhere)]);
 }
 
 /// `docs/KEYMAP.md` is generated. Regenerate it with

@@ -20,6 +20,11 @@ Linux uses the `macOS For All` keymap and macOS uses IntelliJ's `Mac OS X 10.5+`
 | Go to Declaration | `navigate.goto-declaration` | `GotoDeclaration` | `Ctrl+B` / `Ctrl+Click` | `⌘B` / `⌘Click` / `Middle Click` |
 | Back | `navigate.back` | `Back` | `Ctrl+Alt+Left` / `Ctrl+[` / `Mouse Back` | `⌘[` / `⌥⌘Left` / `Mouse Back` |
 | Forward | `navigate.forward` | `Forward` | `Ctrl+Alt+Right` / `Ctrl+]` / `Mouse Forward` | `⌘]` / `⌥⌘Right` / `Mouse Forward` |
+| Search Everywhere | `navigate.search-everywhere` | `SearchEverywhere` | `Shift Shift` | `Shift Shift` |
+| Go to Class… | `navigate.goto-class` | `GotoClass` | `Ctrl+O` | `⌘O` |
+| Go to File… | `navigate.goto-file` | `GotoFile` | `Ctrl+Shift+O` | `⇧⌘O` |
+| Go to Symbol… | `navigate.goto-symbol` | `GotoSymbol` | `Ctrl+Alt+O` | `⌥⌘O` |
+| File Structure | `navigate.file-structure` | `FileStructurePopup` | `Ctrl+F12` | `⌘F12` |
 | Move Caret Left | `text.move-left` | `EditorLeft` | `Left` | `Left` / `⌃B` |
 | Move Caret Right | `text.move-right` | `EditorRight` | `Right` | `Right` / `⌃F` |
 | Move Caret Up | `text.move-up` | `EditorUp` | `Up` | `Up` / `⌃P` |
@@ -50,5 +55,6 @@ Linux uses the `macOS For All` keymap and macOS uses IntelliJ's `Mac OS X 10.5+`
 | Paste | `text.paste` | `$Paste` | `Ctrl+V` / `Shift+Insert` | `⌘V` / `⇧Insert` |
 | Backspace | `text.backspace` | `EditorBackSpace` | `Backspace` / `Shift+Backspace` | `Backspace` / `⇧Backspace` |
 | Delete | `text.delete` | `EditorDelete` | `Delete` | `Delete` |
+| Tab | `text.tab` | `EditorTab` | `Tab` | `Tab` |
 | Enter | `text.enter` | `EditorEnter` | `Enter` | `Enter` |
 | Escape | `text.escape` | `EditorEscape` | `Esc` | `Esc` |

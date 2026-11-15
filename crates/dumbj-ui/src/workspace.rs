@@ -21,8 +21,11 @@ use crate::text_input::{TextChanged, TextInput};
 use crate::theme;
 
 mod navigation;
+mod search_popup;
 
+use dumbj_index::SearchScope;
 use navigation::{Chooser, Indexing, NavigationHistory};
+use search_popup::{SearchMode, SearchPopup};
 
 const HEADER_HEIGHT: Pixels = px(40.);
 const STRIPE_WIDTH: Pixels = px(40.);
@@ -57,6 +60,7 @@ enum ToolWindowState {
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum FocusArea {
     Chooser,
+    Search,
     GotoLine,
     Find,
     Tree,
@@ -82,6 +86,8 @@ pub(crate) struct Workspace {
     indexing: Option<Indexing>,
     history: NavigationHistory,
     chooser: Option<Chooser>,
+    search_input: Entity<TextInput>,
+    search: Option<SearchPopup>,
     /// A one-off notice in the status bar, cleared by the next action.
     status_message: Option<String>,
     subscriptions: Vec<Subscription>,
@@ -142,6 +148,10 @@ impl Workspace {
     fn new(bindings: Bindings, shortcut_style: ShortcutStyle, cx: &mut Context<Self>) -> Self {
         let find = cx.new(|cx| TextInput::new("Search", cx));
         let goto_line = cx.new(|cx| TextInput::new("Line:Column", cx));
+        let search_input = cx.new(|cx| TextInput::new("Search", cx));
+        let on_search_changed = cx.subscribe(&search_input, |this, _, _: &TextChanged, cx| {
+            this.run_search(cx);
+        });
         let on_find_changed = cx.subscribe(&find, |this, find, _: &TextChanged, cx| {
             let query = find.read(cx).text().to_owned();
             if let Some(editor) = this.active_editor() {
@@ -165,8 +175,10 @@ impl Workspace {
             indexing: None,
             history: NavigationHistory::default(),
             chooser: None,
+            search_input,
+            search: None,
             status_message: None,
-            subscriptions: vec![on_find_changed],
+            subscriptions: vec![on_find_changed, on_search_changed],
         }
     }
 
@@ -192,6 +204,8 @@ impl Workspace {
             .is_some_and(|tab| tab.editor.read(cx).focus_handle().is_focused(window));
         if self.chooser.is_some() {
             FocusArea::Chooser
+        } else if self.search.is_some() {
+            FocusArea::Search
         } else if self.goto_line_open && self.goto_line.read(cx).focus_handle().is_focused(window) {
             FocusArea::GotoLine
         } else if self.find_open && self.find.read(cx).focus_handle().is_focused(window) {
@@ -382,7 +396,10 @@ impl Workspace {
     /// shortcut falls through to text input.
     fn is_enabled(&self, action: Action, window: &Window, cx: &App) -> bool {
         let has_editor = self.active.is_some();
-        let popup_open = self.goto_line_open || self.chooser.is_some();
+        // The search actions stay available while the search popup is open, so that
+        // pressing another one switches its scope.
+        let other_popup = self.goto_line_open || self.chooser.is_some();
+        let popup_open = other_popup || self.search.is_some();
         match action {
             Action::OpenFolder => !popup_open,
             Action::CloseTab => has_editor && !popup_open,
@@ -390,6 +407,11 @@ impl Workspace {
             Action::ActivateProjectToolWindow | Action::HideAllToolWindows => {
                 self.project.is_some() && !popup_open
             }
+            Action::SearchEverywhere
+            | Action::GotoClass
+            | Action::GotoFile
+            | Action::GotoSymbol => self.index.is_some() && !other_popup,
+            Action::FileStructure => has_editor && self.index.is_some() && !other_popup,
             Action::GotoDeclaration => has_editor && self.index.is_some() && !popup_open,
             Action::Back => self.history.can_go_back() && !popup_open,
             Action::Forward => self.history.can_go_forward() && !popup_open,
@@ -418,6 +440,19 @@ impl Workspace {
         tracing::debug!(%action, "perform");
         self.status_message = None;
         match action {
+            Action::SearchEverywhere => {
+                self.open_search(SearchMode::Project(SearchScope::All), window, cx);
+            }
+            Action::GotoClass => {
+                self.open_search(SearchMode::Project(SearchScope::Classes), window, cx);
+            }
+            Action::GotoFile => {
+                self.open_search(SearchMode::Project(SearchScope::Files), window, cx);
+            }
+            Action::GotoSymbol => {
+                self.open_search(SearchMode::Project(SearchScope::Symbols), window, cx);
+            }
+            Action::FileStructure => self.open_file_structure(window, cx),
             Action::GotoDeclaration => self.goto_declaration(window, cx),
             Action::Back => self.go_back(window, cx),
             Action::Forward => self.go_forward(window, cx),
@@ -507,6 +542,7 @@ impl Workspace {
     fn perform_in_focus(&mut self, action: Action, window: &mut Window, cx: &mut Context<Self>) {
         match self.focus_area(window, cx) {
             FocusArea::Chooser => self.chooser_action(action, window, cx),
+            FocusArea::Search => self.search_action(action, window, cx),
             FocusArea::GotoLine => match action {
                 Action::Enter => self.submit_goto_line(window, cx),
                 Action::Escape => {
@@ -1074,9 +1110,10 @@ impl Render for Workspace {
             .children(stripe)
             .children(project_window)
             .child(self.render_editor_area(cx));
-        let popup = match &self.chooser {
-            Some(chooser) => Some(Self::render_chooser(chooser, cx).into_any_element()),
-            None => self
+        let popup = match (&self.chooser, &self.search) {
+            (Some(chooser), _) => Some(Self::render_chooser(chooser, cx).into_any_element()),
+            (None, Some(search)) => Some(self.render_search(search, cx).into_any_element()),
+            (None, None) => self
                 .goto_line_open
                 .then(|| self.render_goto_line_popup(cx).into_any_element()),
         };
