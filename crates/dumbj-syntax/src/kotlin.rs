@@ -206,6 +206,37 @@ fn collect_type(
     }
 }
 
+/// The name in a `@JvmName("…")` among `annotations`, which are `annotation` or
+/// `file_annotation` nodes; `target` is the use-site target it must have (`get`), if any.
+fn jvm_name(source: &Source<'_>, annotations: &[Node<'_>], target: Option<&str>) -> Option<String> {
+    annotations.iter().find_map(|annotation| {
+        let site = child_of_kind(*annotation, "use_site_target")
+            .map(|site| source.text(site).trim_end_matches(':').trim().to_owned());
+        if site.as_deref() != target && annotation.kind() != "file_annotation" {
+            return None;
+        }
+        let invocation = child_of_kind(*annotation, "constructor_invocation")?;
+        let user_type = child_of_kind(invocation, "user_type")?;
+        let named = user_type_name(source, user_type);
+        if named.rsplit('.').next() != Some("JvmName") {
+            return None;
+        }
+        let arguments = child_of_kind(invocation, "value_arguments")?;
+        let literal = named_children(arguments)
+            .into_iter()
+            .find_map(|argument| child_of_kind(argument, "string_literal"))?;
+        child_of_kind(literal, "string_content").map(|content| source.text(content))
+    })
+}
+
+fn annotations_of(node: Node<'_>) -> Vec<Node<'_>> {
+    child_of_kind(node, "modifiers")
+        .map_or_else(Vec::new, named_children)
+        .into_iter()
+        .filter(|child| child.kind() == "annotation")
+        .collect()
+}
+
 /// Marks the symbols added since `first` that `declaration` declares as `expect` or
 /// `actual`. Members of an `expect` type are `expect` without saying so.
 fn mark_platform(
@@ -246,6 +277,55 @@ pub(crate) fn collect(collector: &mut Collector<'_>, node: Node<'_>, parent: Opt
     }
 }
 
+fn collect_function(collector: &mut Collector<'_>, node: Node<'_>, parent: Option<usize>) {
+    if let Some(name) = child_of_kind(node, "simple_identifier") {
+        let kind = if parent.is_some() {
+            SymbolKind::Method
+        } else {
+            SymbolKind::Function
+        };
+        let index = collector.push(kind, node, name, parent);
+        let receiver = receiver(collector, node);
+        // The return type is the type written directly in the declaration; the
+        // receiver's type sits inside `receiver_type` and is not picked up here.
+        let type_name = declared_type(&collector.source, node);
+        let parameters = child_of_kind(node, "function_value_parameters")
+            .map(|list| function_parameters(&collector.source, list));
+        let renamed = jvm_name(&collector.source, &annotations_of(node), None);
+        if let Some(symbol) = collector.facts.symbols.get_mut(index) {
+            symbol.receiver = receiver;
+            symbol.type_name = type_name;
+            symbol.parameters = parameters;
+            symbol.jvm_name = renamed;
+        }
+    }
+}
+
+fn collect_property(collector: &mut Collector<'_>, node: Node<'_>, parent: Option<usize>) {
+    let receiver = receiver(collector, node);
+    let constructed = constructed_type(&collector.source, node);
+    let getter = jvm_name(&collector.source, &annotations_of(node), Some("get"));
+    let declarations = named_children(node)
+        .into_iter()
+        .flat_map(|child| match child.kind() {
+            "variable_declaration" => vec![child],
+            "multi_variable_declaration" => named_children(child),
+            _ => Vec::new(),
+        });
+    for declaration in declarations.collect::<Vec<_>>() {
+        if let Some(name) = child_of_kind(declaration, "simple_identifier") {
+            let index = collector.push(SymbolKind::Property, node, name, parent);
+            let type_name =
+                declared_type(&collector.source, declaration).or_else(|| constructed.clone());
+            if let Some(symbol) = collector.facts.symbols.get_mut(index) {
+                symbol.receiver.clone_from(&receiver);
+                symbol.type_name = type_name;
+                symbol.jvm_name.clone_from(&getter);
+            }
+        }
+    }
+}
+
 fn collect_declaration(collector: &mut Collector<'_>, node: Node<'_>, parent: Option<usize>) {
     match node.kind() {
         "package_header" => {
@@ -268,55 +348,18 @@ fn collect_declaration(collector: &mut Collector<'_>, node: Node<'_>, parent: Op
         }
         "object_declaration" => collect_type(collector, node, SymbolKind::Object, parent),
         "companion_object" => collect_type(collector, node, SymbolKind::Companion, parent),
+        "file_annotation" => {
+            if let Some(name) = jvm_name(&collector.source, &[node], None) {
+                collector.facts.jvm_name = Some(name);
+            }
+        }
         "type_alias" => {
             if let Some(name) = child_of_kind(node, "type_identifier") {
                 collector.push(SymbolKind::TypeAlias, node, name, parent);
             }
         }
-        "function_declaration" => {
-            if let Some(name) = child_of_kind(node, "simple_identifier") {
-                let kind = if parent.is_some() {
-                    SymbolKind::Method
-                } else {
-                    SymbolKind::Function
-                };
-                let index = collector.push(kind, node, name, parent);
-                let receiver = receiver(collector, node);
-                // The return type is the type written directly in the declaration; the
-                // receiver's type sits inside `receiver_type` and is not picked up here.
-                let type_name = declared_type(&collector.source, node);
-                let parameters = child_of_kind(node, "function_value_parameters")
-                    .map(|list| function_parameters(&collector.source, list));
-                if let Some(symbol) = collector.facts.symbols.get_mut(index) {
-                    symbol.receiver = receiver;
-                    symbol.type_name = type_name;
-                    symbol.parameters = parameters;
-                }
-            }
-        }
-        "property_declaration" => {
-            let receiver = receiver(collector, node);
-            let constructed = constructed_type(&collector.source, node);
-            let declarations =
-                named_children(node)
-                    .into_iter()
-                    .flat_map(|child| match child.kind() {
-                        "variable_declaration" => vec![child],
-                        "multi_variable_declaration" => named_children(child),
-                        _ => Vec::new(),
-                    });
-            for declaration in declarations.collect::<Vec<_>>() {
-                if let Some(name) = child_of_kind(declaration, "simple_identifier") {
-                    let index = collector.push(SymbolKind::Property, node, name, parent);
-                    let type_name = declared_type(&collector.source, declaration)
-                        .or_else(|| constructed.clone());
-                    if let Some(symbol) = collector.facts.symbols.get_mut(index) {
-                        symbol.receiver.clone_from(&receiver);
-                        symbol.type_name = type_name;
-                    }
-                }
-            }
-        }
+        "function_declaration" => collect_function(collector, node, parent),
+        "property_declaration" => collect_property(collector, node, parent),
         "enum_entry" => {
             if let Some(name) = child_of_kind(node, "simple_identifier") {
                 collector.push(SymbolKind::EnumConstant, node, name, parent);

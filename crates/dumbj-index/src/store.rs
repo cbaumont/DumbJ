@@ -13,7 +13,7 @@ use rusqlite::{Connection, params};
 
 use crate::index::IndexedFile;
 
-const SCHEMA_VERSION: i64 = 8;
+const SCHEMA_VERSION: i64 = 9;
 
 const SCHEMA: &str = "
 CREATE TABLE files (
@@ -22,7 +22,8 @@ CREATE TABLE files (
     mtime_ns INTEGER NOT NULL,
     size INTEGER NOT NULL,
     language TEXT,
-    package TEXT
+    package TEXT,
+    jvm_name TEXT
 );
 CREATE TABLE symbols (
     file_id INTEGER NOT NULL REFERENCES files(id) ON DELETE CASCADE,
@@ -39,6 +40,7 @@ CREATE TABLE symbols (
     supertypes TEXT NOT NULL,
     parameters TEXT,
     platform TEXT,
+    jvm_name TEXT,
     PRIMARY KEY (file_id, idx)
 );
 CREATE INDEX symbols_name ON symbols(name);
@@ -160,9 +162,9 @@ impl IndexStore {
     pub fn load(&self) -> Result<HashMap<String, (FileStamp, StoredFile)>, StoreError> {
         let mut files: HashMap<i64, (String, FileStamp, Option<StoredFile>)> = HashMap::new();
         {
-            let mut statement = self
-                .connection
-                .prepare("SELECT id, path, mtime_ns, size, language, package FROM files")?;
+            let mut statement = self.connection.prepare(
+                "SELECT id, path, mtime_ns, size, language, package, jvm_name FROM files",
+            )?;
             let mut rows = statement.query([])?;
             while let Some(row) = rows.next()? {
                 let id: i64 = row.get(0)?;
@@ -174,6 +176,7 @@ impl IndexStore {
                 };
                 let language: Option<String> = row.get(4)?;
                 let package: Option<String> = row.get(5)?;
+                let jvm_name: Option<String> = row.get(6)?;
                 let language = match language {
                     None => Some(None),
                     Some(id) => Language::from_id(&id).map(Some),
@@ -182,6 +185,7 @@ impl IndexStore {
                     language,
                     facts: FileFacts {
                         package,
+                        jvm_name,
                         ..FileFacts::default()
                     },
                 });
@@ -191,45 +195,19 @@ impl IndexStore {
         {
             let mut statement = self.connection.prepare(
                 "SELECT file_id, name, kind, range_start, range_end, name_start, name_end,
-                        parent, receiver, type_name, supertypes, parameters, platform
+                        parent, receiver, type_name, supertypes, parameters, platform,
+                        jvm_name
                  FROM symbols ORDER BY file_id, idx",
             )?;
             let mut rows = statement.query([])?;
             while let Some(row) = rows.next()? {
                 let file_id: i64 = row.get(0)?;
-                let kind: String = row.get(2)?;
-                let supertypes: String = row.get(10)?;
-                let parameters: Option<String> = row.get(11)?;
-                let platform: Option<String> = row.get(12)?;
-                let symbol = SymbolKind::from_name(&kind).map(|kind| {
-                    Ok::<_, rusqlite::Error>(Symbol {
-                        name: row.get(1)?,
-                        kind,
-                        range: offset(row.get(3)?)..offset(row.get(4)?),
-                        name_range: offset(row.get(5)?)..offset(row.get(6)?),
-                        parent: row
-                            .get::<_, Option<i64>>(7)?
-                            .and_then(|parent| usize::try_from(parent).ok()),
-                        supertypes: supertypes
-                            .split('\n')
-                            .filter(|name| !name.is_empty())
-                            .map(str::to_owned)
-                            .collect(),
-                        receiver: row.get(8)?,
-                        type_name: row.get(9)?,
-                        parameters: parameters.as_deref().map(decode_parameters),
-                        platform: match platform.as_deref() {
-                            Some("expect") => Some(Platform::Expect),
-                            Some("actual") => Some(Platform::Actual),
-                            _ => None,
-                        },
-                    })
-                });
+                let symbol = symbol_from_row(row)?;
                 let Some(entry) = files.get_mut(&file_id) else {
                     continue;
                 };
                 match (symbol, entry.2.as_mut()) {
-                    (Some(symbol), Some(stored)) => stored.facts.symbols.push(symbol?),
+                    (Some(symbol), Some(stored)) => stored.facts.symbols.push(symbol),
                     _ => entry.2 = None,
                 }
             }
@@ -270,14 +248,14 @@ impl IndexStore {
                 delete.execute([path])?;
             }
             let mut insert_file = transaction.prepare_cached(
-                "INSERT INTO files (path, mtime_ns, size, language, package)
-                 VALUES (?1, ?2, ?3, ?4, ?5)",
+                "INSERT INTO files (path, mtime_ns, size, language, package, jvm_name)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             )?;
             let mut insert_symbol = transaction.prepare_cached(
                 "INSERT INTO symbols (file_id, idx, name, kind, range_start, range_end,
                                       name_start, name_end, parent, receiver, type_name,
-                                      supertypes, parameters, platform)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
+                                      supertypes, parameters, platform, jvm_name)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
             )?;
             let mut insert_import = transaction.prepare_cached(
                 "INSERT INTO imports (file_id, idx, path, wildcard, is_static, alias)
@@ -291,6 +269,7 @@ impl IndexStore {
                     i64::try_from(stamp.size).unwrap_or(i64::MAX),
                     file.language.map(Language::as_str),
                     file.facts.package,
+                    file.facts.jvm_name,
                 ])?;
                 let file_id = transaction.last_insert_rowid();
                 for (idx, symbol) in file.facts.symbols.iter().enumerate() {
@@ -312,6 +291,7 @@ impl IndexStore {
                             Platform::Expect => "expect",
                             Platform::Actual => "actual",
                         }),
+                        symbol.jvm_name,
                     ])?;
                 }
                 for (idx, import) in file.facts.imports.iter().enumerate() {
@@ -336,6 +316,40 @@ impl IndexStore {
             .query_row("SELECT count(*) FROM files", [], |row| row.get(0))?;
         Ok(usize::try_from(count).unwrap_or(0))
     }
+}
+
+/// `None` for a kind this version does not know, which makes the file parse again.
+fn symbol_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Option<Symbol>> {
+    let kind: String = row.get(2)?;
+    let Some(kind) = SymbolKind::from_name(&kind) else {
+        return Ok(None);
+    };
+    let supertypes: String = row.get(10)?;
+    let parameters: Option<String> = row.get(11)?;
+    let platform: Option<String> = row.get(12)?;
+    Ok(Some(Symbol {
+        name: row.get(1)?,
+        kind,
+        range: offset(row.get(3)?)..offset(row.get(4)?),
+        name_range: offset(row.get(5)?)..offset(row.get(6)?),
+        parent: row
+            .get::<_, Option<i64>>(7)?
+            .and_then(|parent| usize::try_from(parent).ok()),
+        supertypes: supertypes
+            .split('\n')
+            .filter(|name| !name.is_empty())
+            .map(str::to_owned)
+            .collect(),
+        receiver: row.get(8)?,
+        type_name: row.get(9)?,
+        parameters: parameters.as_deref().map(decode_parameters),
+        platform: match platform.as_deref() {
+            Some("expect") => Some(Platform::Expect),
+            Some("actual") => Some(Platform::Actual),
+            _ => None,
+        },
+        jvm_name: row.get(13)?,
+    }))
 }
 
 /// One parameter per line as `name<TAB>type<TAB>flags`: `o` for optional, `v` for

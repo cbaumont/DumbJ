@@ -523,10 +523,12 @@ mod tests {
             type_name: None,
             parameters: None,
             platform: None,
+            jvm_name: None,
         };
         let facts = FileFacts {
             package: Some("com.shop".to_owned()),
             imports: Vec::new(),
+            jvm_name: None,
             symbols: vec![
                 symbol("Cart", SymbolKind::Class, None),
                 symbol("total", SymbolKind::Field, Some(0)),

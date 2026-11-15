@@ -170,6 +170,8 @@ pub struct Symbol {
     pub parameters: Option<Vec<Parameter>>,
     /// Which side of a Kotlin multiplatform `expect`/`actual` pair this is, if any.
     pub platform: Option<Platform>,
+    /// The JVM name from `@JvmName` (a function) or `@get:JvmName` (a property's getter).
+    pub jvm_name: Option<String>,
 }
 
 /// A side of a Kotlin multiplatform declaration pair.
@@ -226,6 +228,8 @@ pub struct FileFacts {
     pub imports: Vec<Import>,
     /// Declarations in source order; a parent always comes before its children.
     pub symbols: Vec<Symbol>,
+    /// The facade class name from `@file:JvmName`.
+    pub jvm_name: Option<String>,
 }
 
 impl FileFacts {
@@ -355,6 +359,7 @@ impl Collector<'_> {
             type_name: None,
             parameters: None,
             platform: None,
+            jvm_name: None,
         });
         self.facts.symbols.len() - 1
     }

@@ -34,6 +34,8 @@ pub struct Index {
     modules: Vec<Option<ModuleId>>,
     /// Each type's direct subtypes, worked out on first use (see `hierarchy`).
     pub(crate) subtypes: OnceLock<HashMap<SymbolId, Vec<SymbolId>>>,
+    /// Kotlin files by their facade class name (`ShippingKt`, or `@file:JvmName`).
+    pub(crate) facades: OnceLock<HashMap<String, Vec<FileId>>>,
 }
 
 fn to_u32(value: usize) -> u32 {

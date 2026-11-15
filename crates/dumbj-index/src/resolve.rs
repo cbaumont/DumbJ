@@ -301,8 +301,7 @@ impl<'a> Resolver<'a> {
         role: ReferenceRole,
         applicable: &dyn Fn(SymbolId) -> bool,
     ) -> Vec<SymbolId> {
-        let fits =
-            |symbol: &Symbol| symbol.name == name && kind_fits(symbol.kind, role, self.language);
+        let fits = |symbol: &Symbol| fits_reference(symbol, name, role, self.language);
         let mut nearest = Vec::new();
         for type_id in self.with_supertypes(owner) {
             // Record components are also accessor methods.
@@ -362,6 +361,16 @@ impl<'a> Resolver<'a> {
 
 fn any_member(_: SymbolId) -> bool {
     true
+}
+
+/// Java also calls a Kotlin function by its `@JvmName` and a property's getter by its
+/// `@get:JvmName`.
+fn fits_reference(symbol: &Symbol, name: &str, role: ReferenceRole, language: Language) -> bool {
+    let renamed = language == Language::Java
+        && role == ReferenceRole::Call
+        && symbol.jvm_name.as_deref() == Some(name)
+        && (symbol.kind.is_callable() || symbol.kind == SymbolKind::Property);
+    renamed || (symbol.name == name && kind_fits(symbol.kind, role, language))
 }
 
 fn capitalise(name: &str) -> String {
@@ -446,6 +455,9 @@ pub(crate) fn accessor_aliases(name: &str, kind: SymbolKind) -> Vec<String> {
 /// The JVM class name of a Kotlin file's top-level declarations: `ShippingKt` for
 /// `Shipping.kt`, unless `@file:JvmName` says otherwise.
 fn facade_name(file: &crate::index::IndexedFile) -> Option<String> {
+    if let Some(name) = &file.facts.jvm_name {
+        return Some(name.clone());
+    }
     let stem = file.path.file_stem()?.to_str()?;
     let identifier: String = stem
         .chars()
@@ -1032,18 +1044,28 @@ impl Lookup<'_> {
     /// Kotlin files whose facade class is called `name`, narrowed to those the reference
     /// file imports or shares a package with when there are any.
     fn facade_files(&self, name: &str) -> Vec<crate::index::FileId> {
-        if !name.ends_with("Kt") {
-            return Vec::new();
-        }
         let index = self.site.index;
-        let all: Vec<crate::index::FileId> = index
-            .files()
-            .filter(|(_, file)| {
-                file.language == Some(Language::Kotlin)
-                    && facade_name(file).as_deref() == Some(name)
-            })
-            .map(|(id, _)| id)
-            .collect();
+        let facades = index.facades.get_or_init(|| {
+            let mut map: std::collections::HashMap<String, Vec<crate::index::FileId>> =
+                std::collections::HashMap::new();
+            for (id, file) in index.files() {
+                let has_top_level = file
+                    .facts
+                    .symbols
+                    .iter()
+                    .any(|symbol| symbol.parent.is_none() && !symbol.kind.is_type());
+                if file.language == Some(Language::Kotlin)
+                    && has_top_level
+                    && let Some(facade) = facade_name(file)
+                {
+                    map.entry(facade).or_default().push(id);
+                }
+            }
+            map
+        });
+        let Some(all) = facades.get(name).cloned() else {
+            return Vec::new();
+        };
         let here = self.resolver.facts(self.site.file);
         let own_package = here
             .and_then(|facts| facts.package.as_deref())
@@ -1080,11 +1102,30 @@ impl Lookup<'_> {
         name: &str,
         role: ReferenceRole,
     ) -> Vec<SymbolId> {
+        let language = self.resolver.language;
         let lookup = |name: &str, role: ReferenceRole| -> Vec<SymbolId> {
-            self.named_candidates(name, role)
-                .into_iter()
-                .filter(|id| files.contains(&id.file) && !self.is_member(*id))
-                .filter(|id| !self.resolver.is_type(*id))
+            files
+                .iter()
+                .filter_map(|file| Some((*file, self.site.index.file(*file)?)))
+                .flat_map(|(file, indexed)| {
+                    indexed.facts.symbols.iter().enumerate().filter_map(
+                        move |(position, symbol)| {
+                            Some((
+                                SymbolId {
+                                    file,
+                                    index: u32::try_from(position).ok()?,
+                                },
+                                symbol,
+                            ))
+                        },
+                    )
+                })
+                .filter(|(_, symbol)| {
+                    symbol.parent.is_none()
+                        && !symbol.kind.is_type()
+                        && fits_reference(symbol, name, role, language)
+                })
+                .map(|(id, _)| id)
                 .collect()
         };
         let found = lookup(name, role);

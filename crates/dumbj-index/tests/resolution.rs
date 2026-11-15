@@ -671,3 +671,26 @@ fn references_outside_the_project_name_library_classes() {
         [target("java.util.List", Some("size"))]
     );
 }
+
+#[test]
+fn java_sees_jvm_names() {
+    let index = freight_index();
+    let go = |snippet: &str| {
+        go_in(
+            &freight_root(),
+            &index,
+            "src/main/java/freight/app/Tariffs.java",
+            snippet,
+        )
+    };
+    assert_eq!(
+        go("RateTables.standard§Rate()"),
+        "Jump Rates.kt:6 standard Scope",
+        "@file:JvmName names the facade, @JvmName the function"
+    );
+    assert_eq!(go("RateTables.isCh§eap()"), "Jump Rates.kt:9 cheap Scope");
+    assert_eq!(
+        go("tariff.isAct§ive()"),
+        "Jump Rates.kt:13 Tariff.active Scope"
+    );
+}
