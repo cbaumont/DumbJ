@@ -1,0 +1,75 @@
+name: Accuracy
+
+# The dumb-mode Go to Declaration benchmark against the pinned open-source corpus
+# (corpus/manifest.toml). It clones four repositories, so it runs nightly and on demand
+# rather than on every push.
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: accuracy
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  benchmark:
+    name: Go to Declaration accuracy
+    runs-on: ubuntu-latest
+    container: fedora:latest
+    steps:
+      # Only the index crate is built, so GPUI's system libraries are not needed.
+      - name: Install system dependencies
+        run: dnf install -y git gcc gcc-c++ clang cmake mold curl
+
+      - uses: actions/checkout@v4
+
+      - name: Install the pinned Rust toolchain
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain none
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+          "$HOME/.cargo/bin/rustup" show
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Restore the corpus
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/dumbj/corpus
+          key: corpus-${{ hashFiles('corpus/manifest.toml') }}
+
+      - name: Fetch the corpus
+        run: scripts/fetch-corpus.sh
+
+      # Fails when a case file is malformed or a repository is missing.
+      - name: Run the benchmark
+        run: |
+          set -o pipefail
+          cargo run --release --locked -p dumbj-index --example accuracy | tee accuracy.txt
+
+      - name: Summarise
+        if: always()
+        run: |
+          {
+            echo '### Go to Declaration accuracy'
+            echo '```'
+            grep -E '^[A-Za-z]' accuracy.txt || true
+            echo '```'
+            echo '<details><summary>Cases that were not correct</summary>'
+            echo
+            echo '```'
+            grep -E '^ ' accuracy.txt || true
+            echo '```'
+            echo '</details>'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # A wrong jump is worse than a chooser (ARCHITECTURE, "Dumb jump rule"): the
+      # benchmark has none, and a new one is a regression.
+      - name: No wrong jumps
+        run: |
+          wrong=$(awk '$1 == "all" { for (i = 1; i < NF; i++) if ($i == "wrong") print $(i + 1) }' accuracy.txt)
+          echo "wrong jumps: ${wrong:-unknown}"
+          test "$wrong" = 0
