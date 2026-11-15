@@ -5,7 +5,16 @@ A fast, native, keyboard-first **code reading and code review editor** with Inte
 Full spec: `docs/BRIEF.md`. Where it conflicts with the Decisions in `docs/ARCHITECTURE.md`, the Decisions win. Read the sections relevant to your current task, not the whole file every time.
 
 ## Current milestone
-M1a: navigation core (see BRIEF §9), **implemented, awaiting review** (review package sent 2026-11-15). M0 was approved on 2026-11-14. Editing lands in M1b. Decisions are in `docs/ARCHITECTURE.md`. Stop after each milestone with a summary, run instructions, test status, known gaps and screenshots, then wait for approval.
+M1b: the rest of M1 (see BRIEF §9), **in progress**. M1a was approved on 2026-11-15 (the nightly accuracy workflow has not yet had a successful run on GitHub: check it). M0 was approved on 2026-11-14. Decisions are in `docs/ARCHITECTURE.md`. Stop after each milestone with a summary, run instructions, test status, known gaps and screenshots, then wait for approval.
+
+M1b phases, in this order (each a series of small commits):
+1. **Hierarchy:** Go to Implementation(s), Go to Super Method, overriding/implementing gutter icons, Type Hierarchy, dumb Call Hierarchy.
+2. **Java↔Kotlin interop:** properties ↔ `getX`/`isX`/`setX`, `FileKt` facades and `@file:JvmName`, `Companion` and `@JvmStatic`/`@JvmField`/`@JvmName`/`@JvmOverloads`, `INSTANCE`; usages across the boundary. Add benchmark cases.
+3. **Library source jars:** the global source-jar class index, read-only viewing inside the jar, "no sources available".
+4. **Editor surface:** folding, sticky lines, Extend/Shrink selection, usage highlighting, scope-aware highlighting.
+5. **Navigation extras:** Find in Files, Recent Files / Recent Locations, Bookmarks.
+6. **Tier 1 support files (BRIEF §5.2):** grammars, highlighting and structure; `libs.versions.toml` navigation.
+7. **Editing** (ARCHITECTURE "Editing lands in M1b"): typing, undo/redo, atomic autosave, reload prompt, index refresh on change.
 
 Accuracy benchmark (2026-11-15): 264 cases, 84.1% correct, 14.4% chooser, 1.5% missed, 0 wrong. Run `scripts/fetch-corpus.sh`, then `cargo run --release -p dumbj-index --example accuracy`; it also runs nightly (`.github/workflows/accuracy.yml`), failing on any wrong jump. Known causes of the remaining choosers, for after the review: lambda parameter types (`it`), indexing (`a[i].b`), smart casts, scope functions (`apply { }`), and Java `Class` arguments not matching a Kotlin `Type` parameter.
 

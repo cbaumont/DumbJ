@@ -1,6 +1,6 @@
 # DumbJ architecture
 
-Status: M0 approved on 2026-11-14. M1a (navigation core) implemented, awaiting review.
+Status: M0 approved on 2026-11-14, M1a (navigation core) on 2026-11-15. M1b in progress.
 
 ## Crate map
 
@@ -167,3 +167,9 @@ An `expect` declaration and its `actual`s count as one target; the `actual` in t
 
 ### 2026-11-15: The nightly benchmark fails on any wrong jump
 `.github/workflows/accuracy.yml` runs the benchmark nightly and on demand, caches the corpus by the hash of `corpus/manifest.toml`, and fails on a malformed case or on any wrong jump. It does not fail on a lower percentage. Why: the jump rule says a wrong jump is worse than none, so one is a regression, while the correct and chooser counts are expected to move as the engine improves.
+
+### 2026-11-15: M1b assumptions
+- Replace in Files edits many files at once, so it waits until editing has settled; M1b ships Find in Files only.
+- Implements/overrides gutter icons and hierarchies are dumb (from supertypes in the index) and labelled best guess; BRIEF §4.2 calls them LSP-backed, but §5.1 puts them in M1, and smart mode replaces them in M4.
+- Bookmarks and recent locations are per-project state in the XDG state directory (decision "Per-project state in XDG dirs"), never inside the repository.
+- If M1b grows past one reviewable milestone, editing (phase 7) is split into its own milestone, as the decision "Editing lands in M1b" allows.
