@@ -79,6 +79,7 @@ fn kind_tag(kind: SymbolKind) -> &'static str {
         SymbolKind::Field => "field",
         SymbolKind::Property => "property",
         SymbolKind::EnumConstant => "constant",
+        SymbolKind::Heading => "heading",
     }
 }
 

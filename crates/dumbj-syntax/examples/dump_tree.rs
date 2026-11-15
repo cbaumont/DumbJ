@@ -49,6 +49,9 @@ fn main() {
         #[cfg(feature = "kotlin-sg")]
         Some("kt" | "kts") => tree_sitter_kotlin_sg::LANGUAGE.into(),
         Some("yaml" | "yml") => tree_sitter_yaml::LANGUAGE.into(),
+        Some("xml") => tree_sitter_xml::LANGUAGE_XML.into(),
+        Some("toml") => tree_sitter_toml_ng::LANGUAGE.into(),
+        Some("md") => tree_sitter_md::LANGUAGE.into(),
         _ => {
             println!("unsupported file type");
             return;

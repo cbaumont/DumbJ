@@ -116,6 +116,11 @@ fn kotlin_structure() {
 }
 
 #[test]
+fn markdown_structure() {
+    insta::assert_snapshot!(render("Structure.md"));
+}
+
+#[test]
 fn declarations_survive_syntax_errors() {
     let (_, facts) = facts_of(
         Language::Java,

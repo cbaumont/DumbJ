@@ -79,6 +79,13 @@ impl Language {
         }
     }
 
+    /// Whether [`crate::SyntaxTree::facts`] reports declarations or entries for this
+    /// language: code, and documents and configuration with a useful outline.
+    #[must_use]
+    pub fn has_structure(self) -> bool {
+        matches!(self, Self::Java | Self::Kotlin | Self::Markdown)
+    }
+
     /// The name shown to the user.
     #[must_use]
     pub fn name(self) -> &'static str {

@@ -89,6 +89,9 @@ pub fn search(
             if poll() {
                 return None;
             }
+            if symbol.kind.is_document() {
+                continue;
+            }
             let is_type = symbol.kind.is_type();
             if scope == SearchScope::Classes && !is_type {
                 continue;
