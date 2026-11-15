@@ -13,7 +13,7 @@ use rusqlite::{Connection, params};
 
 use crate::index::IndexedFile;
 
-const SCHEMA_VERSION: i64 = 9;
+const SCHEMA_VERSION: i64 = 10;
 
 const SCHEMA: &str = "
 CREATE TABLE files (
@@ -41,6 +41,7 @@ CREATE TABLE symbols (
     parameters TEXT,
     platform TEXT,
     jvm_name TEXT,
+    type_argument TEXT,
     PRIMARY KEY (file_id, idx)
 );
 CREATE INDEX symbols_name ON symbols(name);
@@ -196,7 +197,7 @@ impl IndexStore {
             let mut statement = self.connection.prepare(
                 "SELECT file_id, name, kind, range_start, range_end, name_start, name_end,
                         parent, receiver, type_name, supertypes, parameters, platform,
-                        jvm_name
+                        jvm_name, type_argument
                  FROM symbols ORDER BY file_id, idx",
             )?;
             let mut rows = statement.query([])?;
@@ -254,8 +255,10 @@ impl IndexStore {
             let mut insert_symbol = transaction.prepare_cached(
                 "INSERT INTO symbols (file_id, idx, name, kind, range_start, range_end,
                                       name_start, name_end, parent, receiver, type_name,
-                                      supertypes, parameters, platform, jvm_name)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
+                                      supertypes, parameters, platform, jvm_name,
+                                      type_argument)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15,
+                         ?16)",
             )?;
             let mut insert_import = transaction.prepare_cached(
                 "INSERT INTO imports (file_id, idx, path, wildcard, is_static, alias)
@@ -292,6 +295,7 @@ impl IndexStore {
                             Platform::Actual => "actual",
                         }),
                         symbol.jvm_name,
+                        symbol.type_argument,
                     ])?;
                 }
                 for (idx, import) in file.facts.imports.iter().enumerate() {
@@ -349,6 +353,7 @@ fn symbol_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Option<Symbol>> 
             _ => None,
         },
         jvm_name: row.get(13)?,
+        type_argument: row.get(14)?,
     }))
 }
 

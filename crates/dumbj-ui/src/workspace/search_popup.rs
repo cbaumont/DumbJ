@@ -521,6 +521,7 @@ mod tests {
             supertypes: Vec::new(),
             receiver: None,
             type_name: None,
+            type_argument: None,
             parameters: None,
             platform: None,
             jvm_name: None,

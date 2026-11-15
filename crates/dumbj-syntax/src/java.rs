@@ -68,6 +68,47 @@ fn parameters(source: &Source<'_>, declaration: Node<'_>) -> Option<Vec<Paramete
     Some(found)
 }
 
+fn collect_type(
+    collector: &mut Collector<'_>,
+    node: Node<'_>,
+    kind: SymbolKind,
+    parent: Option<usize>,
+) {
+    let Some(name) = node.child_by_field_name("name") else {
+        return;
+    };
+    let index = collector.push(kind, node, name, parent);
+    let mut supers = Vec::new();
+    for clause in named_children(node) {
+        if matches!(
+            clause.kind(),
+            "superclass" | "super_interfaces" | "extends_interfaces"
+        ) {
+            supertypes(collector, clause, &mut supers);
+        }
+    }
+    if let Some(symbol) = collector.facts.symbols.get_mut(index) {
+        symbol.supertypes = supers;
+    }
+    if let Some(parameters) = node
+        .child_by_field_name("parameters")
+        .filter(|_| kind == SymbolKind::Record)
+    {
+        for parameter in named_children(parameters) {
+            if let Some(name) = parameter.child_by_field_name("name") {
+                let field = collector.push(SymbolKind::Field, parameter, name, Some(index));
+                let type_name = declared_type(&collector.source, parameter, None);
+                collector.set_type(field, type_name);
+                let argument = declared_type_argument(&collector.source, parameter);
+                collector.set_type_argument(field, argument);
+            }
+        }
+    }
+    if let Some(body) = node.child_by_field_name("body") {
+        collect(collector, body, Some(index));
+    }
+}
+
 pub(crate) fn collect(collector: &mut Collector<'_>, node: Node<'_>, parent: Option<usize>) {
     let type_kind = match node.kind() {
         "class_declaration" => Some(SymbolKind::Class),
@@ -78,37 +119,7 @@ pub(crate) fn collect(collector: &mut Collector<'_>, node: Node<'_>, parent: Opt
         _ => None,
     };
     if let Some(kind) = type_kind {
-        let Some(name) = node.child_by_field_name("name") else {
-            return;
-        };
-        let index = collector.push(kind, node, name, parent);
-        let mut supers = Vec::new();
-        for clause in named_children(node) {
-            if matches!(
-                clause.kind(),
-                "superclass" | "super_interfaces" | "extends_interfaces"
-            ) {
-                supertypes(collector, clause, &mut supers);
-            }
-        }
-        if let Some(symbol) = collector.facts.symbols.get_mut(index) {
-            symbol.supertypes = supers;
-        }
-        if let Some(parameters) = node
-            .child_by_field_name("parameters")
-            .filter(|_| kind == SymbolKind::Record)
-        {
-            for parameter in named_children(parameters) {
-                if let Some(name) = parameter.child_by_field_name("name") {
-                    let field = collector.push(SymbolKind::Field, parameter, name, Some(index));
-                    let type_name = declared_type(&collector.source, parameter, None);
-                    collector.set_type(field, type_name);
-                }
-            }
-        }
-        if let Some(body) = node.child_by_field_name("body") {
-            collect(collector, body, Some(index));
-        }
+        collect_type(collector, node, kind, parent);
         return;
     }
     match node.kind() {
@@ -128,6 +139,8 @@ pub(crate) fn collect(collector: &mut Collector<'_>, node: Node<'_>, parent: Opt
                 let method = collector.push(SymbolKind::Method, node, name, parent);
                 let type_name = declared_type(&collector.source, node, None);
                 collector.set_type(method, type_name);
+                let argument = declared_type_argument(&collector.source, node);
+                collector.set_type_argument(method, argument);
                 // An annotation element has no parameter list but is called as `name()`.
                 let parameters = parameters(&collector.source, node).or_else(|| Some(Vec::new()));
                 collector.set_parameters(method, parameters);
@@ -142,11 +155,13 @@ pub(crate) fn collect(collector: &mut Collector<'_>, node: Node<'_>, parent: Opt
         }
         "field_declaration" | "constant_declaration" => {
             let type_name = declared_type(&collector.source, node, None);
+            let argument = declared_type_argument(&collector.source, node);
             for declarator in named_children(node) {
                 let name = declarator.child_by_field_name("name");
                 if let Some(name) = name.filter(|_| declarator.kind() == "variable_declarator") {
                     let field = collector.push(SymbolKind::Field, node, name, parent);
                     collector.set_type(field, type_name.clone());
+                    collector.set_type_argument(field, argument.clone());
                 }
             }
         }
@@ -170,6 +185,22 @@ pub(crate) fn collect(collector: &mut Collector<'_>, node: Node<'_>, parent: Opt
         }
         _ => {}
     }
+}
+
+fn declared_type_argument(source: &Source<'_>, declaration: Node<'_>) -> Option<String> {
+    let written = declaration.child_by_field_name("type")?;
+    let generic = if written.kind() == "generic_type" {
+        written
+    } else {
+        named_children(written)
+            .into_iter()
+            .find(|child| child.kind() == "generic_type")?
+    };
+    let arguments = named_children(generic)
+        .into_iter()
+        .find(|child| child.kind() == "type_arguments")?;
+    let first = named_children(arguments).into_iter().next()?;
+    type_name(source, first).filter(|name| !is_type_parameter(source, declaration, name))
 }
 
 fn type_name(source: &Source<'_>, node: Node<'_>) -> Option<String> {
@@ -276,9 +307,10 @@ pub(crate) fn binders<'t>(
     want_type: bool,
 ) -> Vec<Binder<'t>> {
     let named = |declaration: Node<'t>| {
-        declaration
-            .child_by_field_name("name")
-            .map(|name| Binder::new(name, declared_type(source, declaration, None)))
+        declaration.child_by_field_name("name").map(|name| Binder {
+            type_argument: declared_type_argument(source, declaration),
+            ..Binder::new(name, declared_type(source, declaration, None))
+        })
     };
     if want_type {
         return if child.kind() == "type_parameters" {
@@ -301,6 +333,7 @@ pub(crate) fn binders<'t>(
                 Some(Binder {
                     name,
                     type_name: declared_type(source, child, Some(declarator)),
+                    type_argument: declared_type_argument(source, child),
                     initialiser: declarator
                         .child_by_field_name("value")
                         .map(|value| expression(source, value)),

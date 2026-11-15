@@ -190,6 +190,8 @@ fn collect_type(
                             collector.push(SymbolKind::Property, parameter, name, Some(index));
                         let type_name = declared_type(&collector.source, parameter);
                         collector.set_type(property, type_name);
+                        let argument = declared_type_argument(&collector.source, parameter);
+                        collector.set_type_argument(property, argument);
                     }
                 }
             }
@@ -278,12 +280,14 @@ fn collect_function(collector: &mut Collector<'_>, node: Node<'_>, parent: Optio
         // The return type is the type written directly in the declaration; the
         // receiver's type sits inside `receiver_type` and is not picked up here.
         let type_name = declared_type(&collector.source, node);
+        let type_argument = declared_type_argument(&collector.source, node);
         let parameters = child_of_kind(node, "function_value_parameters")
             .map(|list| function_parameters(&collector.source, list));
         let renamed = jvm_name(&collector.source, &annotations_of(node), None);
         if let Some(symbol) = collector.facts.symbols.get_mut(index) {
             symbol.receiver = receiver;
             symbol.type_name = type_name;
+            symbol.type_argument = type_argument;
             symbol.parameters = parameters;
             symbol.jvm_name = renamed;
         }
@@ -306,9 +310,11 @@ fn collect_property(collector: &mut Collector<'_>, node: Node<'_>, parent: Optio
             let index = collector.push(SymbolKind::Property, node, name, parent);
             let type_name =
                 declared_type(&collector.source, declaration).or_else(|| constructed.clone());
+            let type_argument = declared_type_argument(&collector.source, declaration);
             if let Some(symbol) = collector.facts.symbols.get_mut(index) {
                 symbol.receiver.clone_from(&receiver);
                 symbol.type_name = type_name;
+                symbol.type_argument = type_argument;
                 symbol.jvm_name.clone_from(&getter);
             }
         }
@@ -386,6 +392,21 @@ fn declared_type(source: &Source<'_>, declaration: Node<'_>) -> Option<String> {
         .filter(|child| matches!(child.kind(), "user_type" | "nullable_type"))
         .find_map(find_user_type)
         .map(|user_type| user_type_name(source, user_type))
+        .filter(|name| !is_type_parameter(source, declaration, name))
+}
+
+fn declared_type_argument(source: &Source<'_>, declaration: Node<'_>) -> Option<String> {
+    let user_type = named_children(declaration)
+        .into_iter()
+        .filter(|child| matches!(child.kind(), "user_type" | "nullable_type"))
+        .find_map(find_user_type)?;
+    let arguments = child_of_kind(user_type, "type_arguments")?;
+    let projection = named_children(arguments).into_iter().next()?;
+    named_children(projection)
+        .into_iter()
+        .filter(|child| matches!(child.kind(), "user_type" | "nullable_type"))
+        .find_map(find_user_type)
+        .map(|argument| user_type_name(source, argument))
         .filter(|name| !is_type_parameter(source, declaration, name))
 }
 
@@ -573,6 +594,7 @@ fn variable_binders<'t>(
             Some(Binder {
                 name,
                 type_name: declared_type(source, declaration),
+                type_argument: declared_type_argument(source, declaration),
                 initialiser: initialiser.filter(|_| single).cloned(),
             })
         })
@@ -586,8 +608,10 @@ pub(crate) fn binders<'t>(
     want_type: bool,
 ) -> Vec<Binder<'t>> {
     let parameter = |parameter: Node<'t>| {
-        child_of_kind(parameter, "simple_identifier")
-            .map(|name| Binder::new(name, declared_type(source, parameter)))
+        child_of_kind(parameter, "simple_identifier").map(|name| Binder {
+            type_argument: declared_type_argument(source, parameter),
+            ..Binder::new(name, declared_type(source, parameter))
+        })
     };
     if want_type {
         return if child.kind() == "type_parameters" {

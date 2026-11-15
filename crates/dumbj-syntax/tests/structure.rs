@@ -202,3 +202,37 @@ fn empty_files_and_languages_without_an_outline_have_no_symbols() {
     assert_eq!(facts_of(Language::Java, "").1, FileFacts::default());
     assert_eq!(facts_of(Language::Kotlin, "").1, FileFacts::default());
 }
+
+#[test]
+fn declared_types_keep_their_first_type_argument() {
+    let arguments = |language: Language, source: &str| -> Vec<(String, Option<String>)> {
+        let (_, facts) = facts_of(language, source);
+        facts
+            .symbols
+            .into_iter()
+            .filter(|symbol| symbol.type_name.is_some())
+            .map(|symbol| (symbol.name, symbol.type_argument))
+            .collect()
+    };
+    let kotlin = "class A<T>(val xs: List<Foo>) {\n  val ys: Array<out Deferred<T>>? = null\n  val ts: List<T> = TODO()\n  fun f(): Flow<Bar> = TODO()\n  val plain: Foo = TODO()\n}\n";
+    assert_eq!(
+        arguments(Language::Kotlin, kotlin),
+        [
+            ("xs".to_owned(), Some("Foo".to_owned())),
+            ("ys".to_owned(), Some("Deferred".to_owned())),
+            ("ts".to_owned(), None),
+            ("f".to_owned(), Some("Bar".to_owned())),
+            ("plain".to_owned(), None),
+        ]
+    );
+    let java =
+        "class A { java.util.List<Foo> xs; Map<K, V> m; Optional<Bar> find() { return null; } }";
+    assert_eq!(
+        arguments(Language::Java, java),
+        [
+            ("xs".to_owned(), Some("Foo".to_owned())),
+            ("m".to_owned(), Some("K".to_owned())),
+            ("find".to_owned(), Some("Bar".to_owned())),
+        ]
+    );
+}

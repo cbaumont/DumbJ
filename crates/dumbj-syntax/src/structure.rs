@@ -140,6 +140,8 @@ pub struct Symbol {
     /// The declared type of a field or property, or the return type of a function, without
     /// type arguments. `None` when it is not written, is primitive or is `void`.
     pub type_name: Option<String>,
+    /// The first type argument of that type: `Foo` for `List<Foo>`.
+    pub type_argument: Option<String>,
     /// The parameters of a function, method or constructor, or of the primary constructor
     /// of a Kotlin class (empty when the class declares no constructor at all). `None`
     /// for everything that cannot be called as written.
@@ -258,6 +260,12 @@ pub(crate) struct Collector<'a> {
 }
 
 impl Collector<'_> {
+    pub(crate) fn set_type_argument(&mut self, index: usize, argument: Option<String>) {
+        if let Some(symbol) = self.facts.symbols.get_mut(index) {
+            symbol.type_argument = argument;
+        }
+    }
+
     pub(crate) fn set_type(&mut self, index: usize, type_name: Option<String>) {
         if let Some(symbol) = self.facts.symbols.get_mut(index) {
             symbol.type_name = type_name;
@@ -314,6 +322,7 @@ impl Collector<'_> {
             supertypes: Vec::new(),
             receiver: None,
             type_name: None,
+            type_argument: None,
             parameters: None,
             platform: None,
             jvm_name: None,

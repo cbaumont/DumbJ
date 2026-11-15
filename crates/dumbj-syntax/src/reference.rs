@@ -83,12 +83,14 @@ pub struct Reference {
 pub struct LocalDefinition {
     pub name_range: ByteRange,
     pub type_name: Option<String>,
+    pub type_argument: Option<String>,
     pub initialiser: Option<Qualifier>,
 }
 
 pub(crate) struct Binder<'t> {
     pub(crate) name: Node<'t>,
     pub(crate) type_name: Option<String>,
+    pub(crate) type_argument: Option<String>,
     pub(crate) initialiser: Option<Qualifier>,
 }
 
@@ -97,6 +99,7 @@ impl<'t> Binder<'t> {
         Self {
             name,
             type_name,
+            type_argument: None,
             initialiser: None,
         }
     }
@@ -301,6 +304,7 @@ impl SyntaxTree {
                 return Some(LocalDefinition {
                     name_range: range_of(binder.name),
                     type_name: binder.type_name,
+                    type_argument: binder.type_argument,
                     initialiser: binder.initialiser,
                 });
             }
