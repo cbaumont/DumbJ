@@ -1,0 +1,282 @@
+# Hand-checked Go to Declaration cases for android/nowinandroid at the commit in ../manifest.toml.
+# Format: see crates/dumbj-index/examples/accuracy.rs.
+
+[[case]]
+file = "feature/foryou/impl/src/main/kotlin/com/google/samples/apps/nowinandroid/feature/foryou/impl/ForYouViewModel.kt"
+at = 'userNewsResourceRepository.obs§erveAll('
+target = "core/data/src/main/kotlin/com/google/samples/apps/nowinandroid/core/data/repository/UserNewsResourceRepository.kt:29"
+
+[[case]]
+file = "feature/foryou/impl/src/main/kotlin/com/google/samples/apps/nowinandroid/feature/foryou/impl/ForYouViewModel.kt"
+at = 'userNewsResourceRepository.observeAllFor§FollowedTopics()'
+target = "core/data/src/main/kotlin/com/google/samples/apps/nowinandroid/core/data/repository/UserNewsResourceRepository.kt:39"
+
+[[case]]
+file = "feature/foryou/impl/src/main/kotlin/com/google/samples/apps/nowinandroid/feature/foryou/impl/ForYouViewModel.kt"
+at = 'NewsResourceQ§uery('
+target = "core/data/src/main/kotlin/com/google/samples/apps/nowinandroid/core/data/repository/NewsRepository.kt:26"
+
+[[case]]
+file = "feature/foryou/impl/src/main/kotlin/com/google/samples/apps/nowinandroid/feature/foryou/impl/ForYouViewModel.kt"
+at = '.map(NewsFeedUiState::Suc§cess)'
+target = "core/ui/src/main/kotlin/com/google/samples/apps/nowinandroid/core/ui/NewsFeed.kt:117"
+
+[[case]]
+file = "feature/foryou/impl/src/main/kotlin/com/google/samples/apps/nowinandroid/feature/foryou/impl/ForYouViewModel.kt"
+at = 'OnboardingUiState.Sh§own('
+target = "feature/foryou/impl/src/main/kotlin/com/google/samples/apps/nowinandroid/feature/foryou/impl/OnboardingUiState.kt:43"
+
+[[case]]
+file = "feature/foryou/impl/src/main/kotlin/com/google/samples/apps/nowinandroid/feature/foryou/impl/ForYouViewModel.kt"
+at = 'initialValue = key.linked§NewsResourceId'
+target = "feature/foryou/api/src/main/kotlin/com/google/samples/apps/nowinandroid/feature/foryou/api/navigation/ForYouNavKey.kt:24"
+
+[[case]]
+file = "feature/foryou/impl/src/main/kotlin/com/google/samples/apps/nowinandroid/feature/foryou/impl/ForYouViewModel.kt"
+at = 'analyticsHelper.logNews§DeepLinkOpen('
+target = "feature/foryou/impl/src/main/kotlin/com/google/samples/apps/nowinandroid/feature/foryou/impl/ForYouViewModel.kt:161"
+
+[[case]]
+file = "feature/foryou/impl/src/main/kotlin/com/google/samples/apps/nowinandroid/feature/foryou/impl/ForYouViewModel.kt"
+at = 'userDataRepository.setNewsResourceVi§ewed(newsResourceId, viewed)'
+target = "core/data/src/main/kotlin/com/google/samples/apps/nowinandroid/core/data/repository/UserDataRepository.kt:49"
+
+[[case]]
+file = "feature/foryou/impl/src/main/kotlin/com/google/samples/apps/nowinandroid/feature/foryou/impl/ForYouViewModel.kt"
+at = 'get§FollowableTopics(),'
+target = "feature/foryou/impl/src/main/kotlin/com/google/samples/apps/nowinandroid/feature/foryou/impl/ForYouViewModel.kt:54"
+
+[[case]]
+file = "feature/foryou/impl/src/main/kotlin/com/google/samples/apps/nowinandroid/feature/foryou/impl/ForYouViewModel.kt"
+at = 'lo§gEvent('
+target = "core/analytics/src/main/kotlin/com/google/samples/apps/nowinandroid/core/analytics/AnalyticsHelper.kt:24"
+
+[[case]]
+file = "feature/foryou/impl/src/main/kotlin/com/google/samples/apps/nowinandroid/feature/foryou/impl/ForYouViewModel.kt"
+at = 'Pa§ram('
+target = "core/analytics/src/main/kotlin/com/google/samples/apps/nowinandroid/core/analytics/AnalyticsEvent.kt:50"
+
+[[case]]
+file = "feature/foryou/impl/src/main/kotlin/com/google/samples/apps/nowinandroid/feature/foryou/impl/ForYouViewModel.kt"
+at = '!it.should§HideOnboarding'
+target = "core/model/src/main/kotlin/com/google/samples/apps/nowinandroid/core/model/data/UserData.kt:29"
+
+[[case]]
+file = "feature/foryou/impl/src/main/kotlin/com/google/samples/apps/nowinandroid/feature/foryou/impl/ForYouViewModel.kt"
+at = 'savedStateHandle.getState§Flow('
+target = "none"
+
+[[case]]
+file = "core/domain/src/main/kotlin/com/google/samples/apps/nowinandroid/core/domain/GetFollowableTopicsUseCase.kt"
+at = 'val topicsRepository: Topics§Repository,'
+target = "core/data/src/main/kotlin/com/google/samples/apps/nowinandroid/core/data/repository/TopicsRepository.kt:23"
+
+[[case]]
+file = "core/domain/src/main/kotlin/com/google/samples/apps/nowinandroid/core/domain/GetFollowableTopicsUseCase.kt"
+at = 'sortBy: Topic§SortField = NONE'
+target = "core/domain/src/main/kotlin/com/google/samples/apps/nowinandroid/core/domain/GetFollowableTopicsUseCase.kt:58"
+
+[[case]]
+file = "core/domain/src/main/kotlin/com/google/samples/apps/nowinandroid/core/domain/GetFollowableTopicsUseCase.kt"
+at = 'NA§ME -> followedTopics.sortedBy'
+target = "core/domain/src/main/kotlin/com/google/samples/apps/nowinandroid/core/domain/GetFollowableTopicsUseCase.kt:60"
+
+[[case]]
+file = "core/domain/src/main/kotlin/com/google/samples/apps/nowinandroid/core/domain/GetFollowableTopicsUseCase.kt"
+at = 'followedTopics.sorted§By {'
+target = "none"
+
+[[case]]
+file = "core/domain/src/main/kotlin/com/google/samples/apps/nowinandroid/core/domain/GetFollowableTopicsUseCase.kt"
+at = 'it.topic.na§me'
+target = "core/model/src/main/kotlin/com/google/samples/apps/nowinandroid/core/model/data/Topic.kt:24"
+
+[[case]]
+file = "core/domain/src/main/kotlin/com/google/samples/apps/nowinandroid/core/domain/GetFollowableTopicsUseCase.kt"
+at = 'isFollowed = topic.id in userData.followed§Topics'
+target = "core/model/src/main/kotlin/com/google/samples/apps/nowinandroid/core/model/data/UserData.kt:25"
+
+[[case]]
+file = "core/domain/src/main/kotlin/com/google/samples/apps/nowinandroid/core/domain/GetFollowableTopicsUseCase.kt"
+at = 'topicsRepository.get§Topics(),'
+target = "core/data/src/main/kotlin/com/google/samples/apps/nowinandroid/core/data/repository/TopicsRepository.kt:27"
+
+[[case]]
+file = "core/domain/src/main/kotlin/com/google/samples/apps/nowinandroid/core/domain/GetFollowableTopicsUseCase.kt"
+at = 'FollowableTopic>> = com§bine('
+target = "none"
+
+[[case]]
+file = "core/data/src/main/kotlin/com/google/samples/apps/nowinandroid/core/data/repository/CompositeUserNewsResourceRepository.kt"
+at = 'observe§All(NewsResourceQuery(filterTopicIds'
+target = "core/data/src/main/kotlin/com/google/samples/apps/nowinandroid/core/data/repository/CompositeUserNewsResourceRepository.kt:41"
+
+[[case]]
+file = "core/data/src/main/kotlin/com/google/samples/apps/nowinandroid/core/data/repository/CompositeUserNewsResourceRepository.kt"
+at = 'newsResources.mapToUser§NewsResources(userData)'
+target = "core/model/src/main/kotlin/com/google/samples/apps/nowinandroid/core/model/data/UserNewsResource.kt:56"
+
+[[case]]
+file = "core/data/src/main/kotlin/com/google/samples/apps/nowinandroid/core/data/repository/CompositeUserNewsResourceRepository.kt"
+at = 'NewsResourceQuery(filterNews§Ids = bookmarkedNewsResources)'
+target = "core/data/src/main/kotlin/com/google/samples/apps/nowinandroid/core/data/repository/NewsRepository.kt:34"
+
+[[case]]
+file = "core/data/src/main/kotlin/com/google/samples/apps/nowinandroid/core/data/repository/CompositeUserNewsResourceRepository.kt"
+at = 'userDataRepository.userData.map { it.bookmarked§NewsResources }'
+target = "core/model/src/main/kotlin/com/google/samples/apps/nowinandroid/core/model/data/UserData.kt:23"
+
+[[case]]
+file = "core/model/src/main/kotlin/com/google/samples/apps/nowinandroid/core/model/data/UserNewsResource.kt"
+at = 'map { UserNewsResou§rce(it, userData) }'
+target = "core/model/src/main/kotlin/com/google/samples/apps/nowinandroid/core/model/data/UserNewsResource.kt:37"
+
+[[case]]
+file = "core/domain/src/main/kotlin/com/google/samples/apps/nowinandroid/core/domain/GetSearchContentsUseCase.kt"
+at = 'searchContentsRepository.search§Contents(searchQuery)'
+target = "core/data/src/main/kotlin/com/google/samples/apps/nowinandroid/core/data/repository/SearchContentsRepository.kt:35"
+
+[[case]]
+file = "core/domain/src/main/kotlin/com/google/samples/apps/nowinandroid/core/domain/GetSearchContentsUseCase.kt"
+at = '.mapToUser§SearchResult(userDataRepository.userData)'
+target = "core/domain/src/main/kotlin/com/google/samples/apps/nowinandroid/core/domain/GetSearchContentsUseCase.kt:45"
+
+[[case]]
+file = "core/domain/src/main/kotlin/com/google/samples/apps/nowinandroid/core/domain/GetSearchContentsUseCase.kt"
+at = 'searchResult.top§ics.map { topic ->'
+target = "core/model/src/main/kotlin/com/google/samples/apps/nowinandroid/core/model/data/SearchResult.kt:21"
+
+[[case]]
+file = "sync/work/src/main/kotlin/com/google/samples/apps/nowinandroid/sync/workers/SyncWorker.kt"
+at = 'topicRepository.sy§nc()'
+target = "core/data/src/main/kotlin/com/google/samples/apps/nowinandroid/core/data/SyncUtilities.kt:36"
+
+[[case]]
+file = "sync/work/src/main/kotlin/com/google/samples/apps/nowinandroid/sync/workers/SyncWorker.kt"
+at = 'analyticsHelper.logSync§Started()'
+target = "sync/work/src/main/kotlin/com/google/samples/apps/nowinandroid/sync/workers/AnalyticsExtensions.kt:22"
+
+[[case]]
+file = "sync/work/src/main/kotlin/com/google/samples/apps/nowinandroid/sync/workers/SyncWorker.kt"
+at = '@Dispatcher(I§O)'
+target = "core/common/src/main/kotlin/com/google/samples/apps/nowinandroid/core/common/network/NiaDispatchers.kt:28"
+
+[[case]]
+file = "sync/work/src/main/kotlin/com/google/samples/apps/nowinandroid/sync/workers/SyncWorker.kt"
+at = 'appContext.sync§ForegroundInfo()'
+target = "sync/work/src/main/kotlin/com/google/samples/apps/nowinandroid/sync/initializers/SyncWorkHelpers.kt:44"
+
+[[case]]
+file = "sync/work/src/main/kotlin/com/google/samples/apps/nowinandroid/sync/workers/SyncWorker.kt"
+at = '.setConstraints(Sync§Constraints)'
+target = "sync/work/src/main/kotlin/com/google/samples/apps/nowinandroid/sync/initializers/SyncWorkHelpers.kt:35"
+
+[[case]]
+file = "sync/work/src/main/kotlin/com/google/samples/apps/nowinandroid/sync/workers/SyncWorker.kt"
+at = 'Result.suc§cess()'
+target = "none"
+
+[[case]]
+file = "app/src/main/kotlin/com/google/samples/apps/nowinandroid/MainActivityViewModel.kt"
+at = 'Suc§cess(it)'
+target = "app/src/main/kotlin/com/google/samples/apps/nowinandroid/MainActivityViewModel.kt:50"
+
+[[case]]
+file = "app/src/main/kotlin/com/google/samples/apps/nowinandroid/MainActivityViewModel.kt"
+at = 'initialValue = Loa§ding,'
+target = "app/src/main/kotlin/com/google/samples/apps/nowinandroid/MainActivityViewModel.kt:48"
+
+[[case]]
+file = "app/src/main/kotlin/com/google/samples/apps/nowinandroid/MainActivityViewModel.kt"
+at = 'ThemeBrand.AND§ROID -> true'
+target = "core/model/src/main/kotlin/com/google/samples/apps/nowinandroid/core/model/data/ThemeBrand.kt:21"
+
+[[case]]
+file = "app/src/main/kotlin/com/google/samples/apps/nowinandroid/MainActivityViewModel.kt"
+at = 'DarkThemeConfig.FOLLOW§_SYSTEM -> isSystemDarkTheme'
+target = "core/model/src/main/kotlin/com/google/samples/apps/nowinandroid/core/model/data/DarkThemeConfig.kt:20"
+
+[[case]]
+file = "app/src/main/kotlin/com/google/samples/apps/nowinandroid/MainActivityViewModel.kt"
+at = '!userData.use§DynamicColor'
+target = "core/model/src/main/kotlin/com/google/samples/apps/nowinandroid/core/model/data/UserData.kt:28"
+
+[[case]]
+file = "feature/bookmarks/impl/src/main/kotlin/com/google/samples/apps/nowinandroid/feature/bookmarks/impl/navigation/BookmarksEntryProvider.kt"
+at = 'Bookmarks§Screen('
+target = "feature/bookmarks/impl/src/main/kotlin/com/google/samples/apps/nowinandroid/feature/bookmarks/impl/BookmarksScreen.kt:80"
+
+[[case]]
+file = "feature/bookmarks/impl/src/main/kotlin/com/google/samples/apps/nowinandroid/feature/bookmarks/impl/navigation/BookmarksEntryProvider.kt"
+at = 'navigator::navigate§ToTopic,'
+target = "feature/topic/api/src/main/kotlin/com/google/samples/apps/nowinandroid/feature/topic/api/navigation/TopicNavKey.kt:26"
+
+[[case]]
+file = "feature/bookmarks/impl/src/main/kotlin/com/google/samples/apps/nowinandroid/feature/bookmarks/impl/navigation/BookmarksEntryProvider.kt"
+at = 'snackbarHostState.show§Snackbar('
+target = "none"
+
+[[case]]
+file = "feature/bookmarks/impl/src/main/kotlin/com/google/samples/apps/nowinandroid/feature/bookmarks/impl/navigation/BookmarksEntryProvider.kt"
+at = 'LocalSnackbar§HostState.current'
+target = "feature/bookmarks/impl/src/main/kotlin/com/google/samples/apps/nowinandroid/feature/bookmarks/impl/navigation/BookmarksEntryProvider.kt:47"
+
+[[case]]
+file = "feature/bookmarks/impl/src/main/kotlin/com/google/samples/apps/nowinandroid/feature/bookmarks/impl/navigation/BookmarksEntryProvider.kt"
+at = 'navigator: Navi§gator)'
+target = "core/navigation/src/main/kotlin/com/google/samples/apps/nowinandroid/core/navigation/Navigator.kt:26"
+
+[[case]]
+file = "feature/bookmarks/impl/src/main/kotlin/com/google/samples/apps/nowinandroid/feature/bookmarks/impl/BookmarksScreen.kt"
+at = 'viewModel.setNewsResource§Viewed(it, true)'
+target = "feature/bookmarks/impl/src/main/kotlin/com/google/samples/apps/nowinandroid/feature/bookmarks/impl/BookmarksViewModel.kt:65"
+
+[[case]]
+file = "feature/bookmarks/impl/src/main/kotlin/com/google/samples/apps/nowinandroid/feature/bookmarks/impl/BookmarksScreen.kt"
+at = 'viewModel: BookmarksViewModel = hilt§ViewModel(),'
+target = "none"
+
+[[case]]
+file = "feature/foryou/impl/src/main/kotlin/com/google/samples/apps/nowinandroid/feature/foryou/impl/navigation/ForYouEntryProvider.kt"
+at = 'ForYou§Screen('
+target = "feature/foryou/impl/src/main/kotlin/com/google/samples/apps/nowinandroid/feature/foryou/impl/ForYouScreen.kt:108"
+
+[[case]]
+file = "feature/foryou/impl/src/main/kotlin/com/google/samples/apps/nowinandroid/feature/foryou/impl/navigation/ForYouEntryProvider.kt"
+at = 'it.cre§ate(key)'
+target = "feature/foryou/impl/src/main/kotlin/com/google/samples/apps/nowinandroid/feature/foryou/impl/ForYouViewModel.kt:155"
+
+[[case]]
+file = "feature/foryou/impl/src/main/kotlin/com/google/samples/apps/nowinandroid/feature/foryou/impl/ForYouScreen.kt"
+at = 'Nia§Button('
+target = "core/designsystem/src/main/kotlin/com/google/samples/apps/nowinandroid/core/designsystem/component/Button.kt:51"
+
+[[case]]
+file = "core/ui/src/main/kotlin/com/google/samples/apps/nowinandroid/core/ui/NewsResourceCard.kt"
+at = 'followed = followableTopic.is§Followed,'
+target = "core/model/src/main/kotlin/com/google/samples/apps/nowinandroid/core/model/data/FollowableTopic.kt:25"
+
+[[case]]
+file = "core/ui/src/main/kotlin/com/google/samples/apps/nowinandroid/core/ui/NewsResourceCard.kt"
+at = 'NiaTopic§Tag('
+target = "core/designsystem/src/main/kotlin/com/google/samples/apps/nowinandroid/core/designsystem/component/Tag.kt:31"
+
+[[case]]
+file = "core/designsystem/src/main/kotlin/com/google/samples/apps/nowinandroid/core/designsystem/component/Tag.kt"
+at = 'NiaTagDefaults.UNFOLLOWED_TOPIC_TAG_CONTAINER_§ALPHA'
+target = "core/designsystem/src/main/kotlin/com/google/samples/apps/nowinandroid/core/designsystem/component/Tag.kt:78"
+
+[[case]]
+file = "core/designsystem/src/main/kotlin/com/google/samples/apps/nowinandroid/core/designsystem/component/Tag.kt"
+at = 'Nia§Theme {'
+target = "core/designsystem/src/main/kotlin/com/google/samples/apps/nowinandroid/core/designsystem/theme/Theme.kt:193"
+
+[[case]]
+file = "core/analytics/src/prod/kotlin/com/google/samples/apps/nowinandroid/core/analytics/FirebaseAnalyticsHelper.kt"
+at = 'firebaseAnalytics.log§Event(event.type)'
+target = "none"
+
+[[case]]
+file = "core/analytics/src/prod/kotlin/com/google/samples/apps/nowinandroid/core/analytics/FirebaseAnalyticsHelper.kt"
+at = 'extra.k§ey.take(40)'
+target = "core/analytics/src/main/kotlin/com/google/samples/apps/nowinandroid/core/analytics/AnalyticsEvent.kt:50"
