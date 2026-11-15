@@ -10,7 +10,7 @@
 - [~] Status bar — breadcrumb, line:col, language
 - [~] Project tool window — tree; no git status colours
 - [ ] Structure tool window
-- [~] Find tool window — Find Usages results only
+- [x] Find tool window — Find Usages and Find in Files results, grouped by file
 - [ ] Git tool window
 - [ ] Review tool window
 - [ ] Bookmarks tool window
@@ -54,7 +54,7 @@
 - [~] Call Hierarchy / Type Hierarchy — callers only, no callees
 - [x] Navigate Back / Forward
 - [ ] Recent Files / Recent Locations / Last Edit Location / Switcher
-- [ ] Find in Files / Replace in Files
+- [~] Find in Files — regex, case, whole word, file mask, directory scope, gitignore; no Replace in Files
 - [ ] Bookmarks
 - [ ] Copy Reference / Path / permalink
 - [ ] Navigation bar jump
@@ -139,7 +139,7 @@ Find
 - [ ] Replace
 - [x] FindNext
 - [x] FindPrevious
-- [ ] FindInPath
+- [x] FindInPath
 - [ ] ReplaceInPath
 
 Bookmarks

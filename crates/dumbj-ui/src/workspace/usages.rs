@@ -1,3 +1,4 @@
+use std::ops::Range;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -16,7 +17,7 @@ use crate::theme;
 const ROW_HEIGHT: f32 = 22.;
 pub(super) const FIND_WINDOW_HEIGHT: f32 = 240.;
 
-enum FindRow {
+pub(super) enum FindRow {
     File {
         relative: String,
         count: usize,
@@ -26,6 +27,8 @@ enum FindRow {
         line: usize,
         text: String,
         maybe: bool,
+        /// Byte ranges of `text` to highlight.
+        ranges: Vec<Range<usize>>,
     },
 }
 
@@ -34,9 +37,58 @@ pub(super) struct FindWindow {
     rows: Vec<FindRow>,
     selected: usize,
     scroll: UniformListScrollHandle,
+    /// Text matches are exact; usages are the dumb engine's best guess.
+    exact: bool,
     pub(super) visible: bool,
     /// Whether Hide All Tool Windows hid it, so the same action restores it.
     pub(super) hidden_by_hide_all: bool,
+}
+
+impl FindWindow {
+    pub(super) fn new(title: String, rows: Vec<FindRow>, exact: bool) -> Self {
+        let selected = rows
+            .iter()
+            .position(|row| matches!(row, FindRow::Usage { .. }))
+            .unwrap_or(0);
+        Self {
+            title,
+            rows,
+            selected,
+            scroll: UniformListScrollHandle::new(),
+            exact,
+            visible: true,
+            hidden_by_hide_all: false,
+        }
+    }
+
+    /// Moves the selection by `delta` result rows, skipping the file headings.
+    pub(super) fn step_selection(&mut self, delta: isize) {
+        let usages: Vec<usize> = self
+            .rows
+            .iter()
+            .enumerate()
+            .filter(|(_, row)| matches!(row, FindRow::Usage { .. }))
+            .map(|(index, _)| index)
+            .collect();
+        let current = usages.iter().position(|row| *row >= self.selected);
+        let target = current.map_or(0, |position| {
+            position
+                .saturating_add_signed(delta)
+                .min(usages.len().saturating_sub(1))
+        });
+        if let Some(row) = usages.get(target) {
+            self.selected = *row;
+            self.scroll
+                .scroll_to_item(self.selected.saturating_sub(1), ScrollStrategy::Nearest);
+        }
+    }
+
+    pub(super) fn selected_location(&self) -> Option<Location> {
+        match self.rows.get(self.selected)? {
+            FindRow::Usage { location, .. } => Some(location.clone()),
+            FindRow::File { .. } => None,
+        }
+    }
 }
 
 fn file_name(usage: &Usage) -> String {
@@ -73,6 +125,7 @@ fn find_rows(index: &Index, usages: &[Usage]) -> Vec<FindRow> {
             line: usage.line + 1,
             text: usage.line_text.clone(),
             maybe: usage.certainty == Certainty::Maybe,
+            ranges: Vec::new(),
         }));
     }
     rows
@@ -139,14 +192,11 @@ impl Workspace {
                         .collect();
                     this.chooser = Some(Chooser::new(summary(&name, &usages), items));
                 } else {
-                    this.find_window = Some(FindWindow {
-                        title: summary(&name, &usages),
-                        rows: find_rows(&index, &usages),
-                        selected: 1,
-                        scroll: UniformListScrollHandle::new(),
-                        visible: true,
-                        hidden_by_hide_all: false,
-                    });
+                    this.find_window = Some(FindWindow::new(
+                        summary(&name, &usages),
+                        find_rows(&index, &usages),
+                        false,
+                    ));
                 }
                 this.pending_focus = Some(super::PendingFocus::Results);
                 cx.notify();
@@ -215,6 +265,39 @@ impl Workspace {
         cx.notify();
     }
 
+    /// `text` with the byte `ranges` on the search-match background.
+    fn highlighted(text: &str, ranges: &[Range<usize>], cx: &Context<Self>) -> gpui::Div {
+        let mut parts: Vec<(&str, bool)> = Vec::new();
+        let mut at = 0;
+        for range in ranges {
+            let (start, end) = (range.start.max(at), range.end.min(text.len()));
+            if start >= end || !text.is_char_boundary(start) || !text.is_char_boundary(end) {
+                continue;
+            }
+            if start > at {
+                parts.push((&text[at..start], false));
+            }
+            parts.push((&text[start..end], true));
+            at = end;
+        }
+        if at < text.len() {
+            parts.push((&text[at..], false));
+        }
+        div()
+            .flex()
+            .min_w_0()
+            .overflow_hidden()
+            .whitespace_nowrap()
+            .children(parts.into_iter().map(|(part, matched)| {
+                div()
+                    .flex_none()
+                    .when(matched, |run| {
+                        run.bg(theme::ui(cx, UiRole::EditorSearchMatch))
+                    })
+                    .child(part.to_owned())
+            }))
+    }
+
     fn render_find_row(
         &self,
         find: &FindWindow,
@@ -244,7 +327,11 @@ impl Workspace {
                         .child(count.to_string()),
                 ),
             FindRow::Usage {
-                line, text, maybe, ..
+                line,
+                text,
+                maybe,
+                ranges,
+                ..
             } => div()
                 .flex()
                 .gap(px(10.))
@@ -256,7 +343,7 @@ impl Workspace {
                         .text_color(theme::ui(cx, UiRole::TextFaint))
                         .child(line.to_string()),
                 )
-                .child(div().truncate().child(text.clone()))
+                .child(Self::highlighted(text, ranges, cx))
                 // A usage the dumb engine could not pin to this symbol alone.
                 .children(maybe.then(|| {
                     div()
@@ -330,8 +417,15 @@ impl Workspace {
             .child(
                 div()
                     .text_size(px(11.))
-                    .text_color(theme::ui(cx, UiRole::Warning))
-                    .child("best guess"),
+                    .text_color(theme::ui(
+                        cx,
+                        if find.exact {
+                            UiRole::Success
+                        } else {
+                            UiRole::Warning
+                        },
+                    ))
+                    .child(if find.exact { "exact" } else { "best guess" }),
             );
         div()
             .track_focus(&self.find_window_focus)
@@ -381,6 +475,7 @@ mod tests {
                     text,
                     maybe,
                     location,
+                    ..
                 } => {
                     format!("  {line} {text} {maybe} @{}", location.offset.get())
                 }

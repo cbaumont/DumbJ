@@ -12,6 +12,7 @@ publish.workspace = true
 dumbj-actions.workspace = true
 dumbj-index.workspace = true
 dumbj-jars.workspace = true
+dumbj-search.workspace = true
 dumbj-settings.workspace = true
 dumbj-syntax.workspace = true
 dumbj-text.workspace = true
