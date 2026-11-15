@@ -323,6 +323,7 @@ impl Workspace {
         let Some(index) = self.index.clone() else {
             return;
         };
+        editor.update(cx, |editor, cx| editor.set_index(index.clone(), cx));
         let Some(file) = index.file_by_path(path) else {
             return;
         };

@@ -44,6 +44,84 @@ pub struct Usage {
 /// under the caret, or what the reference there resolves to. When resolution is ambiguous
 /// the best-ranked candidate is used.
 #[must_use]
+/// Calling a constructor is a usage of its class.
+fn hits(index: &Index, target: &UsageTarget, candidate: &crate::resolve::Target) -> bool {
+    match target {
+        UsageTarget::Symbol(id) => candidate.symbol.is_some_and(|found| {
+            found == *id
+                || (index.parent(found) == Some(*id)
+                    && index
+                        .symbol(found)
+                        .is_some_and(|symbol| symbol.kind == SymbolKind::Constructor))
+        }),
+        UsageTarget::Local { name_range, .. } => {
+            candidate.symbol.is_none() && candidate.range == *name_range
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UsageHighlight {
+    pub range: ByteRange,
+    /// A declaration or an assignment.
+    pub write: bool,
+}
+
+/// The sure usages in the site's file of what is at `offset`, for highlighting. Empty
+/// when cancelled.
+#[must_use]
+pub fn usage_highlights(
+    site: Site<'_>,
+    offset: ByteOffset,
+    cancelled: &AtomicBool,
+) -> Vec<UsageHighlight> {
+    let Some(target) = usage_target_at(site, offset) else {
+        return Vec::new();
+    };
+    let (name, own) = match &target {
+        UsageTarget::Symbol(id) => {
+            let Some(symbol) = site.index.symbol(*id) else {
+                return Vec::new();
+            };
+            let own = (id.file == site.file).then(|| symbol.name_range.clone());
+            (symbol.name.clone(), own)
+        }
+        UsageTarget::Local {
+            name, name_range, ..
+        } => (name.clone(), Some(name_range.clone())),
+    };
+    let mut found = Vec::new();
+    for reference in site.tree.references_named(site.buffer, &name) {
+        if cancelled.load(Ordering::Relaxed) {
+            return Vec::new();
+        }
+        if reference.role == ReferenceRole::Declaration {
+            if own.as_ref() == Some(&reference.range) {
+                found.push(UsageHighlight {
+                    range: reference.range,
+                    write: true,
+                });
+            }
+            continue;
+        }
+        let sure = resolve(site, reference.range.start).is_some_and(|resolution| {
+            resolution.decision == Decision::Jump
+                && resolution
+                    .targets
+                    .first()
+                    .is_some_and(|candidate| hits(site.index, &target, candidate))
+        });
+        if sure {
+            let write = site.tree.is_write(reference.range.start);
+            found.push(UsageHighlight {
+                range: reference.range,
+                write,
+            });
+        }
+    }
+    found
+}
+
 pub fn usage_target_at(site: Site<'_>, offset: ByteOffset) -> Option<UsageTarget> {
     let resolution = resolve(site, offset)?;
     if resolution.reference.role == ReferenceRole::Declaration {
@@ -162,18 +240,7 @@ fn usages_in_file(
         let Some(resolution) = resolve(site, reference.range.start) else {
             continue;
         };
-        let hits = |candidate: &crate::resolve::Target| match target {
-            UsageTarget::Symbol(id) => candidate.symbol.is_some_and(|found| {
-                found == *id
-                    || (index.parent(found) == Some(*id)
-                        && index
-                            .symbol(found)
-                            .is_some_and(|symbol| symbol.kind == SymbolKind::Constructor))
-            }),
-            UsageTarget::Local { name_range, .. } => {
-                candidate.symbol.is_none() && candidate.range == *name_range
-            }
-        };
+        let hits = |candidate: &crate::resolve::Target| hits(index, target, candidate);
         let certainty = match resolution.decision {
             Decision::Jump if resolution.targets.first().is_some_and(hits) => Certainty::Sure,
             Decision::Choose if resolution.targets.iter().any(hits) => Certainty::Maybe,

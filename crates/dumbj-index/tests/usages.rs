@@ -221,3 +221,35 @@ fn usages_cross_the_accessor_boundary() {
         "{found:?}"
     );
 }
+
+#[test]
+fn usages_in_one_file_for_highlighting() {
+    use dumbj_index::usage_highlights;
+    let index = shop_index();
+    let path = shop_root().join(CART);
+    let source = std::fs::read_to_string(&path).unwrap();
+    let offset = source.find("total.add(cost)").unwrap() + 1;
+    let buffer = Buffer::new(&source);
+    let tree = parse(Language::Java, &buffer, || false).unwrap().unwrap();
+    let site = Site {
+        index: &index,
+        file: index.file_by_path(&path).unwrap(),
+        tree: &tree,
+        buffer: &buffer,
+    };
+    let found: Vec<(usize, bool)> =
+        usage_highlights(site, ByteOffset(offset), &AtomicBool::new(false))
+            .into_iter()
+            .map(|usage| {
+                (
+                    buffer.point_at(usage.range.start).line.get() + 1,
+                    usage.write,
+                )
+            })
+            .collect();
+    assert_eq!(
+        found,
+        [(11, true), (16, true), (16, false), (21, false)],
+        "the declaration and `total = …` write; `total.add` and `return total` read"
+    );
+}

@@ -33,6 +33,8 @@ editor-selection = { color = "overlay2", alpha = 0.3 }
 editor-caret = "rosewater"
 editor-search-match = { color = "sky", alpha = 0.3 }
 editor-search-match-current = { color = "peach", alpha = 0.55 }
+editor-usage-read = { color = "blue", alpha = 0.2 }
+editor-usage-write = { color = "red", alpha = 0.22 }
 
 [syntax]
 comment = "overlay2"

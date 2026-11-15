@@ -442,3 +442,24 @@ fn enclosing_ranges_grow_one_node_at_a_time() {
     let whole = ByteOffset(0)..ByteOffset(source.len());
     assert_eq!(tree.enclosing_range(whole), None);
 }
+
+#[test]
+fn writes_are_assignment_targets() {
+    let write = |language: Language, source: &str, at: &str| {
+        let buffer = Buffer::new(source);
+        let tree = parse(language, &buffer, || false).unwrap().unwrap();
+        tree.is_write(ByteOffset(source.find(at).unwrap()))
+    };
+    let java = "class A { int x; void m(int y) { x = y; this.x += 1; x++; f(x); } }";
+    assert!(write(Language::Java, java, "x = y"));
+    assert!(!write(Language::Java, java, "y; this"));
+    assert!(write(Language::Java, java, "x += 1"));
+    assert!(write(Language::Java, java, "x++"));
+    assert!(!write(Language::Java, java, "x); }"));
+    let kotlin = "class A { var x = 0\n fun m(y: Int) { x = y\n this.x += 1\n x++\n f(x) } }";
+    assert!(write(Language::Kotlin, kotlin, "x = y"));
+    assert!(!write(Language::Kotlin, kotlin, "y\n this"));
+    assert!(write(Language::Kotlin, kotlin, "x += 1"));
+    assert!(write(Language::Kotlin, kotlin, "x++"));
+    assert!(!write(Language::Kotlin, kotlin, "x) }"));
+}

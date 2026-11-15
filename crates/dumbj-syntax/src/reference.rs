@@ -195,6 +195,36 @@ impl SyntaxTree {
         }
     }
 
+    /// Whether the identifier at `offset` is assigned to: the target of `=`, a compound
+    /// assignment, `++` or `--`, possibly through `this.` or another qualifier.
+    #[must_use]
+    pub fn is_write(&self, offset: ByteOffset) -> bool {
+        let Some(mut node) = self.identifier_node(offset) else {
+            return false;
+        };
+        while let Some(parent) = node.parent() {
+            match parent.kind() {
+                "field_access"
+                | "navigation_expression"
+                | "navigation_suffix"
+                | "directly_assignable_expression" => node = parent,
+                "assignment_expression" | "assignment" => {
+                    return parent.child(0).is_some_and(|left| left.id() == node.id());
+                }
+                "update_expression" => return true,
+                "postfix_expression" | "prefix_expression" => {
+                    let text_of = |n: tree_sitter::Node<'_>| n.kind().to_owned();
+                    let mut cursor = parent.walk();
+                    return parent
+                        .children(&mut cursor)
+                        .any(|child| matches!(text_of(child).as_str(), "++" | "--"));
+                }
+                _ => return false,
+            }
+        }
+        false
+    }
+
     /// Returns `None` when the name is not declared locally, which means it has to be
     /// looked up among fields, types and imports instead.
     #[must_use]

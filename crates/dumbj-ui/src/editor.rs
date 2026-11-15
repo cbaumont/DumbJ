@@ -5,7 +5,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 use dumbj_actions::{Action, MouseStroke};
-use dumbj_index::{Index, LibraryTarget, Resolution, Site, SymbolId, UsageTarget};
+use dumbj_index::{Index, LibraryTarget, Resolution, Site, SymbolId, UsageHighlight, UsageTarget};
 use dumbj_settings::UiRole;
 use dumbj_syntax::{HighlightSpan, Language, SyntaxTree};
 use dumbj_text::search::{self, SearchOptions};
@@ -165,6 +165,10 @@ pub(crate) struct EditorView {
     pending_offset: Option<ByteOffset>,
     benchmark: Option<ScrollBenchmark>,
     gutter_icons: Vec<GutterIcon>,
+    index: Option<Arc<Index>>,
+    usages: Arc<Vec<UsageHighlight>>,
+    usages_at: Option<ByteOffset>,
+    usages_task: Option<Task<()>>,
     load_cancel: Arc<AtomicBool>,
     _load: Task<()>,
 }
@@ -220,6 +224,10 @@ impl EditorView {
             pending_offset: None,
             benchmark: None,
             gutter_icons: Vec::new(),
+            index: None,
+            usages: Arc::new(Vec::new()),
+            usages_at: None,
+            usages_task: None,
             load_cancel,
             _load: task,
         }
@@ -385,6 +393,50 @@ impl EditorView {
         }
         cx.notify();
         true
+    }
+
+    pub(crate) fn set_index(&mut self, index: Arc<Index>, cx: &mut Context<Self>) {
+        self.index = Some(index);
+        self.usages_at = None;
+        cx.notify();
+    }
+
+    fn refresh_usages(&mut self, cx: &mut Context<Self>) {
+        let caret = self.model.caret();
+        if self.usages_at == Some(caret) {
+            return;
+        }
+        self.usages_at = Some(caret);
+        let (Some(index), Some(tree)) = (self.index.clone(), self.syntax.clone()) else {
+            return;
+        };
+        let Some(file) = index.file_by_path(&self.path) else {
+            return;
+        };
+        let buffer = self.model.buffer().clone();
+        self.usages_task = Some(cx.spawn(async move |this, cx| {
+            cx.background_executor()
+                .timer(Duration::from_millis(150))
+                .await;
+            let found = cx
+                .background_spawn(async move {
+                    let site = Site {
+                        index: &index,
+                        file,
+                        tree: &tree,
+                        buffer: &buffer,
+                    };
+                    let mut found =
+                        dumbj_index::usage_highlights(site, caret, &AtomicBool::new(false));
+                    found.sort_by_key(|usage| usage.range.start);
+                    found
+                })
+                .await;
+            let _ = this.update(cx, |this, cx| {
+                this.usages = Arc::new(found);
+                cx.notify();
+            });
+        }));
     }
 
     pub(crate) fn set_gutter_icons(&mut self, icons: Vec<GutterIcon>, cx: &mut Context<Self>) {
@@ -800,6 +852,10 @@ impl EditorView {
         let matches = self.search.matches.clone();
         let visible_start = buffer.line_start(LineIndex(first_line));
         let mut match_index = matches.partition_point(|found| found.end <= visible_start);
+        let usages = self.usages.clone();
+        let mut usage_index = usages.partition_point(|usage| usage.range.end <= visible_start);
+        let usage_read_color = theme::ui(cx, UiRole::EditorUsageRead);
+        let usage_write_color = theme::ui(cx, UiRole::EditorUsageWrite);
 
         let mut backgrounds = Vec::new();
         let mut lines = Vec::with_capacity(last_line - first_line);
@@ -858,6 +914,18 @@ impl EditorView {
             if line == caret_point.line.get() && !has_selection {
                 let current_line = theme::ui(cx, UiRole::EditorCurrentLine);
                 backgrounds.push(band(bounds.left(), bounds.right(), current_line));
+            }
+            while let Some(usage) = usages
+                .get(usage_index)
+                .filter(|usage| usage.range.start < line_end)
+            {
+                let color = if usage.write {
+                    usage_write_color
+                } else {
+                    usage_read_color
+                };
+                backgrounds.push(band(x(usage.range.start), x(usage.range.end), color));
+                usage_index += 1;
             }
             while let Some(found) = matches
                 .get(match_index)
@@ -973,6 +1041,9 @@ impl EditorView {
 
 impl Render for EditorView {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        if matches!(self.state, LoadState::Ready) {
+            self.refresh_usages(cx);
+        }
         let message = match &self.state {
             LoadState::Ready => None,
             LoadState::Loading => Some(("Loading…".to_owned(), UiRole::TextFaint)),

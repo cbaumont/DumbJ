@@ -90,6 +90,8 @@ pub enum UiRole {
     EditorCaret,
     EditorSearchMatch,
     EditorSearchMatchCurrent,
+    EditorUsageRead,
+    EditorUsageWrite,
 }
 
 impl UiRole {
@@ -121,6 +123,8 @@ impl UiRole {
         Self::EditorCaret,
         Self::EditorSearchMatch,
         Self::EditorSearchMatchCurrent,
+        Self::EditorUsageRead,
+        Self::EditorUsageWrite,
     ];
 
     #[must_use]
@@ -153,6 +157,8 @@ impl UiRole {
             Self::EditorCaret => "editor-caret",
             Self::EditorSearchMatch => "editor-search-match",
             Self::EditorSearchMatchCurrent => "editor-search-match-current",
+            Self::EditorUsageRead => "editor-usage-read",
+            Self::EditorUsageWrite => "editor-usage-write",
         }
     }
 }
