@@ -1,5 +1,3 @@
-//! Java-specific tree walking.
-
 use tree_sitter::Node;
 
 use crate::reference::{Argument, Binder, Call, Qualifier, ReferenceRole, qualifier_from_text};
@@ -8,7 +6,6 @@ use crate::structure::{
     named_children,
 };
 
-/// Type names in a `superclass`, `super_interfaces` or `extends_interfaces` clause.
 fn supertypes(collector: &Collector<'_>, clause: Node<'_>, out: &mut Vec<String>) {
     for child in named_children(clause) {
         match child.kind() {
@@ -38,7 +35,6 @@ fn import(collector: &Collector<'_>, node: Node<'_>) -> Option<Import> {
     })
 }
 
-/// The parameters of a method or constructor declaration.
 fn parameters(source: &Source<'_>, declaration: Node<'_>) -> Option<Vec<Parameter>> {
     let list = declaration.child_by_field_name("parameters")?;
     let found = named_children(list)
@@ -72,7 +68,6 @@ fn parameters(source: &Source<'_>, declaration: Node<'_>) -> Option<Vec<Paramete
     Some(found)
 }
 
-/// Walks `node` and records the declarations below it.
 pub(crate) fn collect(collector: &mut Collector<'_>, node: Node<'_>, parent: Option<usize>) {
     let type_kind = match node.kind() {
         "class_declaration" => Some(SymbolKind::Class),
@@ -99,7 +94,6 @@ pub(crate) fn collect(collector: &mut Collector<'_>, node: Node<'_>, parent: Opt
         if let Some(symbol) = collector.facts.symbols.get_mut(index) {
             symbol.supertypes = supers;
         }
-        // Record components are fields of the record.
         if let Some(parameters) = node
             .child_by_field_name("parameters")
             .filter(|_| kind == SymbolKind::Record)
@@ -178,8 +172,6 @@ pub(crate) fn collect(collector: &mut Collector<'_>, node: Node<'_>, parent: Opt
     }
 }
 
-/// The type named by a `type` field, without type arguments or array brackets. `var` and
-/// primitive types give `None`.
 fn type_name(source: &Source<'_>, node: Node<'_>) -> Option<String> {
     match node.kind() {
         "type_identifier" if source.text(node) == "var" => None,
@@ -191,8 +183,6 @@ fn type_name(source: &Source<'_>, node: Node<'_>) -> Option<String> {
     }
 }
 
-/// The type of a declared variable: its written type, or for `var x = new Foo()` the
-/// constructed type.
 fn declared_type(
     source: &Source<'_>,
     declaration: Node<'_>,
@@ -211,7 +201,6 @@ fn declared_type(
     })
 }
 
-/// What the dumb engine can tell about an expression.
 pub(crate) fn expression(source: &Source<'_>, node: Node<'_>) -> Qualifier {
     let typed = |name: &str| Qualifier::Typed(name.to_owned());
     let written_type = |node: Node<'_>| {
@@ -263,7 +252,6 @@ pub(crate) fn expression(source: &Source<'_>, node: Node<'_>) -> Qualifier {
     }
 }
 
-/// The arguments of a `method_invocation`.
 fn arguments(source: &Source<'_>, call: Node<'_>) -> Vec<Argument> {
     call.child_by_field_name("arguments")
         .map_or_else(Vec::new, named_children)
@@ -276,13 +264,11 @@ fn arguments(source: &Source<'_>, call: Node<'_>) -> Vec<Argument> {
         .collect()
 }
 
-/// The arguments of the call whose callee name is `node`.
 pub(crate) fn call_arguments(source: &Source<'_>, node: Node<'_>) -> Option<Vec<Argument>> {
     let call = node.parent()?;
     (call.kind() == "method_invocation").then(|| arguments(source, call))
 }
 
-/// The names `child` introduces into `scope` for code that comes after it.
 pub(crate) fn binders<'t>(
     source: &Source<'_>,
     scope: Node<'t>,
@@ -295,7 +281,6 @@ pub(crate) fn binders<'t>(
             .map(|name| Binder::new(name, declared_type(source, declaration, None)))
     };
     if want_type {
-        // Type parameters of the enclosing method or class.
         return if child.kind() == "type_parameters" {
             named_children(child)
                 .into_iter()
@@ -335,17 +320,14 @@ pub(crate) fn binders<'t>(
                 _ => None,
             })
             .collect(),
-        // Lambda parameters without types: `(a, b) ->`.
         "inferred_parameters" => named_children(child)
             .into_iter()
             .filter(|name| name.kind() == "identifier")
             .map(|name| Binder::new(name, None))
             .collect(),
-        // A single untyped lambda parameter: `x ->`.
         "identifier" if scope.kind() == "lambda_expression" => {
             vec![Binder::new(child, None)]
         }
-        // The loop variable of `for (String s : names)`.
         "identifier"
             if scope.kind() == "enhanced_for_statement"
                 && scope
@@ -399,7 +381,6 @@ fn pattern_variables<'t>(source: &Source<'_>, node: Node<'t>, out: &mut Vec<Bind
     }
 }
 
-/// The role, qualifier and import flag of an identifier node.
 pub(crate) fn classify(
     source: &Source<'_>,
     node: Node<'_>,
@@ -451,7 +432,6 @@ pub(crate) fn classify(
                 None => (ReferenceRole::Value, None, false),
             }
         }
-        // `a.b.C` in imports, annotations and package statements.
         "scoped_identifier" if is_field("name") => {
             (ReferenceRole::Type, qualifier_of("scope"), in_import)
         }

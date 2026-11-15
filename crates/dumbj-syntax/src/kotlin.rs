@@ -1,5 +1,4 @@
-//! Kotlin-specific tree walking. The grammar has almost no field names, so children are
-//! found by kind and position.
+//! The grammar has almost no field names, so children are found by kind and position.
 
 use tree_sitter::Node;
 
@@ -9,7 +8,6 @@ use crate::structure::{
     is_type_parameter, named_children,
 };
 
-/// The dotted name of a `user_type` without type arguments: `java.io.Serializable`.
 fn user_type_name(source: &Source<'_>, user_type: Node<'_>) -> String {
     let parts: Vec<String> = named_children(user_type)
         .into_iter()
@@ -19,8 +17,6 @@ fn user_type_name(source: &Source<'_>, user_type: Node<'_>) -> String {
     parts.join(".")
 }
 
-/// Finds the `user_type` naming a supertype or receiver, looking through wrappers such as
-/// `constructor_invocation`, `nullable_type` and `receiver_type`.
 fn find_user_type(node: Node<'_>) -> Option<Node<'_>> {
     if node.kind() == "user_type" {
         return Some(node);
@@ -95,8 +91,7 @@ fn is_vararg(source: &Source<'_>, modifiers: Node<'_>) -> bool {
         .any(|modifier| source.text(modifier) == "vararg")
 }
 
-/// The parameters in a `function_value_parameters` node. Modifiers and default values
-/// are siblings of the parameter they belong to.
+/// Modifiers and default values are siblings of their parameter.
 fn function_parameters(source: &Source<'_>, list: Node<'_>) -> Vec<Parameter> {
     let mut found: Vec<Parameter> = Vec::new();
     let mut variadic = false;
@@ -123,7 +118,6 @@ fn function_parameters(source: &Source<'_>, list: Node<'_>) -> Vec<Parameter> {
     found
 }
 
-/// The parameters of a primary constructor.
 fn class_parameters(source: &Source<'_>, constructor: Node<'_>) -> Vec<Parameter> {
     named_children(constructor)
         .into_iter()
@@ -139,8 +133,6 @@ fn class_parameters(source: &Source<'_>, constructor: Node<'_>) -> Vec<Parameter
         .collect()
 }
 
-/// A class, interface, object or companion: its symbol, supertypes, constructor
-/// properties and members.
 fn collect_type(
     collector: &mut Collector<'_>,
     node: Node<'_>,
@@ -189,7 +181,6 @@ fn collect_type(
         match child.kind() {
             "primary_constructor" => {
                 for parameter in named_children(child) {
-                    // Only `val`/`var` parameters declare properties.
                     let is_property = child_of_kind(parameter, "binding_pattern_kind").is_some();
                     let name = child_of_kind(parameter, "simple_identifier");
                     if let Some(name) = name.filter(|_| is_property) {
@@ -206,8 +197,6 @@ fn collect_type(
     }
 }
 
-/// The name in a `@JvmName("…")` among `annotations`, which are `annotation` or
-/// `file_annotation` nodes; `target` is the use-site target it must have (`get`), if any.
 fn jvm_name(source: &Source<'_>, annotations: &[Node<'_>], target: Option<&str>) -> Option<String> {
     annotations.iter().find_map(|annotation| {
         let site = child_of_kind(*annotation, "use_site_target")
@@ -237,7 +226,6 @@ fn annotations_of(node: Node<'_>) -> Vec<Node<'_>> {
         .collect()
 }
 
-/// Marks the symbols added since `first` that `declaration` declares as `expect` or
 /// `actual`. Members of an `expect` type are `expect` without saying so.
 fn mark_platform(
     collector: &mut Collector<'_>,
@@ -265,7 +253,6 @@ fn mark_platform(
     }
 }
 
-/// Walks `node` and records the declarations below it.
 pub(crate) fn collect(collector: &mut Collector<'_>, node: Node<'_>, parent: Option<usize>) {
     let first = collector.facts.symbols.len();
     collect_declaration(collector, node, parent);
@@ -366,7 +353,6 @@ fn collect_declaration(collector: &mut Collector<'_>, node: Node<'_>, parent: Op
             }
         }
         "secondary_constructor" => {
-            // Lands on the `constructor` keyword; named after the class like in Java.
             let class_name = parent
                 .and_then(|index| collector.facts.symbols.get(index))
                 .map(|s| s.name.clone());
@@ -392,8 +378,6 @@ fn collect_declaration(collector: &mut Collector<'_>, node: Node<'_>, parent: Op
     }
 }
 
-/// The declared type of a parameter or variable node, without type arguments. `None` when
-/// it is a type parameter (`T`).
 fn declared_type(source: &Source<'_>, declaration: Node<'_>) -> Option<String> {
     named_children(declaration)
         .into_iter()
@@ -403,7 +387,6 @@ fn declared_type(source: &Source<'_>, declaration: Node<'_>) -> Option<String> {
         .filter(|name| !is_type_parameter(source, declaration, name))
 }
 
-/// What the dumb engine can tell about an expression.
 pub(crate) fn expression(source: &Source<'_>, node: Node<'_>) -> Qualifier {
     let typed = |name: &str| Qualifier::Typed(name.to_owned());
     match node.kind() {
@@ -467,7 +450,6 @@ pub(crate) fn expression(source: &Source<'_>, node: Node<'_>) -> Qualifier {
     }
 }
 
-/// The arguments of a `call_expression`, a trailing lambda last.
 fn arguments(source: &Source<'_>, call: Node<'_>) -> Vec<Argument> {
     let Some(suffix) = child_of_kind(call, "call_suffix") else {
         return Vec::new();
@@ -504,9 +486,6 @@ fn arguments(source: &Source<'_>, call: Node<'_>) -> Vec<Argument> {
     found
 }
 
-/// The receiver type of the innermost extension function or property around `node`:
-/// `Foo` inside `fun Foo.bar() { … }`. Inside it, `this` is a `Foo` and the members of
-/// `Foo` are in scope.
 pub(crate) fn extension_receiver(source: &Source<'_>, node: Node<'_>) -> Option<String> {
     std::iter::successors(Some(node), Node::parent)
         .filter(|scope| {
@@ -523,7 +502,6 @@ pub(crate) fn extension_receiver(source: &Source<'_>, node: Node<'_>) -> Option<
         })
 }
 
-/// The arguments of the call whose callee name is `node`.
 pub(crate) fn call_arguments(source: &Source<'_>, node: Node<'_>) -> Option<Vec<Argument>> {
     let parent = node.parent()?;
     let call = match parent.kind() {
@@ -534,7 +512,6 @@ pub(crate) fn call_arguments(source: &Source<'_>, node: Node<'_>) -> Option<Vec<
     (call.kind() == "call_expression").then(|| arguments(source, call))
 }
 
-/// The initialiser of a `property_declaration`, if it has one.
 fn initialiser(source: &Source<'_>, property: Node<'_>) -> Option<Qualifier> {
     let has_value = all_children(property).iter().any(|c| c.kind() == "=");
     let value = named_children(property).into_iter().last()?;
@@ -551,7 +528,6 @@ fn constructed_type(source: &Source<'_>, property: Node<'_>) -> Option<String> {
     name.starts_with(char::is_uppercase).then_some(name)
 }
 
-/// The names declared by a `variable_declaration` or `multi_variable_declaration`.
 fn variable_binders<'t>(
     source: &Source<'_>,
     node: Node<'t>,
@@ -576,7 +552,6 @@ fn variable_binders<'t>(
         .collect()
 }
 
-/// The names `child` introduces into `scope` for code that comes after it.
 pub(crate) fn binders<'t>(
     source: &Source<'_>,
     scope: Node<'t>,
@@ -606,7 +581,6 @@ pub(crate) fn binders<'t>(
                 .flat_map(|part| variable_binders(source, part, initialiser.as_ref()))
                 .collect()
         }
-        // A local function can be called by the code after it.
         ("statements", "function_declaration") => child_of_kind(child, "simple_identifier")
             .map(|name| Binder::new(name, None))
             .into_iter()
@@ -641,7 +615,6 @@ pub(crate) fn binders<'t>(
     }
 }
 
-/// The role, qualifier and import flag of an identifier node.
 pub(crate) fn classify(
     source: &Source<'_>,
     node: Node<'_>,
@@ -652,7 +625,6 @@ pub(crate) fn classify(
     let is_first = parent
         .named_child(0)
         .is_some_and(|first| first.id() == node.id());
-    // The dotted parts written before `node` inside `parent`, e.g. `java.io` in a type.
     let preceding = || {
         let before = source
             .buffer
@@ -692,7 +664,6 @@ pub(crate) fn classify(
             Some("import_header") => (ReferenceRole::Type, preceding(), true),
             _ => (ReferenceRole::Declaration, None, false),
         },
-        // `Foo::bar`
         "callable_reference" if node.kind() == "simple_identifier" => {
             let qualifier = child_of_kind(parent, "type_identifier")
                 .map(|owner| qualifier_from_text(&source.text(owner)));

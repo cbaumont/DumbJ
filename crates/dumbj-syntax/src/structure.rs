@@ -1,12 +1,8 @@
-//! The declarations, package and imports of a source file: the facts the symbol index and
-//! File Structure are built from.
-
 use dumbj_text::{Buffer, ByteOffset, ByteRange};
 use tree_sitter::Node;
 
 use crate::{Language, SyntaxTree};
 
-/// What kind of declaration a [`Symbol`] is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum SymbolKind {
     Class,
@@ -14,33 +10,22 @@ pub enum SymbolKind {
     Enum,
     Record,
     Annotation,
-    /// A Kotlin `object`.
     Object,
-    /// A Kotlin `companion object`.
     Companion,
     TypeAlias,
-    /// A function outside any type (Kotlin top level).
     Function,
-    /// A function declared in a type.
     Method,
     Constructor,
     Field,
-    /// A Kotlin property, including `val`/`var` constructor parameters.
     Property,
     EnumConstant,
-    /// A Markdown heading.
     Heading,
-    /// A TOML table or array of tables.
     Table,
-    /// An element of an XML file: the root and its children, and Maven modules,
-    /// dependencies and plugins.
     Element,
-    /// A key of a configuration file: a TOML or YAML key.
     Key,
 }
 
 impl SymbolKind {
-    /// Every kind, for tests and exhaustive tables.
     pub const ALL: &[Self] = &[
         Self::Class,
         Self::Interface,
@@ -62,7 +47,6 @@ impl SymbolKind {
         Self::Key,
     ];
 
-    /// A stable name for storing the kind outside the process; see [`Self::from_name`].
     #[must_use]
     pub fn as_str(self) -> &'static str {
         match self {
@@ -87,7 +71,6 @@ impl SymbolKind {
         }
     }
 
-    /// The kind stored under `name` by [`Self::as_str`], or `None` for an unknown name.
     #[must_use]
     pub fn from_name(name: &str) -> Option<Self> {
         match name {
@@ -112,7 +95,6 @@ impl SymbolKind {
             _ => None,
         }
     }
-    /// Whether the symbol declares a type that can contain members.
     #[must_use]
     pub fn is_type(self) -> bool {
         matches!(
@@ -139,27 +121,21 @@ impl SymbolKind {
         )
     }
 
-    /// Whether the symbol can be called.
     #[must_use]
     pub fn is_callable(self) -> bool {
         matches!(self, Self::Function | Self::Method | Self::Constructor)
     }
 }
 
-/// One declaration in a file.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Symbol {
     pub name: String,
     pub kind: SymbolKind,
-    /// The whole declaration.
     pub range: ByteRange,
-    /// The declared name; where navigation lands.
     pub name_range: ByteRange,
     /// The index, in [`FileFacts::symbols`], of the enclosing declaration.
     pub parent: Option<usize>,
-    /// Supertypes as written, without type arguments (`Runnable`, `java.io.Serializable`).
     pub supertypes: Vec<String>,
-    /// The receiver type of a Kotlin extension function or property, as written.
     pub receiver: Option<String>,
     /// The declared type of a field or property, or the return type of a function, without
     /// type arguments. `None` when it is not written, is primitive or is `void`.
@@ -168,43 +144,33 @@ pub struct Symbol {
     /// of a Kotlin class (empty when the class declares no constructor at all). `None`
     /// for everything that cannot be called as written.
     pub parameters: Option<Vec<Parameter>>,
-    /// Which side of a Kotlin multiplatform `expect`/`actual` pair this is, if any.
     pub platform: Option<Platform>,
-    /// The JVM name from `@JvmName` (a function) or `@get:JvmName` (a property's getter).
     pub jvm_name: Option<String>,
 }
 
-/// A side of a Kotlin multiplatform declaration pair.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Platform {
     /// `expect`: the declaration common code sees. Members of an `expect` type are too.
     Expect,
-    /// `actual`: the implementation in one platform's source set.
     Actual,
 }
 
-/// One parameter of a callable.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Parameter {
     pub name: String,
     /// The declared type without type arguments. `None` when it is a type parameter, a
     /// function type or a primitive Java type.
     pub type_name: Option<String>,
-    /// Whether a call may leave it out: it has a default value.
     pub optional: bool,
-    /// `vararg` or `...`: takes any number of arguments.
     pub variadic: bool,
 }
 
-/// One import statement.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Import {
     /// The imported name without any trailing `.*`, e.g. `java.util.List` or `java.util`.
     pub path: String,
     pub wildcard: bool,
-    /// A Java `import static`.
     pub is_static: bool,
-    /// The Kotlin `as` name.
     pub alias: Option<String>,
 }
 
@@ -221,14 +187,12 @@ impl Import {
     }
 }
 
-/// Everything the index needs to know about one file.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct FileFacts {
     pub package: Option<String>,
     pub imports: Vec<Import>,
     /// Declarations in source order; a parent always comes before its children.
     pub symbols: Vec<Symbol>,
-    /// The facade class name from `@file:JvmName`.
     pub jvm_name: Option<String>,
 }
 
@@ -247,7 +211,6 @@ impl FileFacts {
     }
 }
 
-/// Shared helpers for walking a tree with its source text.
 pub(crate) struct Source<'a> {
     pub(crate) buffer: &'a Buffer,
 }
@@ -262,7 +225,6 @@ pub(crate) fn range_of(node: Node<'_>) -> ByteRange {
     ByteOffset(node.start_byte())..ByteOffset(node.end_byte())
 }
 
-/// The named children of `node`.
 pub(crate) fn named_children(node: Node<'_>) -> Vec<Node<'_>> {
     let mut cursor = node.walk();
     node.named_children(&mut cursor).collect()
@@ -290,28 +252,24 @@ pub(crate) fn is_type_parameter(source: &Source<'_>, node: Node<'_>, name: &str)
         .any(|parameter| source.text(parameter) == name)
 }
 
-/// Collects symbols while walking; keeps the push logic in one place.
 pub(crate) struct Collector<'a> {
     pub(crate) source: Source<'a>,
     pub(crate) facts: FileFacts,
 }
 
 impl Collector<'_> {
-    /// Sets the declared type of the symbol at `index`.
     pub(crate) fn set_type(&mut self, index: usize, type_name: Option<String>) {
         if let Some(symbol) = self.facts.symbols.get_mut(index) {
             symbol.type_name = type_name;
         }
     }
 
-    /// Sets the parameters of the callable at `index`.
     pub(crate) fn set_parameters(&mut self, index: usize, parameters: Option<Vec<Parameter>>) {
         if let Some(symbol) = self.facts.symbols.get_mut(index) {
             symbol.parameters = parameters;
         }
     }
 
-    /// Adds a symbol and returns its index.
     pub(crate) fn push(
         &mut self,
         kind: SymbolKind,
@@ -322,7 +280,6 @@ impl Collector<'_> {
         self.push_range(kind, range_of(declaration), range_of(name), parent)
     }
 
-    /// Adds a symbol whose name is a part of a node, such as the text of a heading.
     pub(crate) fn push_range(
         &mut self,
         kind: SymbolKind,
@@ -366,8 +323,6 @@ impl Collector<'_> {
 }
 
 impl SyntaxTree {
-    /// Extracts the package, imports and declarations of the file.
-    ///
     /// `buffer` must hold the text this tree was parsed from. Declarations inside function
     /// bodies are left out. Syntax errors are tolerated: whatever still parses is reported.
     #[must_use]

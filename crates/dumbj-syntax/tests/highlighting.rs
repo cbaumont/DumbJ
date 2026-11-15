@@ -1,5 +1,3 @@
-//! Golden tests: every highlight span of the fixture files.
-
 #![expect(
     clippy::unwrap_used,
     reason = "integration test: a panic is the failure report"
@@ -23,7 +21,6 @@ fn fixture(name: &str) -> (Language, Buffer) {
     )
 }
 
-/// One line per span: `line:column Kind "text"`.
 fn render(name: &str) -> String {
     let (language, buffer) = fixture(name);
     let tree = parse(language, &buffer, || false).unwrap().unwrap();
@@ -162,8 +159,7 @@ fn broken_source_still_highlights() {
     assert!(spans.len() > 3);
 }
 
-/// A known gap in the Kotlin grammar (ARCHITECTURE, Kotlin grammar decision). When this
-/// test fails the grammar has been fixed upstream: delete it and update the decision.
+/// A known Kotlin grammar gap: when this fails the grammar was fixed upstream, so delete the test.
 #[test]
 fn kotlin_annotated_function_type_parameter_is_a_known_grammar_gap() {
     let source = "fun Button(text: @Composable () -> Unit, enabled: Boolean) {}\nfun after() {}\n";

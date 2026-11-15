@@ -1,5 +1,3 @@
-//! Prints the tree-sitter syntax tree of a file, one node per line with field names.
-//!
 //! Usage: `cargo run -p dumbj-syntax --example dump_tree -- FILE`
 
 #![expect(clippy::print_stdout, reason = "a command-line tool")]

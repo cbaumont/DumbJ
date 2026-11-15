@@ -1,5 +1,3 @@
-//! Golden tests for the package, imports and declarations extracted from fixture files.
-
 #![expect(
     clippy::unwrap_used,
     reason = "integration test: a panic is the failure report"

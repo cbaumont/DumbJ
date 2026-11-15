@@ -1,5 +1,4 @@
-//! Reference classification and local-scope resolution. A `§` in the source marks the
-//! caret; it is removed before parsing.
+//! A `§` in the source marks the caret; it is removed before parsing.
 
 #![expect(
     clippy::unwrap_used,
@@ -131,7 +130,6 @@ fn type_parameters_are_not_declared_types() {
     );
 }
 
-/// The initialiser of the local the identifier at the caret resolves to.
 fn initialiser(language: Language, marked: &str) -> String {
     let (buffer, tree, caret) = at_caret(language, marked);
     let found = tree.reference_at(&buffer, caret).unwrap();

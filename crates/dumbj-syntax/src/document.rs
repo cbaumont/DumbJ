@@ -1,14 +1,8 @@
-//! The outline of documents and configuration files: Markdown headings and the like.
-//! These are the entries File Structure shows; none of them is a declaration that
-//! navigation can land on from code.
-
 use dumbj_text::{ByteOffset, ByteRange};
 use tree_sitter::Node;
 
 use crate::structure::{Collector, SymbolKind, named_children, range_of};
 
-/// The sub-range of `node` without surrounding whitespace, or `None` when it is blank.
-/// With `closing_hashes`, an ATX heading's optional closing `##` sequence is cut off too.
 fn trimmed(
     collector: &Collector<'_>,
     node: Node<'_>,
@@ -31,7 +25,6 @@ fn trimmed(
     Some(ByteOffset(start)..ByteOffset(start + name.len()))
 }
 
-/// The heading level of an ATX or setext heading node.
 fn heading_level(heading: Node<'_>) -> Option<usize> {
     named_children(heading)
         .into_iter()
@@ -46,9 +39,6 @@ fn heading_level(heading: Node<'_>) -> Option<usize> {
         })
 }
 
-/// Reports the headings of a Markdown document, nested by level: a heading's parent is
-/// the closest preceding heading with a smaller level. Headings inside lists and quotes
-/// are left out.
 pub(crate) fn markdown(collector: &mut Collector<'_>, root: Node<'_>) {
     // The enclosing headings: (level, symbol index), levels strictly increasing.
     let mut open: Vec<(usize, usize)> = Vec::new();
@@ -85,15 +75,12 @@ fn headings(collector: &mut Collector<'_>, node: Node<'_>, open: &mut Vec<(usize
     }
 }
 
-/// The key node of a TOML table header or pair: a bare, quoted or dotted key.
 fn toml_key(node: Node<'_>) -> Option<Node<'_>> {
     named_children(node)
         .into_iter()
         .find(|child| matches!(child.kind(), "bare_key" | "quoted_key" | "dotted_key"))
 }
 
-/// Reports the tables of a TOML file and the keys in them. Keys of inline tables are not
-/// listed; a pair before the first table has no parent.
 pub(crate) fn toml(collector: &mut Collector<'_>, root: Node<'_>) {
     for item in named_children(root) {
         match item.kind() {
@@ -121,7 +108,6 @@ pub(crate) fn toml(collector: &mut Collector<'_>, root: Node<'_>) {
     }
 }
 
-/// The `Name` node of an XML element's start (or empty-element) tag.
 fn xml_tag_name(element: Node<'_>) -> Option<Node<'_>> {
     let tag = named_children(element)
         .into_iter()
@@ -131,7 +117,6 @@ fn xml_tag_name(element: Node<'_>) -> Option<Node<'_>> {
         .find(|child| child.kind() == "Name")
 }
 
-/// The child elements of an XML element.
 fn xml_children(element: Node<'_>) -> Vec<Node<'_>> {
     named_children(element)
         .into_iter()
@@ -141,7 +126,6 @@ fn xml_children(element: Node<'_>) -> Vec<Node<'_>> {
         .collect()
 }
 
-/// The text content of an XML element without surrounding whitespace, and where it is.
 fn xml_text(collector: &Collector<'_>, element: Node<'_>) -> Option<(String, ByteRange)> {
     let content = named_children(element)
         .into_iter()
@@ -151,7 +135,6 @@ fn xml_text(collector: &Collector<'_>, element: Node<'_>) -> Option<(String, Byt
     Some((text, range))
 }
 
-/// The text of the first child element called `tag`.
 fn xml_child_text(
     collector: &Collector<'_>,
     element: Node<'_>,
@@ -163,9 +146,6 @@ fn xml_child_text(
     xml_text(collector, child)
 }
 
-/// The name of a Maven `dependency` or `plugin`, `groupId:artifactId` (just the
-/// `artifactId` when there is no group, as plugins often do), and where to land: the
-/// artifact id, as a point when the name is not written in one piece.
 fn xml_artifact(collector: &Collector<'_>, element: Node<'_>) -> Option<(String, ByteRange)> {
     let (artifact, range) = xml_child_text(collector, element, "artifactId")?;
     match xml_child_text(collector, element, "groupId") {
@@ -174,10 +154,6 @@ fn xml_artifact(collector: &Collector<'_>, element: Node<'_>) -> Option<(String,
     }
 }
 
-/// Reports the XML elements worth an outline entry: the root, its direct children, and
-/// anywhere below them the Maven elements that carry an identity, `module`, `dependency`
-/// and `plugin`. A dependency or plugin is named `groupId:artifactId`, a module by its
-/// path. Entries nest under the closest reported ancestor.
 pub(crate) fn xml(collector: &mut Collector<'_>, root: Node<'_>) {
     if let Some(element) = named_children(root)
         .into_iter()
@@ -226,9 +202,6 @@ fn xml_element(
 /// How deep nested YAML mappings are followed; guards the recursion against absurd input.
 const MAX_YAML_DEPTH: usize = 24;
 
-/// Reports the keys of the block mappings of a YAML file, nested the way the mappings
-/// are. Keys inside sequences and flow mappings (`{a: 1}`) are not listed, nor are merge
-/// keys (`<<`).
 pub(crate) fn yaml(collector: &mut Collector<'_>, root: Node<'_>) {
     for document in named_children(root) {
         if document.kind() == "document" {
@@ -237,8 +210,6 @@ pub(crate) fn yaml(collector: &mut Collector<'_>, root: Node<'_>) {
     }
 }
 
-/// Finds the block mappings at or below `node` (through the wrappers a document and a
-/// value put around them) and reports their pairs.
 fn yaml_node(collector: &mut Collector<'_>, node: Node<'_>, parent: Option<usize>, depth: usize) {
     if depth > MAX_YAML_DEPTH {
         return;

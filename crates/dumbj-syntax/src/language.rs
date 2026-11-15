@@ -1,5 +1,3 @@
-//! The languages DumbJ has a grammar for.
-
 use std::path::Path;
 use std::sync::OnceLock;
 
@@ -7,7 +5,6 @@ use tree_sitter::Query;
 
 use crate::SyntaxError;
 
-/// A language with a tree-sitter grammar and highlight query.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Language {
     Java,
@@ -40,8 +37,6 @@ impl Language {
         Self::Sql,
     ];
 
-    /// Picks the language from a file's name, or else its extension. Only the path is
-    /// looked at, never the content, so a script without extension is recognised by name.
     #[must_use]
     pub fn from_path(path: &Path) -> Option<Self> {
         let name = path.file_name()?.to_str()?;
@@ -53,7 +48,6 @@ impl Language {
             "java" => Some(Self::Java),
             "kt" | "kts" => Some(Self::Kotlin),
             "yaml" | "yml" => Some(Self::Yaml),
-            // Maven's pom.xml and Android's layouts are XML; so are IDE project files.
             "xml" | "xsd" | "xsl" | "xslt" | "svg" | "wsdl" | "pom" | "fxml" => Some(Self::Xml),
             "dockerfile" => Some(Self::Dockerfile),
             "properties" => Some(Self::Properties),
@@ -67,20 +61,16 @@ impl Language {
         }
     }
 
-    /// Files recognised by their whole name, which has no useful extension.
     fn from_file_name(name: &str) -> Option<Self> {
         match name {
             // The Gradle and Maven wrapper scripts have a `#!/bin/sh` line, no extension.
             "gradlew" | "mvnw" => Some(Self::Shell),
-            // `Dockerfile`, `Dockerfile.dev`, `Containerfile`; `app.dockerfile` is by extension.
             "Dockerfile" | "Containerfile" => Some(Self::Dockerfile),
             _ if name.starts_with("Dockerfile.") => Some(Self::Dockerfile),
             _ => None,
         }
     }
 
-    /// Whether [`crate::SyntaxTree::facts`] reports declarations or entries for this
-    /// language: code, and documents and configuration with a useful outline.
     #[must_use]
     pub fn has_structure(self) -> bool {
         matches!(
@@ -89,7 +79,6 @@ impl Language {
         )
     }
 
-    /// The name shown to the user.
     #[must_use]
     pub fn name(self) -> &'static str {
         match self {
@@ -108,8 +97,6 @@ impl Language {
         }
     }
 
-    /// A stable lowercase identifier for storing the language outside the process; see
-    /// [`Self::from_id`].
     #[must_use]
     pub fn as_str(self) -> &'static str {
         match self {
@@ -128,7 +115,6 @@ impl Language {
         }
     }
 
-    /// The language stored under `id` by [`Self::as_str`], or `None` for an unknown id.
     #[must_use]
     pub fn from_id(id: &str) -> Option<Self> {
         Self::ALL
@@ -171,7 +157,6 @@ impl Language {
         }
     }
 
-    /// The compiled highlight query, built once per language.
     pub(crate) fn highlights_query(self) -> Result<&'static Query, SyntaxError> {
         static QUERIES: [OnceLock<Result<Query, String>>; Language::ALL.len()] =
             [const { OnceLock::new() }; Language::ALL.len()];

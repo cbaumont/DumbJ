@@ -1,51 +1,35 @@
-//! What an identifier under the caret refers to syntactically, and resolution of names
-//! declared in enclosing local scopes (parameters, local variables, type parameters).
-
 use dumbj_text::{Buffer, ByteOffset, ByteRange};
 use tree_sitter::Node;
 
 use crate::structure::{Source, range_of};
 use crate::{Language, SyntaxTree};
 
-/// How an identifier is used where it stands.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ReferenceRole {
-    /// A type position: `Foo x`, `: Foo`, `new Foo()`, an annotation, an import.
     Type,
     /// The callee of a call: `foo()`, `x.foo()`. In Kotlin this may also be a constructor.
     Call,
-    /// A member read after a dot: `x.foo`.
     Member,
-    /// A bare name in an expression: a local, a field, or a type used as a qualifier.
     Value,
-    /// The name being declared; the caret is already on a declaration.
     Declaration,
 }
 
-/// An expression as far as the dumb engine understands it: what stands before the dot of
-/// a qualified reference, an argument of a call, or the initialiser of a local.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Qualifier {
     This,
     Super,
-    /// A single identifier: a local, a field or a type name.
     Name(String),
-    /// Dotted identifiers such as `java.util` or `a.b`.
     Path(String),
     /// A call: `foo(x)`, `a.foo(x)`, or in Kotlin a constructor call `Foo(x)`.
     Call(Box<Call>),
-    /// A member read on something that is not a plain dotted path: `foo().bar`.
     Member(Box<Qualifier>, String),
     /// A value whose type is written on the spot: `new Foo()`, `x as Foo`, or a literal
     /// (`String`, and `Int`/`int` and the like in the file's language).
     Typed(String),
-    /// A lambda, an anonymous function or a method reference.
     Lambda,
-    /// Any other expression. Its type is unknown to the dumb engine.
     Other,
 }
 
-/// A call expression: the callee's name, what it is called on, and its arguments.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Call {
     pub receiver: Option<Qualifier>,
@@ -53,10 +37,8 @@ pub struct Call {
     pub arguments: Vec<Argument>,
 }
 
-/// One argument of a call. A Kotlin trailing lambda is the last argument.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Argument {
-    /// The parameter name of a Kotlin named argument (`limit = 3`).
     pub name: Option<String>,
     pub value: Qualifier,
     /// A Kotlin lambda written after the parentheses; it goes to the last parameter.
@@ -76,31 +58,23 @@ impl Qualifier {
     }
 }
 
-/// An identifier occurrence and its syntactic context.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Reference {
     pub name: String,
     pub range: ByteRange,
     pub role: ReferenceRole,
     pub qualifier: Option<Qualifier>,
-    /// The arguments, when the identifier is the callee of a call.
     pub arguments: Option<Vec<Argument>>,
-    /// Whether the identifier is part of an import statement.
     pub in_import: bool,
 }
 
-/// A parameter, local variable or type parameter that a reference resolves to.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LocalDefinition {
     pub name_range: ByteRange,
-    /// The declared type without type arguments, when one is written.
     pub type_name: Option<String>,
-    /// The expression the name is initialised from (`val x = foo.bar()`), which gives its
-    /// type when none is written.
     pub initialiser: Option<Qualifier>,
 }
 
-/// A name introduced into a scope, with the node that carries its type if there is one.
 pub(crate) struct Binder<'t> {
     pub(crate) name: Node<'t>,
     pub(crate) type_name: Option<String>,
@@ -117,7 +91,6 @@ impl<'t> Binder<'t> {
     }
 }
 
-/// Classifies a qualifier expression by its text.
 pub(crate) fn qualifier_from_text(text: &str) -> Qualifier {
     let is_identifier = |part: &str| {
         let mut chars = part.chars();
@@ -181,9 +154,6 @@ impl SyntaxTree {
         }
     }
 
-    /// Describes the identifier at `offset`, or `None` if there is no identifier there
-    /// (whitespace, a keyword, a comment, a string).
-    ///
     /// `buffer` must hold the text this tree was parsed from.
     #[must_use]
     pub fn reference_at(&self, buffer: &Buffer, offset: ByteOffset) -> Option<Reference> {
@@ -191,8 +161,6 @@ impl SyntaxTree {
         Some(self.classify(&Source { buffer }, node))
     }
 
-    /// The receiver type, as written and without type arguments, of the Kotlin extension
-    /// function or property that encloses `offset`.
     #[must_use]
     pub fn extension_receiver_at(&self, buffer: &Buffer, offset: ByteOffset) -> Option<String> {
         if self.language() != Language::Kotlin {
@@ -202,8 +170,6 @@ impl SyntaxTree {
         crate::kotlin::extension_receiver(&Source { buffer }, node)
     }
 
-    /// Every identifier in the file spelled `name`, in source order. Comments and strings
-    /// are never included because they contain no identifier nodes.
     #[must_use]
     pub fn references_named(&self, buffer: &Buffer, name: &str) -> Vec<Reference> {
         let source = Source { buffer };
@@ -229,10 +195,6 @@ impl SyntaxTree {
         }
     }
 
-    /// Resolves the identifier at `offset` to a declaration in an enclosing local scope: a
-    /// parameter, a local variable, a loop or catch variable, or (for `Type` references)
-    /// a type parameter. The innermost, nearest preceding declaration wins.
-    ///
     /// Returns `None` when the name is not declared locally, which means it has to be
     /// looked up among fields, types and imports instead.
     #[must_use]

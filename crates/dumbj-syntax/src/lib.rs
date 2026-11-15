@@ -1,5 +1,4 @@
-//! DumbJ's tree-sitter layer: language detection, cancellable parsing and highlighting.
-//! No UI and no I/O; callers run [`parse`] on a background thread.
+//! Tree-sitter layer with no UI and no I/O; callers run [`parse`] on a background thread.
 
 mod document;
 mod highlight;
@@ -20,7 +19,6 @@ pub use language::Language;
 pub use reference::{Argument, Call, LocalDefinition, Qualifier, Reference, ReferenceRole};
 pub use structure::{FileFacts, Import, Parameter, Platform, Symbol, SymbolKind};
 
-/// A failure in the syntax layer. These indicate a bug in a bundled grammar or query.
 #[derive(Debug, Error)]
 pub enum SyntaxError {
     #[error("the {} grammar is incompatible with this tree-sitter version: {message}", language.name())]
@@ -29,7 +27,6 @@ pub enum SyntaxError {
     Query { language: Language, message: String },
 }
 
-/// A parsed syntax tree for one version of a buffer.
 #[derive(Debug, Clone)]
 pub struct SyntaxTree {
     language: Language,
@@ -43,13 +40,11 @@ impl SyntaxTree {
         self.language
     }
 
-    /// The [`Buffer::version`] this tree was parsed from.
     #[must_use]
     pub fn buffer_version(&self) -> u64 {
         self.buffer_version
     }
 
-    /// Whether the parser had to recover from syntax errors.
     #[must_use]
     pub fn has_errors(&self) -> bool {
         self.tree.root_node().has_error()
@@ -60,8 +55,6 @@ impl SyntaxTree {
     }
 }
 
-/// Parses `buffer` as `language`.
-///
 /// `cancelled` is polled regularly; when it returns `true` parsing stops and `Ok(None)` is
 /// returned. Source with syntax errors still yields a tree.
 pub fn parse(

@@ -1,11 +1,8 @@
-//! Syntax highlighting from tree-sitter highlight queries.
-
 use dumbj_text::{Buffer, ByteOffset, ByteRange};
 use tree_sitter::{Node, QueryCursor, StreamingIterator as _};
 
 use crate::{SyntaxError, SyntaxTree};
 
-/// The semantic role of a piece of source text. Themes map each role to a colour.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum HighlightKind {
     Comment,
@@ -14,21 +11,17 @@ pub enum HighlightKind {
     StringEscape,
     Regex,
     Number,
-    /// `true`, `false`, `null` and similar built-in values.
     ConstantBuiltin,
     Constant,
     Type,
-    /// Primitive types such as `int`.
     TypeBuiltin,
     Constructor,
     Function,
     FunctionBuiltin,
     Variable,
-    /// `this`, `super`, Kotlin's `it`.
     VariableBuiltin,
     Parameter,
     Property,
-    /// Annotations.
     Attribute,
     Namespace,
     Label,
@@ -66,8 +59,6 @@ impl HighlightKind {
         Self::PunctuationSpecial,
     ];
 
-    /// Maps a query capture name such as `function.method` to a kind, falling back to the
-    /// name's dotted prefixes. Unknown names give `None`.
     fn from_capture(name: &str) -> Option<Self> {
         let mut name = name;
         loop {
@@ -109,14 +100,12 @@ impl HighlightKind {
     }
 }
 
-/// A run of text with one highlight kind.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HighlightSpan {
     pub range: ByteRange,
     pub kind: HighlightKind,
 }
 
-/// Yields the buffer's text between two offsets as rope chunks, for query predicates.
 struct Chunks<'a> {
     buffer: &'a Buffer,
     offset: usize,
@@ -140,7 +129,6 @@ impl<'a> Iterator for Chunks<'a> {
     }
 }
 
-/// One query capture: a node's range, the pattern that produced it and what it means.
 /// `kind` is `None` for `@none`, which clears highlighting inside an enclosing capture.
 struct Capture {
     start: usize,
@@ -150,8 +138,6 @@ struct Capture {
 }
 
 impl SyntaxTree {
-    /// The highlight spans that intersect `range`, sorted and non-overlapping.
-    ///
     /// `buffer` must hold the text this tree was parsed from. Where captures nest, the
     /// innermost node wins; where several patterns capture the same node, the pattern
     /// that appears last in the query wins.
@@ -187,7 +173,6 @@ impl SyntaxTree {
                 "none" => None,
                 name => match HighlightKind::from_capture(name) {
                     Some(kind) => Some(kind),
-                    // Private captures (`@_name`) and names no theme role exists for.
                     None => continue,
                 },
             };
@@ -213,7 +198,6 @@ impl SyntaxTree {
     }
 }
 
-/// Flattens nested captures into non-overlapping spans clipped to `clip_start..clip_end`.
 fn flatten(captures: &[Capture], clip_start: usize, clip_end: usize) -> Vec<HighlightSpan> {
     let mut spans: Vec<HighlightSpan> = Vec::new();
     let mut emit = |start: usize, end: usize, kind: Option<HighlightKind>| {
@@ -233,7 +217,6 @@ fn flatten(captures: &[Capture], clip_start: usize, clip_end: usize) -> Vec<High
         }
     };
 
-    // The captures enclosing the current position, innermost last.
     let mut open: Vec<&Capture> = Vec::new();
     let mut position = 0;
     for capture in captures {
