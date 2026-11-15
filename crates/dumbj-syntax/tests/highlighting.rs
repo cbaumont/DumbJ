@@ -70,8 +70,13 @@ fn yaml_highlights() {
 }
 
 #[test]
+fn xml_highlights() {
+    insta::assert_snapshot!(render("pom.xml"));
+}
+
+#[test]
 fn a_range_query_matches_the_same_part_of_a_full_query() {
-    for name in ["Sample.java", "Sample.kt", "sample.yaml"] {
+    for name in ["Sample.java", "Sample.kt", "sample.yaml", "pom.xml"] {
         let (language, buffer) = fixture(name);
         let tree = parse(language, &buffer, || false).unwrap().unwrap();
         let all = tree

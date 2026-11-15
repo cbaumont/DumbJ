@@ -13,10 +13,11 @@ pub enum Language {
     Java,
     Kotlin,
     Yaml,
+    Xml,
 }
 
 impl Language {
-    pub const ALL: &[Self] = &[Self::Java, Self::Kotlin, Self::Yaml];
+    pub const ALL: &[Self] = &[Self::Java, Self::Kotlin, Self::Yaml, Self::Xml];
 
     /// Picks the language from a file name's extension.
     #[must_use]
@@ -26,6 +27,8 @@ impl Language {
             "java" => Some(Self::Java),
             "kt" | "kts" => Some(Self::Kotlin),
             "yaml" | "yml" => Some(Self::Yaml),
+            // Maven's pom.xml and Android's layouts are XML; so are IDE project files.
+            "xml" | "xsd" | "xsl" | "xslt" | "svg" | "wsdl" | "pom" | "fxml" => Some(Self::Xml),
             _ => None,
         }
     }
@@ -37,6 +40,7 @@ impl Language {
             Self::Java => "Java",
             Self::Kotlin => "Kotlin",
             Self::Yaml => "YAML",
+            Self::Xml => "XML",
         }
     }
 
@@ -48,6 +52,7 @@ impl Language {
             Self::Java => "java",
             Self::Kotlin => "kotlin",
             Self::Yaml => "yaml",
+            Self::Xml => "xml",
         }
     }
 
@@ -68,6 +73,7 @@ impl Language {
             #[cfg(not(feature = "kotlin-sg"))]
             Self::Kotlin => tree_sitter_kotlin_ng::LANGUAGE.into(),
             Self::Yaml => tree_sitter_yaml::LANGUAGE.into(),
+            Self::Xml => tree_sitter_xml::LANGUAGE_XML.into(),
         }
     }
 
@@ -76,6 +82,7 @@ impl Language {
             Self::Java => include_str!("../queries/java/highlights.scm"),
             Self::Kotlin => include_str!("../queries/kotlin/highlights.scm"),
             Self::Yaml => include_str!("../queries/yaml/highlights.scm"),
+            Self::Xml => include_str!("../queries/xml/highlights.scm"),
         }
     }
 
@@ -108,6 +115,7 @@ mod tests {
         assert_eq!(detect("build.gradle.kts"), Some(Language::Kotlin));
         assert_eq!(detect("ci.YML"), Some(Language::Yaml));
         assert_eq!(detect("config.yaml"), Some(Language::Yaml));
+        assert_eq!(detect("pom.xml"), Some(Language::Xml));
         assert_eq!(detect("README.md"), None);
         assert_eq!(detect("Makefile"), None);
     }
