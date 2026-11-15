@@ -1,0 +1,22 @@
+---
+source: crates/dumbj-syntax/tests/structure.rs
+expression: "render(\"libs.versions.toml\")"
+---
+package None
+2:2 Table versions
+3:1 Key versions.kotlin
+4:1 Key versions.coroutines
+5:1 Key versions.junit
+6:1 Key versions.enabled
+7:1 Key versions.build
+8:1 Key versions.released
+10:2 Table libraries
+11:1 Key libraries.kotlinx-coroutines-core
+12:1 Key libraries.junit-jupiter
+13:1 Key libraries."quoted.key"
+14:1 Key libraries.escaped
+16:2 Table plugins
+17:1 Key plugins.kotlin-jvm
+19:3 Table bundles
+20:1 Key bundles.name
+21:1 Key bundles.libraries

@@ -30,6 +30,10 @@ pub enum SymbolKind {
     EnumConstant,
     /// A Markdown heading.
     Heading,
+    /// A TOML table or array of tables.
+    Table,
+    /// A key of a configuration file: a TOML or YAML key.
+    Key,
 }
 
 impl SymbolKind {
@@ -50,6 +54,8 @@ impl SymbolKind {
         Self::Property,
         Self::EnumConstant,
         Self::Heading,
+        Self::Table,
+        Self::Key,
     ];
 
     /// A stable name for storing the kind outside the process; see [`Self::from_name`].
@@ -71,6 +77,8 @@ impl SymbolKind {
             Self::Property => "Property",
             Self::EnumConstant => "EnumConstant",
             Self::Heading => "Heading",
+            Self::Table => "Table",
+            Self::Key => "Key",
         }
     }
 
@@ -93,6 +101,8 @@ impl SymbolKind {
             "Property" => Some(Self::Property),
             "EnumConstant" => Some(Self::EnumConstant),
             "Heading" => Some(Self::Heading),
+            "Table" => Some(Self::Table),
+            "Key" => Some(Self::Key),
             _ => None,
         }
     }
@@ -117,7 +127,7 @@ impl SymbolKind {
     /// but are not searched for across the project and never resolve a reference.
     #[must_use]
     pub fn is_document(self) -> bool {
-        matches!(self, Self::Heading)
+        matches!(self, Self::Heading | Self::Table | Self::Key)
     }
 
     /// Whether the symbol can be called.
@@ -343,11 +353,11 @@ impl SyntaxTree {
             Language::Java => crate::java::collect(&mut collector, root, None),
             Language::Kotlin => crate::kotlin::collect(&mut collector, root, None),
             Language::Markdown => crate::document::markdown(&mut collector, root),
+            Language::Toml => crate::document::toml(&mut collector, root),
             Language::Yaml
             | Language::Xml
             | Language::Properties
             | Language::Json
-            | Language::Toml
             | Language::Groovy
             | Language::Shell
             | Language::Dockerfile

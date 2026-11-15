@@ -84,3 +84,39 @@ fn headings(collector: &mut Collector<'_>, node: Node<'_>, open: &mut Vec<(usize
         }
     }
 }
+
+/// The key node of a TOML table header or pair: a bare, quoted or dotted key.
+fn toml_key(node: Node<'_>) -> Option<Node<'_>> {
+    named_children(node)
+        .into_iter()
+        .find(|child| matches!(child.kind(), "bare_key" | "quoted_key" | "dotted_key"))
+}
+
+/// Reports the tables of a TOML file and the keys in them. Keys of inline tables are not
+/// listed; a pair before the first table has no parent.
+pub(crate) fn toml(collector: &mut Collector<'_>, root: Node<'_>) {
+    for item in named_children(root) {
+        match item.kind() {
+            "pair" => {
+                if let Some(key) = toml_key(item) {
+                    collector.push(SymbolKind::Key, item, key, None);
+                }
+            }
+            "table" | "table_array_element" => {
+                let Some(name) = toml_key(item) else {
+                    continue;
+                };
+                let table = collector.push(SymbolKind::Table, item, name, None);
+                for pair in named_children(item) {
+                    if pair.kind() != "pair" {
+                        continue;
+                    }
+                    if let Some(key) = toml_key(pair) {
+                        collector.push(SymbolKind::Key, pair, key, Some(table));
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+}

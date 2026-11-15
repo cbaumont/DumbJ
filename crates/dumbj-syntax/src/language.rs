@@ -83,7 +83,10 @@ impl Language {
     /// language: code, and documents and configuration with a useful outline.
     #[must_use]
     pub fn has_structure(self) -> bool {
-        matches!(self, Self::Java | Self::Kotlin | Self::Markdown)
+        matches!(
+            self,
+            Self::Java | Self::Kotlin | Self::Markdown | Self::Toml
+        )
     }
 
     /// The name shown to the user.

@@ -121,6 +121,11 @@ fn markdown_structure() {
 }
 
 #[test]
+fn toml_structure() {
+    insta::assert_snapshot!(render("libs.versions.toml"));
+}
+
+#[test]
 fn declarations_survive_syntax_errors() {
     let (_, facts) = facts_of(
         Language::Java,
