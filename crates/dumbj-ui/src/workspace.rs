@@ -6,7 +6,7 @@ use dumbj_settings::UiRole;
 use gpui::{
     AnyElement, App, Bounds, Context, CursorStyle, Decorations, Entity, FocusHandle, IntoElement,
     KeyDownEvent, ModifiersChangedEvent, MouseButton, MouseDownEvent, PathPromptOptions, Pixels,
-    Point, Render, ResizeEdge, Size, Subscription, Window, WindowBounds, WindowDecorations,
+    Point, Render, ResizeEdge, Size, Subscription, Task, Window, WindowBounds, WindowDecorations,
     WindowOptions, div, prelude::*, px, size, svg,
 };
 
@@ -22,13 +22,15 @@ mod hierarchy;
 mod library;
 mod navigation;
 mod search_popup;
+mod state;
 mod usages;
 
 use dumbj_index::SearchScope;
+use dumbj_settings::ProjectState;
 use find_in_files::FindInFiles;
 use hierarchy::HierarchyWindow;
 use navigation::{Chooser, Indexing, NavigationHistory};
-use search_popup::{SearchMode, SearchPopup};
+use search_popup::{RecentKind, SearchMode, SearchPopup};
 use usages::FindWindow;
 
 const HEADER_HEIGHT: Pixels = px(40.);
@@ -102,6 +104,10 @@ pub(crate) struct Workspace {
     find_in_files: Option<FindInFiles>,
     find_query: Entity<TextInput>,
     find_mask: Entity<TextInput>,
+    state: ProjectState,
+    /// Where `state` is saved; known once the background lookup has finished.
+    state_dir: Option<PathBuf>,
+    state_save: Option<Task<()>>,
     find_window: Option<FindWindow>,
     find_window_focus: FocusHandle,
     hierarchy_window: Option<HierarchyWindow>,
@@ -206,6 +212,9 @@ impl Workspace {
             find_in_files: None,
             find_query,
             find_mask,
+            state: ProjectState::default(),
+            state_dir: None,
+            state_save: None,
             find_window: None,
             find_window_focus: cx.focus_handle(),
             hierarchy_window: None,
@@ -292,6 +301,7 @@ impl Workspace {
         let handle = tree.read(cx).focus_handle().clone();
         window.focus(&handle, cx);
         self.start_indexing(root.clone(), cx);
+        self.load_project_state(root.clone(), cx);
         self.start_jar_indexing(cx);
         self.project = Some(Project { root, name, tree });
         self.project_window = ToolWindowState::Visible;
@@ -300,6 +310,7 @@ impl Workspace {
     }
 
     fn open_file(&mut self, path: PathBuf, window: &mut Window, cx: &mut Context<Self>) {
+        let opened = path.clone();
         let index = self
             .tabs
             .iter()
@@ -335,9 +346,16 @@ impl Workspace {
                 self.tabs.len() - 1
             });
         self.activate_tab(index, window, cx);
+        self.record_recent_file(&opened, cx);
     }
 
     fn activate_tab(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
+        if index >= self.tabs.len() {
+            return;
+        }
+        if self.active != Some(index) {
+            self.record_current_location(cx);
+        }
         let Some(tab) = self.tabs.get(index) else {
             return;
         };
@@ -356,6 +374,9 @@ impl Workspace {
     fn close_tab(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
         if index >= self.tabs.len() {
             return;
+        }
+        if self.active == Some(index) {
+            self.record_current_location(cx);
         }
         self.tabs.remove(index);
         let active = self.active.unwrap_or(0);
@@ -467,6 +488,12 @@ impl Workspace {
             | Action::GotoFile
             | Action::GotoSymbol => self.index.is_some() && !other_popup,
             Action::FileStructure => has_editor && self.index.is_some() && !other_popup,
+            Action::RecentFiles | Action::RecentLocations => {
+                self.project.is_some()
+                    && !(self.goto_line_open
+                        || self.chooser.is_some()
+                        || self.find_in_files.is_some())
+            }
             Action::FindInPath => {
                 self.project.is_some()
                     && !(self.goto_line_open || self.chooser.is_some() || self.search.is_some())
@@ -521,6 +548,12 @@ impl Workspace {
             }
             Action::FileStructure => self.open_file_structure(window, cx),
             Action::FindInPath => self.open_find_in_files(window, cx),
+            Action::RecentFiles => {
+                self.open_search(SearchMode::Recent(RecentKind::Files), window, cx);
+            }
+            Action::RecentLocations => {
+                self.open_search(SearchMode::Recent(RecentKind::Locations), window, cx);
+            }
             Action::FindUsages => self.find_usages(false, cx),
             Action::ShowUsages => self.find_usages(true, cx),
             Action::ActivateFindToolWindow => self.toggle_find_window(window, cx),

@@ -53,7 +53,7 @@
 - [x] File Structure popup
 - [~] Call Hierarchy / Type Hierarchy — callers only, no callees
 - [x] Navigate Back / Forward
-- [ ] Recent Files / Recent Locations / Last Edit Location / Switcher
+- [~] Recent Files, Recent Locations — per project, kept in the state dir; no Last Edit Location or Switcher
 - [~] Find in Files — regex, case, whole word, file mask, directory scope, gitignore; no Replace in Files
 - [ ] Bookmarks
 - [ ] Copy Reference / Path / permalink
@@ -106,8 +106,8 @@ Search & go to
 - [x] GotoFile
 - [x] GotoSymbol
 - [x] GotoLine
-- [ ] RecentFiles
-- [ ] RecentLocations
+- [x] RecentFiles
+- [x] RecentLocations
 - [ ] Switcher
 
 Code navigation

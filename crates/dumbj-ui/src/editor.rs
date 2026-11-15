@@ -294,6 +294,15 @@ impl EditorView {
         )
     }
 
+    /// The trimmed text of the caret's line; `None` until the file has loaded.
+    pub(crate) fn caret_line_text(&self) -> Option<String> {
+        let buffer = self.model.buffer();
+        matches!(self.state, LoadState::Ready).then(|| {
+            let line = buffer.line(self.model.caret_point().line);
+            line.trim().chars().take(200).collect()
+        })
+    }
+
     pub(crate) fn selection_for_search(&self) -> Option<String> {
         let selected = self.model.selected_text();
         (!selected.is_empty() && !selected.contains('\n')).then_some(selected)

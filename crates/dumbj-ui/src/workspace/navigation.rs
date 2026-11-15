@@ -222,6 +222,7 @@ impl Workspace {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        self.record_current_location(cx);
         if let Some(from) = self.current_location(cx) {
             self.history.record_jump(from, to.clone());
         }
@@ -229,12 +230,14 @@ impl Workspace {
     }
 
     pub(super) fn go_back(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.record_current_location(cx);
         if let Some(location) = self.history.back() {
             self.show_location(location, window, cx);
         }
     }
 
     pub(super) fn go_forward(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.record_current_location(cx);
         if let Some(location) = self.history.forward() {
             self.show_location(location, window, cx);
         }
