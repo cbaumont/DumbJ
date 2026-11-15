@@ -1,7 +1,4 @@
-//! The jump rule (ARCHITECTURE, "Dumb jump rule"): jump directly only when exactly one
-//! candidate is in the best rank tier, its kind fits the reference and nothing about the
-//! lookup was a guess. Otherwise the caller shows a chooser sorted by rank. A wrong jump is
-//! worse than a chooser.
+//! Jumps only when one candidate is in the best tier and nothing was guessed; otherwise a chooser.
 
 use std::cell::OnceCell;
 use std::collections::HashSet;
@@ -31,7 +28,6 @@ pub enum Tier {
 pub struct Target {
     pub path: PathBuf,
     pub range: ByteRange,
-    /// The declaration in the index; `None` for a local.
     pub symbol: Option<SymbolId>,
     pub tier: Tier,
 }
@@ -58,17 +54,14 @@ pub struct Site<'a> {
     pub buffer: &'a Buffer,
 }
 
-/// How deep supertype chains are followed. Guards against cycles and absurd hierarchies.
 const MAX_SUPERTYPE_DEPTH: usize = 12;
 
-/// How many calls and local initialisers are followed to find the type of one expression.
 const MAX_EXPRESSION_DEPTH: usize = 8;
 
 fn kind_fits(kind: SymbolKind, role: ReferenceRole, language: Language) -> bool {
     match role {
         ReferenceRole::Type => kind.is_type(),
-        // In Kotlin `Foo()` constructs a Foo, so a call may name a type; its constructors
-        // are reached through the type (see `Lookup::callables_of`).
+        // Kotlin `Foo()` constructs a Foo.
         ReferenceRole::Call => {
             matches!(kind, SymbolKind::Function | SymbolKind::Method)
                 || (language == Language::Kotlin && kind.is_type())
@@ -109,7 +102,6 @@ impl<'a> Resolver<'a> {
         current
     }
 
-    /// The types whose bodies contain `offset` in `file`, innermost first.
     fn enclosing_types(&self, file: FileId, offset: ByteOffset) -> Vec<SymbolId> {
         let Some(facts) = self.facts(file) else {
             return Vec::new();
@@ -133,10 +125,7 @@ impl<'a> Resolver<'a> {
         found.into_iter().map(|(_, id)| id).collect()
     }
 
-    /// How `candidate` ranks for an unqualified name used in `file`.
-    ///
-    /// With `as_member`, the candidate is a member reached through some receiver, so it
-    /// ranks like the top-level type that contains it.
+    /// With `as_member`, ranks like the top-level type containing the candidate.
     fn tier(
         &self,
         file: FileId,
@@ -167,8 +156,7 @@ impl<'a> Resolver<'a> {
         if explicit {
             return Tier::ExplicitImport;
         }
-        // A nested declaration is only visible unqualified through an import that names
-        // it or its container, so "same package" applies to top-level subjects only.
+        // Nested declarations are only visible unqualified through an import.
         let container = match self.index.parent(subject) {
             Some(parent) => self.index.fqn(parent),
             None => self.index.package_of(subject).to_owned(),
@@ -215,8 +203,6 @@ impl<'a> Resolver<'a> {
             .collect()
     }
 
-    /// Resolves a type name written in `file`: simple (`Money`), nested (`Money.Currency`)
-    /// or fully qualified. Returns the types in the best tier.
     fn resolve_type(&self, file: FileId, enclosing: &[SymbolId], name: &str) -> Vec<SymbolId> {
         let types = |candidates: &[SymbolId]| -> Vec<SymbolId> {
             candidates
@@ -267,7 +253,6 @@ impl<'a> Resolver<'a> {
             .collect()
     }
 
-    /// `type_id`, then its supertypes breadth first, each once.
     fn with_supertypes(&self, type_id: SymbolId) -> Vec<SymbolId> {
         let mut seen = HashSet::from([type_id]);
         let mut order = vec![type_id];
@@ -287,12 +272,8 @@ impl<'a> Resolver<'a> {
         order
     }
 
-    /// The members of `owner` called `name` that fit `role`: its own, those of its Kotlin
-    /// companion object, or failing that the nearest supertype's.
-    ///
-    /// `applicable` says whether a member can take the call's arguments. Overloads may be
-    /// spread over a hierarchy, so the nearest type with an applicable member wins; when
-    /// no member is applicable anywhere, the nearest type that has the name does.
+    /// Overloads can span a hierarchy: the nearest type with an applicable member wins,
+    /// else the nearest type with the name.
     fn members_named(
         &self,
         owner: SymbolId,
@@ -304,7 +285,7 @@ impl<'a> Resolver<'a> {
             |symbol: &Symbol| symbol.name == name && kind_fits(symbol.kind, role, self.language);
         let mut nearest = Vec::new();
         for type_id in self.with_supertypes(owner) {
-            // A Java record's components are also its accessor methods: `point.x()`.
+            // Record components are also accessor methods.
             let is_record = self
                 .symbol(type_id)
                 .is_some_and(|s| s.kind == SymbolKind::Record);
@@ -345,8 +326,7 @@ impl<'a> Resolver<'a> {
         nearest
     }
 
-    /// The types a value of declared type `type_name` has, resolved where `declared_in`
-    /// is written. `None` when the type is unknown to the index.
+    /// `None` when the type is not in the index.
     fn types_named(
         &self,
         declared_in: SymbolId,
@@ -360,13 +340,11 @@ impl<'a> Resolver<'a> {
     }
 }
 
-/// Any member will do: the lookup is not a call, or its arguments do not matter.
 fn any_member(_: SymbolId) -> bool {
     true
 }
 
-/// The group of interchangeable built-in types `name` belongs to: text, numbers (a Java
-/// `char` widens to `int`) or booleans. Values never convert between groups.
+/// Built-in types that convert into each other: text, numbers (Java `char` widens), booleans.
 fn scalar_group(name: &str) -> Option<u8> {
     match name {
         "String" => Some(0),
@@ -381,11 +359,8 @@ fn simple_name(type_name: &str) -> &str {
     type_name.rsplit('.').next().unwrap_or(type_name)
 }
 
-/// How well a call's arguments suit one callable. Later variants are better.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 enum Fit {
-    /// The call cannot be to this callable: wrong argument count, an unknown parameter
-    /// name, or an argument whose type certainly does not convert.
     No,
     Maybe,
     Exact,
@@ -396,7 +371,6 @@ enum Receiver {
     Function,
     Types(Vec<SymbolId>),
     External(String),
-    /// Nothing is known about it (a call result, an untyped local).
     Unknown,
 }
 
@@ -404,8 +378,7 @@ struct Lookup<'a> {
     site: Site<'a>,
     resolver: Resolver<'a>,
     enclosing: Vec<SymbolId>,
-    /// What `this` is inside a Kotlin extension function: its receiver. It is the
-    /// innermost implicit receiver, ahead of the enclosing types.
+    /// Inside a Kotlin extension, `this` is its receiver, ahead of the enclosing types.
     extension_receiver: Option<Receiver>,
 }
 
@@ -430,7 +403,6 @@ struct CallSite<'q> {
 struct Found {
     local: Option<LocalDefinition>,
     ranked: Vec<(SymbolId, Tier)>,
-    /// False when the lookup involved a guess, which always means a chooser.
     confident: bool,
 }
 
@@ -517,8 +489,7 @@ impl Lookup<'_> {
         if let Some(local) = tree.resolve_local(buffer, at, name, ReferenceRole::Value) {
             return match (&local.type_name, &local.initialiser) {
                 (Some(type_name), _) => self.receiver_of_written_type(type_name),
-                // `val paid = Cash.of(…)`: the local has the type of its initialiser,
-                // which is evaluated where the local is declared.
+                // Evaluated where the local is declared.
                 (None, Some(initialiser)) => {
                     self.receiver(initialiser, local.name_range.start, depth + 1)
                 }
@@ -601,7 +572,7 @@ impl Lookup<'_> {
             return Receiver::Unknown;
         }
         if found.ranked.is_empty() {
-            // `ArrayList<Foo>()`: a Kotlin constructor call of a library type.
+            // A Kotlin constructor call of a library type: `ArrayList<Foo>()`.
             let constructs = call.receiver.is_none()
                 && self.site.tree.language() == Language::Kotlin
                 && call.name.starts_with(char::is_uppercase);
@@ -611,7 +582,6 @@ impl Lookup<'_> {
                 Receiver::Unknown
             };
         }
-        // Overloads may tie as long as they all return the same thing.
         let mut results = found.ranked.iter().take(in_best_tier).map(|(id, _)| {
             match self.resolver.symbol(*id).map(|symbol| symbol.kind) {
                 Some(kind) if kind.is_type() => Receiver::Types(vec![*id]),
@@ -703,8 +673,7 @@ impl Lookup<'_> {
             && self.site.index.parent(id).and_then(kind) == Some(SymbolKind::Record)
     }
 
-    /// The type of an argument. Unlike a receiver, a bare type name is not a value of
-    /// that type (`foo(Job)` passes a companion object), unless it names an `object`.
+    /// A bare type name passes a companion (`foo(Job)`), not a value of that type, unless it is an `object`.
     fn argument_type(&self, value: &Qualifier, at: ByteOffset, depth: usize) -> Receiver {
         let receiver = self.receiver(value, at, depth);
         let (Qualifier::Name(name) | Qualifier::Path(name), Receiver::Types(types)) =
@@ -728,8 +697,7 @@ impl Lookup<'_> {
         }
     }
 
-    /// Whether a value of type `argument` can be passed for `parameter` of `callee`.
-    /// Only a certain mismatch is `No`: library types are not known to the index.
+    /// Only a certain mismatch is `No`: library types are invisible to the index.
     fn type_fit(&self, argument: &Receiver, callee: SymbolId, parameter: &Parameter) -> Fit {
         let Some(written) = &parameter.type_name else {
             return Fit::Maybe;
@@ -742,13 +710,11 @@ impl Lookup<'_> {
         let kind = |id: &SymbolId| self.resolver.symbol(*id).map(|symbol| symbol.kind);
         let is_alias =
             |ids: &[SymbolId]| ids.iter().any(|id| kind(id) == Some(SymbolKind::TypeAlias));
-        // A value of a library type is never an instance of a project type, and nothing
-        // but text, a number or a boolean is passed for one.
         let unless = |ruled_out: bool| if ruled_out { Fit::No } else { Fit::Maybe };
         match argument {
             Receiver::Unknown => Fit::Maybe,
             Receiver::Function if declared.is_empty() => unless(scalar_group(simple).is_some()),
-            // A lambda converts to an interface or a function type alias, not to a class.
+            // A lambda converts to an interface or function type alias, not a class.
             Receiver::Function => unless(declared.iter().all(|id| {
                 !matches!(
                     kind(id),
@@ -780,12 +746,10 @@ impl Lookup<'_> {
         let Some(symbol) = self.resolver.symbol(id) else {
             return Fit::No;
         };
-        // No parameter list to check: a Java class without a constructor, a property of a
-        // function type, a record accessor.
         let Some(declared) = &symbol.parameters else {
             return Fit::Maybe;
         };
-        // Java calls a Kotlin extension with the receiver as the first argument.
+        // Java passes a Kotlin extension's receiver as the first argument.
         let receiver = symbol
             .receiver
             .as_ref()
@@ -813,13 +777,11 @@ impl Lookup<'_> {
                 next_positional = None;
                 parameters.iter().position(|p| p.name == *name)
             } else if let Some(slot) = next_positional {
-                // A variadic parameter takes every remaining positional argument.
                 if parameters.get(slot).is_some_and(|p| !p.variadic) {
                     next_positional = Some(slot + 1);
                 }
                 Some(slot).filter(|slot| *slot < parameters.len())
             } else {
-                // A positional argument after a named one: not worth modelling.
                 return Fit::Maybe;
             };
             let Some((parameter, is_bound)) =
@@ -840,8 +802,7 @@ impl Lookup<'_> {
         if missing { Fit::No } else { fit }
     }
 
-    /// What calling the candidate `id` runs: itself, or for a type its constructors. A
-    /// class with a primary constructor (or none at all) stands for that constructor.
+    /// A class with a primary constructor, or none, stands for that constructor.
     fn callables_of(&self, id: SymbolId) -> Vec<SymbolId> {
         if !self.resolver.is_type(id) {
             return vec![id];
@@ -861,8 +822,7 @@ impl Lookup<'_> {
         own.into_iter().chain(constructors).collect()
     }
 
-    /// Whether `id` is a type that `Name(…)` cannot construct: an interface, an object.
-    /// Calling it can only mean a SAM constructor or an `invoke` operator.
+    /// An interface or object: `Name(…)` would be a SAM constructor or `invoke`.
     fn is_uncallable_type(&self, id: SymbolId) -> bool {
         self.resolver.symbol(id).is_some_and(|symbol| {
             symbol.parameters.is_none()
@@ -886,11 +846,10 @@ impl Lookup<'_> {
                     .map(|callable| (callable, *tier, self.fit(call, callable)))
             })
             .collect();
-        // If nothing fits, the model is missing something: keep every candidate.
+        // Nothing fits: the model is missing something, so keep everything.
         if fits.iter().any(|(_, _, fit)| *fit != Fit::No) {
             fits.retain(|(_, _, fit)| *fit != Fit::No);
         }
-        // `Job()` is the function `Job`, not the interface next to it.
         let callable_tier = fits
             .iter()
             .filter(|(id, _, _)| !self.is_uncallable_type(*id))
@@ -899,8 +858,6 @@ impl Lookup<'_> {
         fits.retain(|(id, tier, _)| {
             !(self.is_uncallable_type(*id) && callable_tier.is_some_and(|best| best <= *tier))
         });
-        // Among overloads in the best tier, one whose parameter types are exactly the
-        // argument types is the most specific and wins.
         if let Some(best) = fits.iter().map(|(_, tier, _)| *tier).min() {
             let exact =
                 |(_, tier, fit): &(SymbolId, Tier, Fit)| *tier == best && *fit == Fit::Exact;
@@ -949,9 +906,7 @@ impl Lookup<'_> {
         found
     }
 
-    /// The source set directory of `path` as seen from `other`: the path up to and
-    /// including the first directory where the two part ways (`core/jvm` for
-    /// `core/jvm/src/A.kt` against `core/common/src/A.kt`).
+    /// `core/jvm` for `core/jvm/src/A.kt` against `core/common/src/A.kt`.
     fn source_set<'p>(path: &'p str, other: &str) -> &'p str {
         let shared: usize = path
             .split('/')
@@ -966,9 +921,7 @@ impl Lookup<'_> {
         path.get(..end).unwrap_or(path)
     }
 
-    /// Collapses a Kotlin multiplatform declaration and its implementations into one
-    /// target: the `actual` in the source set the reference is written in, otherwise the
-    /// `expect`, which is the declaration common code compiles against.
+    /// The `actual` in the reference's source set, otherwise the `expect` common code sees.
     fn select_platform(&self, found: &mut Found) {
         let platform = |id: SymbolId| self.resolver.symbol(id).and_then(|s| s.platform);
         let relative = |id: SymbolId| {
@@ -1052,7 +1005,6 @@ impl Lookup<'_> {
             .flat_map(|owner| self.resolver.members_named(*owner, name, role, applicable))
             .collect();
         if let Some(first) = in_scope.first() {
-            // The innermost type that declares the name wins; overloads there tie.
             let owner = self.site.index.parent(*first);
             return Found::sure(
                 in_scope
@@ -1062,10 +1014,7 @@ impl Lookup<'_> {
                     .collect(),
             );
         }
-        // Types, top-level functions and properties, and statically imported members
-        // are visible unqualified. Other members can only be reached through an implicit
-        // receiver (inherited from a library type, or a Kotlin scope function), which the
-        // dumb engine cannot see: they are offered as guesses.
+        // Other members need an implicit receiver the dumb engine cannot see: guesses.
         let mut visible = Vec::new();
         let mut guesses = Vec::new();
         for id in self.named_candidates(name, role) {
@@ -1080,10 +1029,7 @@ impl Lookup<'_> {
         if visible.is_empty() {
             return Found::guess(guesses);
         }
-        // An extension needs an implicit receiver of its receiver type. The ones the dumb
-        // engine sees are the enclosing types and an enclosing extension's receiver; a
-        // lambda with a receiver (`apply { … }`, `flow { … }`) is invisible to it, so
-        // other extensions are only offered when nothing surer is in sight.
+        // Lambdas with receivers (`apply { }`) are invisible, so unmatched extensions are guesses.
         let receivers = self.implicit_receiver_names();
         let (sure, unsure): (Vec<_>, Vec<_>) = visible.into_iter().partition(|(id, _)| {
             self.extension_receiver_name(*id)
@@ -1096,7 +1042,6 @@ impl Lookup<'_> {
         }
     }
 
-    /// The types whose members can be named without a qualifier, innermost first.
     fn implicit_receivers(&self) -> Vec<SymbolId> {
         let extension = match &self.extension_receiver {
             Some(Receiver::Types(types)) => types.as_slice(),
@@ -1105,7 +1050,6 @@ impl Lookup<'_> {
         extension.iter().chain(&self.enclosing).copied().collect()
     }
 
-    /// The simple names of the implicit receivers and of their supertypes, nearest first.
     fn implicit_receiver_names(&self) -> Vec<&str> {
         let external = match &self.extension_receiver {
             Some(Receiver::External(name)) => Some(simple_name(name)),
@@ -1129,10 +1073,7 @@ impl Lookup<'_> {
         Some(simple_name(receiver))
     }
 
-    /// The Kotlin extensions called `name` on a receiver whose type, or one of its
-    /// supertypes, has one of `receiver_names` (nearest first). The extensions on the
-    /// nearest type win. The match is by simple name, which is a sure thing only for an
-    /// extension the file can see: imported, or in its package.
+    /// Matched by simple name, so only an extension the file can see is a sure match.
     fn extensions_on(&self, name: &str, role: ReferenceRole, receiver_names: &[&str]) -> Found {
         if self.resolver.language != Language::Kotlin {
             return Found::sure(Vec::new());
@@ -1208,19 +1149,14 @@ impl Lookup<'_> {
                 if !members.is_empty() {
                     return Found::sure(members.into_iter().map(|id| (id, Tier::Scope)).collect());
                 }
-                // Not a member: perhaps a Kotlin extension on the receiver's type. Failing
-                // that, the member is inherited from a library supertype
-                // (`JpaRepository.save`, `Enum.name`): members of unrelated project types
-                // with the same name would only be wrong answers.
+                // Otherwise inherited from a library supertype; namesakes elsewhere would be wrong.
                 self.extensions_on(name, role, &self.type_names(&owners))
             }
-            // The receiver's type is written but is not in the project (a library type).
-            // Its members are not ours; only an extension on that type can match.
+            // A library type: only an extension on it can match.
             Receiver::External(type_name) => {
                 let simple = simple_name(&type_name);
                 let extensions = self.extensions_on(name, role, &[simple]);
-                // A member that `Any` or `Object` does not have is reached through a
-                // smart cast the engine cannot see, so the declared type says nothing.
+                // Reached through a smart cast the engine cannot see.
                 if extensions.ranked.is_empty() && matches!(simple, "Any" | "Object") {
                     guess_all()
                 } else {
@@ -1292,7 +1228,7 @@ pub(crate) fn resolve_supertypes(index: &Index, id: SymbolId) -> Vec<SymbolId> {
     Resolver { index, language }.supertypes(id)
 }
 
-/// Resolves the identifier at `offset`. Returns `None` when there is no identifier there.
+/// `None` when there is no identifier at `offset`.
 #[must_use]
 pub fn resolve(site: Site<'_>, offset: ByteOffset) -> Option<Resolution> {
     let reference = site.tree.reference_at(site.buffer, offset)?;
