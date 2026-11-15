@@ -2,10 +2,8 @@
 //! upper-case pattern letter must land on a word start or a capital ("CamelHumps": `SE`
 //! finds `SearchEverywhere`), and matches at word starts and in a row score higher.
 
-/// How well a pattern matched a candidate.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FuzzyMatch {
-    /// Higher is better. Only comparable between matches of the same pattern.
     pub score: i32,
     /// The byte offsets in the candidate of the matched characters, ascending.
     pub positions: Vec<usize>,
@@ -20,7 +18,6 @@ const GAP_PENALTY: i32 = 1;
 const BREAK_PENALTY: i32 = 3;
 const PREFIX_BONUS: i32 = 20;
 const EXACT_BONUS: i32 = 40;
-/// Marks a cell of the score table that no match reaches.
 const NONE: i32 = i32::MIN / 2;
 
 /// Whether `chars[index]` starts a word: the first character, one after a separator, an
@@ -41,7 +38,6 @@ fn same_letter(a: char, b: char) -> bool {
     a == b || a.to_lowercase().eq(b.to_lowercase())
 }
 
-/// Cheap rejection before scoring: do the pattern's characters appear in order at all?
 fn is_subsequence(pattern: &[char], chars: &[char]) -> bool {
     let mut remaining = pattern.iter();
     let mut next = remaining.next();
@@ -97,7 +93,6 @@ pub fn fuzzy_match(pattern: &str, candidate: &str) -> Option<FuzzyMatch> {
                 continue;
             }
             let word_start = is_word_start(&chars, c);
-            // An upper-case pattern letter stands for a word start or a capital letter.
             if pattern_char.is_uppercase() && !word_start && !candidate_char.is_uppercase() {
                 continue;
             }
@@ -111,7 +106,6 @@ pub fn fuzzy_match(pattern: &str, candidate: &str) -> Option<FuzzyMatch> {
                 score += CASE_BONUS;
             }
             let (total, origin) = if p == 0 {
-                // Leading characters skipped before the first match cost a little.
                 (
                     score - i32::try_from(c.min(8)).unwrap_or(8) * GAP_PENALTY / 2,
                     usize::MAX,
@@ -120,7 +114,6 @@ pub fn fuzzy_match(pattern: &str, candidate: &str) -> Option<FuzzyMatch> {
                 let Some((previous, at)) = running else {
                     continue;
                 };
-                // A run that continues is rewarded; starting a new run costs extra.
                 let consecutive = if at + 1 == c {
                     CONSECUTIVE_BONUS
                 } else {
@@ -137,7 +130,6 @@ pub fn fuzzy_match(pattern: &str, candidate: &str) -> Option<FuzzyMatch> {
         }
     }
 
-    // The best end position in the last row, then walk back to recover the positions.
     let last = rows - 1;
     let (mut column, mut score) = (0..columns)
         .filter_map(|c| best.get(cell(last, c)).map(|score| (c, *score)))
@@ -175,7 +167,6 @@ mod tests {
         fuzzy_match(pattern, candidate).map(|found| found.score)
     }
 
-    /// The candidate with the matched characters wrapped in brackets.
     fn marked(pattern: &str, candidate: &str) -> String {
         let Some(found) = fuzzy_match(pattern, candidate) else {
             return "no match".to_owned();
@@ -193,7 +184,6 @@ mod tests {
         out
     }
 
-    /// Asserts that `pattern` ranks the candidates in the given order, best first.
     fn ranks(pattern: &str, ordered: &[&str]) {
         let scores: Vec<i32> = ordered
             .iter()

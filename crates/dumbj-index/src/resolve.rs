@@ -1,6 +1,3 @@
-//! Dumb Go to Declaration: resolves the identifier under the caret with tree-sitter and
-//! the symbol index only.
-//!
 //! The jump rule (ARCHITECTURE, "Dumb jump rule"): jump directly only when exactly one
 //! candidate is in the best rank tier, its kind fits the reference and nothing about the
 //! lookup was a guess. Otherwise the caller shows a chooser sorted by rank. A wrong jump is
@@ -18,61 +15,44 @@ use dumbj_text::{Buffer, ByteOffset, ByteRange};
 
 use crate::index::{FileId, Index, SymbolId};
 
-/// How close a candidate is to the reference. Earlier variants rank higher.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Tier {
-    /// A parameter, local variable or type parameter in an enclosing scope.
     Local,
-    /// A member of an enclosing type or of one of its supertypes, or a member of the
-    /// receiver's known type.
     Scope,
     SameFile,
-    /// Named by a single-name import (including a Kotlin alias or a Java static import).
     ExplicitImport,
     SamePackage,
-    /// Covered by a wildcard import.
     WildcardImport,
-    /// In the same module (Gradle project or Maven module).
     SameModule,
-    /// Anywhere else in the project.
     Repo,
 }
 
-/// Where a reference may lead.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Target {
     pub path: PathBuf,
-    /// The declared name; the caret goes to its start.
     pub range: ByteRange,
     /// The declaration in the index; `None` for a local.
     pub symbol: Option<SymbolId>,
     pub tier: Tier,
 }
 
-/// What Go to Declaration should do.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Decision {
-    /// Go straight to the first target.
     Jump,
-    /// Show the targets in a chooser, labelled as a best guess.
     Choose,
     NotFound,
 }
 
-/// The outcome of resolving one reference.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Resolution {
     pub reference: Reference,
-    /// Candidates, best first.
     pub targets: Vec<Target>,
     pub decision: Decision,
 }
 
-/// The file a reference sits in, with its parsed tree.
 #[derive(Debug, Clone, Copy)]
 pub struct Site<'a> {
     pub index: &'a Index,
-    /// The file's entry in `index`.
     pub file: FileId,
     pub tree: &'a SyntaxTree,
     pub buffer: &'a Buffer,
@@ -84,8 +64,6 @@ const MAX_SUPERTYPE_DEPTH: usize = 12;
 /// How many calls and local initialisers are followed to find the type of one expression.
 const MAX_EXPRESSION_DEPTH: usize = 8;
 
-/// Whether a declaration of `kind` can be what a reference with `role`, written in
-/// `language`, names.
 fn kind_fits(kind: SymbolKind, role: ReferenceRole, language: Language) -> bool {
     match role {
         ReferenceRole::Type => kind.is_type(),
@@ -105,10 +83,8 @@ fn kind_fits(kind: SymbolKind, role: ReferenceRole, language: Language) -> bool 
     }
 }
 
-/// Lookups shared by every step of a resolution.
 struct Resolver<'a> {
     index: &'a Index,
-    /// The language of the file the reference is in.
     language: Language,
 }
 
@@ -125,7 +101,6 @@ impl<'a> Resolver<'a> {
         self.symbol(id).is_some_and(|symbol| symbol.kind.is_type())
     }
 
-    /// The outermost declaration enclosing `id` (or `id` itself).
     fn top_level(&self, id: SymbolId) -> SymbolId {
         let mut current = id;
         while let Some(parent) = self.index.parent(current) {
@@ -219,7 +194,6 @@ impl<'a> Resolver<'a> {
         Tier::Repo
     }
 
-    /// Keeps the candidates in the best tier.
     fn best(
         &self,
         file: FileId,
@@ -252,7 +226,6 @@ impl<'a> Resolver<'a> {
                 .collect()
         };
         let Some((first, rest)) = name.split_once('.') else {
-            // An alias (`import a.B as C`) makes `C` mean `a.B`.
             let aliased = self.facts(file).and_then(|facts| {
                 facts
                     .imports
@@ -268,7 +241,6 @@ impl<'a> Resolver<'a> {
         if !exact.is_empty() {
             return exact;
         }
-        // `Outer.Inner`: resolve the first part, then step into nested types.
         let mut owners = self.resolve_type(file, enclosing, first);
         for part in rest.split('.') {
             owners = owners
@@ -281,7 +253,6 @@ impl<'a> Resolver<'a> {
         owners
     }
 
-    /// The supertypes of `type_id` found in the index, resolved in its own file.
     fn supertypes(&self, type_id: SymbolId) -> Vec<SymbolId> {
         let Some(symbol) = self.symbol(type_id) else {
             return Vec::new();
@@ -416,26 +387,19 @@ enum Fit {
     /// The call cannot be to this callable: wrong argument count, an unknown parameter
     /// name, or an argument whose type certainly does not convert.
     No,
-    /// Nothing rules it out.
     Maybe,
-    /// Every argument has exactly the declared type of its parameter.
     Exact,
 }
 
-/// What an expression denotes, as far as the index can tell.
 #[derive(PartialEq, Eq)]
 enum Receiver {
-    /// A lambda or a function reference.
     Function,
-    /// Values of these indexed types.
     Types(Vec<SymbolId>),
-    /// A value whose declared type is not in the index: a library type such as `List`.
     External(String),
     /// Nothing is known about it (a call result, an untyped local).
     Unknown,
 }
 
-/// One resolution in progress: the reference site plus the resolver.
 struct Lookup<'a> {
     site: Site<'a>,
     resolver: Resolver<'a>,
@@ -445,21 +409,16 @@ struct Lookup<'a> {
     extension_receiver: Option<Receiver>,
 }
 
-/// A name to look up: the reference under the caret, or a callee inside its qualifier.
 #[derive(Clone, Copy)]
 struct Query<'q> {
     name: &'q str,
     role: ReferenceRole,
     qualifier: Option<&'q Qualifier>,
-    /// The arguments of a call; they pick the overload.
     arguments: Option<&'q [Argument]>,
-    /// Where the name is written; locals are looked up from here.
     at: ByteOffset,
-    /// How many expressions deep this lookup is.
     depth: usize,
 }
 
-/// The arguments of the call being resolved, with their types worked out on first use.
 struct CallSite<'q> {
     arguments: &'q [Argument],
     types: OnceCell<Vec<Receiver>>,
@@ -467,10 +426,8 @@ struct CallSite<'q> {
     depth: usize,
 }
 
-/// What a lookup found.
 #[derive(Default)]
 struct Found {
-    /// A local declaration; it shadows everything in the index.
     local: Option<LocalDefinition>,
     ranked: Vec<(SymbolId, Tier)>,
     /// False when the lookup involved a guess, which always means a chooser.
@@ -494,7 +451,6 @@ impl Found {
         }
     }
 
-    /// Sorts best first and returns how many candidates share the best tier.
     fn rank(&mut self) -> usize {
         self.ranked.sort_by_key(|(id, tier)| (*tier, *id));
         self.ranked.dedup();
@@ -518,7 +474,6 @@ impl Lookup<'_> {
         })
     }
 
-    /// What a declared type name denotes, resolved by `resolve`.
     fn receiver_of_type(
         type_name: Option<&String>,
         resolve: impl Fn(&str) -> Vec<SymbolId>,
@@ -536,7 +491,6 @@ impl Lookup<'_> {
         }
     }
 
-    /// The receiver a symbol's declared type denotes, resolved where the symbol is written.
     fn receiver_of_symbol(&self, symbol: SymbolId) -> Receiver {
         let type_name = self
             .resolver
@@ -549,7 +503,6 @@ impl Lookup<'_> {
         })
     }
 
-    /// A value of a type written at the reference site.
     fn receiver_of_written_type(&self, type_name: &String) -> Receiver {
         Self::receiver_of_type(Some(type_name), |name| {
             self.resolver
@@ -557,8 +510,6 @@ impl Lookup<'_> {
         })
     }
 
-    /// What a single name written at `at` denotes: the type of a local or field called
-    /// `name`, or the type `name` itself.
     fn receiver_of_name(&self, name: &str, at: ByteOffset, depth: usize) -> Receiver {
         let Site {
             tree, buffer, file, ..
@@ -574,7 +525,6 @@ impl Lookup<'_> {
                 (None, None) => Receiver::Unknown,
             };
         }
-        // A field or property of an enclosing type (or of one of its supertypes).
         let field = self
             .enclosing
             .iter()
@@ -590,7 +540,6 @@ impl Lookup<'_> {
         if !types.is_empty() {
             return Receiver::Types(types);
         }
-        // A Kotlin top-level property.
         let property = self
             .site
             .index
@@ -609,7 +558,6 @@ impl Lookup<'_> {
         })
     }
 
-    /// What reading the member `name` of `receiver` gives.
     fn receiver_of_member(&self, receiver: &Receiver, name: &str) -> Receiver {
         let Receiver::Types(owners) = receiver else {
             return Receiver::Unknown;
@@ -624,7 +572,6 @@ impl Lookup<'_> {
         let kind = member.and_then(|member| self.resolver.symbol(member).map(|s| s.kind));
         match (member, kind) {
             (Some(member), Some(kind)) if kind.is_type() => Receiver::Types(vec![member]),
-            // `Color.RED` is a `Color`.
             (Some(member), Some(SymbolKind::EnumConstant)) => self
                 .site
                 .index
@@ -635,7 +582,6 @@ impl Lookup<'_> {
         }
     }
 
-    /// What a call evaluates to: the callee's return type, or the constructed type.
     fn receiver_of_call(
         &self,
         call: &dumbj_syntax::Call,
@@ -687,7 +633,6 @@ impl Lookup<'_> {
         }
     }
 
-    /// What `expression`, written at `at`, denotes.
     fn receiver(&self, expression: &Qualifier, at: ByteOffset, depth: usize) -> Receiver {
         if depth > MAX_EXPRESSION_DEPTH {
             return Receiver::Unknown;
@@ -712,14 +657,12 @@ impl Lookup<'_> {
             ),
             Qualifier::Name(name) => self.receiver_of_name(name, at, depth),
             Qualifier::Path(path) => {
-                // A fully qualified or nested type name, e.g. `com.shop.core.Money`.
                 let named = self
                     .resolver
                     .resolve_type(self.site.file, &self.enclosing, path);
                 if !named.is_empty() {
                     return Receiver::Types(named);
                 }
-                // Otherwise a chain of member accesses: `a.b.c`.
                 let mut parts = path.split('.');
                 let mut receiver = parts.next().map_or(Receiver::Unknown, |first| {
                     self.receiver_of_name(first, at, depth)
@@ -739,7 +682,6 @@ impl Lookup<'_> {
         }
     }
 
-    /// Every declaration called `name` whose kind fits `role`.
     fn named_candidates(&self, name: &str, role: ReferenceRole) -> Vec<SymbolId> {
         self.site
             .index
@@ -755,7 +697,6 @@ impl Lookup<'_> {
             .collect()
     }
 
-    /// Whether `id` is a component of a Java record, which is also its accessor method.
     fn is_record_component(&self, id: SymbolId) -> bool {
         let kind = |id: SymbolId| self.resolver.symbol(id).map(|symbol| symbol.kind);
         kind(id) == Some(SymbolKind::Field)
@@ -835,7 +776,6 @@ impl Lookup<'_> {
         }
     }
 
-    /// How well the arguments of `call` suit the callable `id`.
     fn fit(&self, call: &CallSite<'_>, id: SymbolId) -> Fit {
         let Some(symbol) = self.resolver.symbol(id) else {
             return Fit::No;
@@ -936,7 +876,6 @@ impl Lookup<'_> {
         })
     }
 
-    /// Narrows the candidates of a call to those its arguments can be passed to.
     fn select_overload(&self, found: &mut Found, call: &CallSite<'_>) {
         let mut fits: Vec<(SymbolId, Tier, Fit)> = found
             .ranked
@@ -978,12 +917,10 @@ impl Lookup<'_> {
             .is_some_and(|symbol| symbol.receiver.is_some())
     }
 
-    /// Whether `id` is declared inside a type (a member rather than a top-level symbol).
     fn is_member(&self, id: SymbolId) -> bool {
         self.site.index.parent(id).is_some()
     }
 
-    /// Looks `query` up among locals and in the index.
     fn find(&self, query: Query<'_>) -> Found {
         let call = query
             .arguments
@@ -1040,7 +977,6 @@ impl Lookup<'_> {
                 .file(id.file)
                 .map_or("", |file| file.relative.as_str())
         };
-        // Declarations pair up by qualified name and signature.
         let signature = |id: SymbolId| {
             let symbol = self.resolver.symbol(id);
             let parameters: Option<Vec<Option<&str>>> = symbol
@@ -1071,7 +1007,6 @@ impl Lookup<'_> {
                 .map(|(id, _)| *id)
                 .filter(|id| platform(*id) == Some(Platform::Actual) && signature(*id) == key)
                 .collect();
-            // The implementation for the platform this file is compiled for, if any.
             let local = actuals.iter().copied().find(|actual| {
                 let source_set = Self::source_set(relative(*actual), relative(expect));
                 here.strip_prefix(source_set)
@@ -1096,7 +1031,6 @@ impl Lookup<'_> {
                 confident: true,
             };
         }
-        // An import alias (`import a.B as C`) names exactly one declaration.
         let aliased = self.resolver.facts(file).and_then(|facts| {
             facts
                 .imports
@@ -1112,7 +1046,6 @@ impl Lookup<'_> {
                     .collect(),
             );
         }
-        // Members of the implicit receivers and of their supertypes.
         let in_scope: Vec<SymbolId> = self
             .implicit_receivers()
             .iter()
@@ -1182,7 +1115,6 @@ impl Lookup<'_> {
         external.into_iter().chain(indexed).collect()
     }
 
-    /// The names of `types` and of their supertypes, nearest first.
     fn type_names(&self, types: &[SymbolId]) -> Vec<&str> {
         types
             .iter()
@@ -1192,7 +1124,6 @@ impl Lookup<'_> {
             .collect()
     }
 
-    /// The simple name of the receiver type of the extension `id`.
     fn extension_receiver_name(&self, id: SymbolId) -> Option<&str> {
         let receiver = self.resolver.symbol(id)?.receiver.as_deref()?;
         Some(simple_name(receiver))
@@ -1259,7 +1190,6 @@ impl Lookup<'_> {
                     .collect(),
             );
         }
-        // Every member or extension with this name, as a guess.
         let guess_all = || {
             Found::guess(
                 self.named_candidates(name, role)
@@ -1316,7 +1246,6 @@ impl Lookup<'_> {
         )
     }
 
-    /// Turns what was found into a resolution.
     fn finish(&self, reference: Reference, mut found: Found) -> Resolution {
         if let Some(local) = found.local {
             let path = self
@@ -1355,7 +1284,6 @@ impl Lookup<'_> {
     }
 }
 
-/// The supertypes of the type `id` that are in the index, resolved in its own file.
 pub(crate) fn resolve_supertypes(index: &Index, id: SymbolId) -> Vec<SymbolId> {
     let language = index
         .file(id.file)

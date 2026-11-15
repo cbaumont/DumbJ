@@ -1,29 +1,20 @@
-//! Fuzzy search over the index: the engine behind Search Everywhere, Go to File, Go to
-//! Class, Go to Symbol and File Structure.
-
 use crate::fuzzy::fuzzy_match;
 use crate::index::{FileId, Index, SymbolId};
 
-/// What a search looks through.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SearchScope {
-    /// Files, classes and all other symbols together.
     All,
-    /// Types only.
     Classes,
     Files,
-    /// Every declaration.
     Symbols,
 }
 
-/// What a hit points at.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum HitTarget {
     File(FileId),
     Symbol(SymbolId),
 }
 
-/// One search result.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SearchHit {
     pub target: HitTarget,
@@ -36,7 +27,6 @@ pub struct SearchHit {
 /// they match equally well.
 const CLASS_BOOST: i32 = 10;
 const FILE_BOOST: i32 = 5;
-/// How often the cancellation flag is polled, in candidates.
 const CANCEL_INTERVAL: usize = 1024;
 
 fn file_name(relative: &str) -> &str {

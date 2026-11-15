@@ -1,6 +1,3 @@
-//! The project model: modules and their source roots, worked out from build files and
-//! package declarations without ever running Gradle or Maven (BRIEF §5.1).
-//!
 //! A module is a directory with a build file (`build.gradle`, `build.gradle.kts`,
 //! `pom.xml`) or one named by `settings.gradle(.kts)` or a parent POM. Source roots are
 //! inferred from package declarations: the root of `src/main/java/com/shop/A.java` in
@@ -11,26 +8,21 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use crate::index::IndexedFile;
 
-/// Identifies a module within one [`ProjectModel`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct ModuleId(pub(crate) u32);
 
-/// Whether a source root holds production or test code.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum SourceKind {
     Main,
     Test,
 }
 
-/// A directory that package names are relative to.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct SourceRoot {
-    /// Relative to the project root, with `/` separators.
     pub path: String,
     pub kind: SourceKind,
 }
 
-/// One module of the project.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Module {
     /// The Gradle path (`:core:model`) or directory name; `:` for the root project.
@@ -40,7 +32,6 @@ pub struct Module {
     pub source_roots: Vec<SourceRoot>,
 }
 
-/// The modules of a project.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ProjectModel {
     modules: Vec<Module>,
@@ -66,7 +57,6 @@ pub(crate) fn gradle_includes(settings: &str) -> Vec<String> {
         if !starts_word || !ends_word {
             continue;
         }
-        // The arguments run to the closing parenthesis, or to the end of the statement.
         let arguments = match rest.trim_start().strip_prefix('(') {
             Some(inside) => inside.split(')').next().unwrap_or(""),
             None => rest.lines().next().unwrap_or(""),
@@ -84,7 +74,6 @@ pub(crate) fn gradle_includes(settings: &str) -> Vec<String> {
     includes
 }
 
-/// The `<module>` entries of a Maven POM.
 pub(crate) fn maven_modules(pom: &str) -> Vec<String> {
     pom.split("<module>")
         .skip(1)
@@ -107,7 +96,6 @@ fn join(dir: &str, child: &str) -> String {
     }
 }
 
-/// Whether a source root holds tests: a `test`-like source set anywhere in its path.
 fn source_kind(root: &str) -> SourceKind {
     let is_test = root.split('/').any(|part| {
         let part = part.to_ascii_lowercase();
@@ -120,7 +108,6 @@ fn source_kind(root: &str) -> SourceKind {
     }
 }
 
-/// The source root of a file: its directory with the package path removed from the end.
 fn source_root_of(file: &IndexedFile) -> Option<String> {
     let dir = parent_dir(&file.relative);
     let package_path = file.facts.package.as_ref()?.replace('.', "/");
@@ -137,7 +124,6 @@ impl ProjectModel {
     /// POM files among them from disk.
     #[must_use]
     pub fn discover(files: &[IndexedFile]) -> Self {
-        // Module directory -> Gradle path, when a settings file names it.
         let mut dirs: BTreeMap<String, Option<String>> = BTreeMap::from([(String::new(), None)]);
         for file in files {
             let (dir, name) = (
@@ -216,7 +202,6 @@ impl ProjectModel {
         self.modules.get(id.0 as usize)
     }
 
-    /// The module a file belongs to: the nearest enclosing module directory.
     #[must_use]
     pub fn module_of_path(&self, relative: &str) -> Option<ModuleId> {
         self.modules
@@ -232,7 +217,6 @@ impl ProjectModel {
             .and_then(|(index, _)| Some(ModuleId(u32::try_from(index).ok()?)))
     }
 
-    /// Whether a file sits in a test source root.
     #[must_use]
     pub fn is_test_path(&self, relative: &str) -> bool {
         let Some(module) = self.module_of_path(relative).and_then(|id| self.module(id)) else {

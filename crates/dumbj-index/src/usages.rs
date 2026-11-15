@@ -12,10 +12,8 @@ use dumbj_text::{Buffer, ByteOffset, ByteRange};
 use crate::index::{FileId, Index, SymbolId};
 use crate::resolve::{Decision, Site, resolve};
 
-/// What usages are searched for.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum UsageTarget {
-    /// A declaration in the index.
     Symbol(SymbolId),
     /// A parameter or local variable; its usages are all in one file.
     Local {
@@ -25,24 +23,19 @@ pub enum UsageTarget {
     },
 }
 
-/// How sure the dumb engine is that an occurrence refers to the target.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Certainty {
-    /// The occurrence resolves to the target and nothing else.
     Sure,
     /// The target is one of several candidates (unknown receiver, extension, overload).
     Maybe,
 }
 
-/// One occurrence of the target.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Usage {
     pub path: PathBuf,
-    /// The identifier.
     pub range: ByteRange,
     /// The zero-based line of the identifier.
     pub line: usize,
-    /// The text of that line, trimmed, for display.
     pub line_text: String,
     pub certainty: Certainty,
 }
@@ -54,7 +47,6 @@ pub struct Usage {
 pub fn usage_target_at(site: Site<'_>, offset: ByteOffset) -> Option<UsageTarget> {
     let resolution = resolve(site, offset)?;
     if resolution.reference.role == ReferenceRole::Declaration {
-        // The caret is on a declaration: find it by its name range.
         let range = &resolution.reference.range;
         let facts = &site.index.file(site.file)?.facts;
         let position = facts
@@ -128,7 +120,6 @@ fn usage(
     })
 }
 
-/// The usages of `target` in one file.
 fn usages_in_file(
     index: &Index,
     file: FileId,
@@ -168,7 +159,6 @@ fn usages_in_file(
             continue;
         };
         let hits = |candidate: &crate::resolve::Target| match target {
-            // Calling a constructor is a usage of its class.
             UsageTarget::Symbol(id) => candidate.symbol.is_some_and(|found| {
                 found == *id
                     || (index.parent(found) == Some(*id)
@@ -190,8 +180,6 @@ fn usages_in_file(
     found
 }
 
-/// Finds the usages of `target` across the project, sorted by file and position.
-///
 /// Files are searched in parallel. `cancelled` is polled between files; when it is set the
 /// search stops and returns `None`.
 pub fn find_usages(

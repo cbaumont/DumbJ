@@ -81,7 +81,6 @@ impl Tally {
     }
 }
 
-/// Runs one case. `Err` describes a malformed case.
 fn run_case(
     index: &Index,
     root: &Path,
@@ -119,7 +118,6 @@ fn run_case(
         ByteOffset(offset),
     );
 
-    // Where each candidate is, as `relative/path:line`.
     let describe = |target: &dumbj_index::Target| {
         let relative = target
             .path

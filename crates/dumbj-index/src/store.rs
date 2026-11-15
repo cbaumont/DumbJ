@@ -13,7 +13,6 @@ use rusqlite::{Connection, params};
 
 use crate::index::IndexedFile;
 
-/// Bumped whenever the schema or the meaning of a column changes.
 const SCHEMA_VERSION: i64 = 4;
 
 const SCHEMA: &str = "
@@ -54,7 +53,6 @@ CREATE TABLE imports (
 );
 ";
 
-/// Why the cache could not be opened, read or written.
 #[derive(Debug, thiserror::Error)]
 pub enum StoreError {
     #[error("index cache database error: {0}")]
@@ -74,7 +72,6 @@ pub struct FileStamp {
 }
 
 impl FileStamp {
-    /// The stamp of the file at `path`, or `None` if it cannot be read.
     #[must_use]
     pub fn of(path: &Path) -> Option<Self> {
         let meta = fs::metadata(path).ok()?;
@@ -91,14 +88,12 @@ impl FileStamp {
     }
 }
 
-/// What the cache holds about one file.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StoredFile {
     pub language: Option<Language>,
     pub facts: FileFacts,
 }
 
-/// The cache database.
 #[derive(Debug)]
 pub struct IndexStore {
     connection: Connection,
@@ -263,8 +258,6 @@ impl IndexStore {
             .collect())
     }
 
-    /// Replaces the rows of `changed` files and deletes those of `removed` paths, in one
-    /// transaction.
     pub fn save(
         &mut self,
         changed: &[(&IndexedFile, FileStamp)],
@@ -337,7 +330,6 @@ impl IndexStore {
         Ok(())
     }
 
-    /// The number of cached files; for diagnostics.
     pub fn file_count(&self) -> Result<usize, StoreError> {
         let count: i64 = self
             .connection
@@ -389,7 +381,6 @@ fn offset(value: i64) -> ByteOffset {
     ByteOffset(usize::try_from(value).unwrap_or(0))
 }
 
-/// Deletes the database and any journal files next to it.
 fn remove_database(path: &Path) -> Result<(), StoreError> {
     for suffix in ["", "-journal", "-wal", "-shm"] {
         let mut name = path.as_os_str().to_owned();

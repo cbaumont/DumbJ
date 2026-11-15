@@ -1,6 +1,3 @@
-//! Builds an [`Index`] by walking a project directory and parsing its source files in
-//! parallel. Honours `.gitignore`.
-
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -13,7 +10,6 @@ use ignore::{WalkBuilder, WalkState};
 use crate::index::{Index, IndexedFile};
 use crate::store::{FileStamp, IndexStore};
 
-/// Source files larger than this are listed but not parsed.
 const MAX_INDEXED_FILE_BYTES: u64 = 4 * 1024 * 1024;
 
 /// Reads and parses one file. Failures are logged and leave the file without symbols, so
@@ -41,7 +37,6 @@ fn file_facts(path: &Path, language: Language, cancelled: &AtomicBool) -> FileFa
     }
 }
 
-/// `path` relative to `root`, with `/` separators.
 fn relative_path(root: &Path, path: &Path) -> String {
     path.strip_prefix(root)
         .unwrap_or(path)
@@ -51,11 +46,9 @@ fn relative_path(root: &Path, path: &Path) -> String {
         .join("/")
 }
 
-/// Builds the index entry for one file under `root`.
 #[must_use]
 pub fn index_file(root: &Path, path: &Path, cancelled: &AtomicBool) -> IndexedFile {
     let relative = relative_path(root, path);
-    // Only languages with navigation support are parsed; YAML has no declarations.
     let language = Language::from_path(path);
     let facts = match language {
         Some(language @ (Language::Java | Language::Kotlin)) => {
@@ -220,7 +213,6 @@ fn fnv1a(bytes: &[u8]) -> u64 {
     })
 }
 
-/// The absolute form of `path`, for looking files up in an index built from `root`.
 #[must_use]
 pub fn absolute(path: &Path) -> PathBuf {
     std::path::absolute(path).unwrap_or_else(|_| path.to_path_buf())

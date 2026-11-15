@@ -1,6 +1,3 @@
-//! The in-memory symbol index: every file of a project with its declarations, and the
-//! lookup tables navigation needs.
-
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
@@ -9,31 +6,24 @@ use dumbj_syntax::{FileFacts, Language, Symbol};
 
 use crate::project::{ModuleId, ProjectModel};
 
-/// Identifies a file within one [`Index`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct FileId(pub(crate) u32);
 
-/// Identifies a declaration within one [`Index`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct SymbolId {
     pub file: FileId,
-    /// The position in the file's [`FileFacts::symbols`].
     pub index: u32,
 }
 
-/// One file of the project.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IndexedFile {
-    /// The absolute path.
     pub path: PathBuf,
-    /// The path relative to the project root, with `/` separators, for display.
     pub relative: String,
     /// `None` for files DumbJ has no grammar for; they are still listed for Go to File.
     pub language: Option<Language>,
     pub facts: FileFacts,
 }
 
-/// An immutable snapshot of a project's files and declarations.
 #[derive(Debug, Default)]
 pub struct Index {
     files: Vec<IndexedFile>,
@@ -41,7 +31,6 @@ pub struct Index {
     by_name: HashMap<String, Vec<SymbolId>>,
     by_package: HashMap<String, Vec<FileId>>,
     project: ProjectModel,
-    /// The module of each file, parallel to `files`.
     modules: Vec<Option<ModuleId>>,
     /// Each type's direct subtypes, worked out on first use (see `hierarchy`).
     pub(crate) subtypes: OnceLock<HashMap<SymbolId, Vec<SymbolId>>>,
@@ -95,7 +84,6 @@ impl Index {
         index
     }
 
-    /// A new snapshot with `file` added, or replacing the file at the same path.
     #[must_use]
     pub fn with_file(&self, file: IndexedFile) -> Self {
         let mut files: Vec<IndexedFile> = self
@@ -108,7 +96,6 @@ impl Index {
         Self::new(files)
     }
 
-    /// A new snapshot without the file at `path`.
     #[must_use]
     pub fn without_file(&self, path: &Path) -> Self {
         Self::new(
@@ -120,13 +107,11 @@ impl Index {
         )
     }
 
-    /// The project's modules and source roots.
     #[must_use]
     pub fn project(&self) -> &ProjectModel {
         &self.project
     }
 
-    /// The module `file` belongs to.
     #[must_use]
     pub fn module_of(&self, file: FileId) -> Option<ModuleId> {
         self.modules.get(file.0 as usize).copied().flatten()
@@ -142,7 +127,6 @@ impl Index {
         self.files.iter().map(|file| file.facts.symbols.len()).sum()
     }
 
-    /// Every file with its ID, sorted by path.
     pub fn files(&self) -> impl Iterator<Item = (FileId, &IndexedFile)> {
         self.files
             .iter()
@@ -171,7 +155,6 @@ impl Index {
         self.by_name.get(name).map_or(&[], Vec::as_slice)
     }
 
-    /// Every declaration in the index.
     pub fn symbols(&self) -> impl Iterator<Item = (SymbolId, &Symbol)> {
         self.files().flat_map(|(file, indexed)| {
             indexed
@@ -191,7 +174,6 @@ impl Index {
         })
     }
 
-    /// The files that declare `package`.
     #[must_use]
     pub fn files_in_package(&self, package: &str) -> &[FileId] {
         self.by_package.get(package).map_or(&[], Vec::as_slice)
@@ -205,7 +187,6 @@ impl Index {
             .unwrap_or("")
     }
 
-    /// The enclosing declaration of `id`.
     #[must_use]
     pub fn parent(&self, id: SymbolId) -> Option<SymbolId> {
         let parent = self.symbol(id)?.parent?;
@@ -215,7 +196,6 @@ impl Index {
         })
     }
 
-    /// The declarations directly inside `id`.
     pub fn members(&self, id: SymbolId) -> impl Iterator<Item = (SymbolId, &Symbol)> {
         let symbols = self
             .file(id.file)
@@ -235,7 +215,6 @@ impl Index {
             })
     }
 
-    /// The name of `id` within its file: enclosing declarations joined with dots.
     #[must_use]
     pub fn qualified_name(&self, id: SymbolId) -> String {
         self.file(id.file).map_or_else(String::new, |file| {
@@ -243,7 +222,6 @@ impl Index {
         })
     }
 
-    /// The fully qualified name: package, enclosing declarations and the name.
     #[must_use]
     pub fn fqn(&self, id: SymbolId) -> String {
         let (package, name) = (self.package_of(id), self.qualified_name(id));
@@ -254,7 +232,6 @@ impl Index {
         }
     }
 
-    /// The declarations whose fully qualified name is `fqn`.
     #[must_use]
     pub fn symbols_by_fqn(&self, fqn: &str) -> Vec<SymbolId> {
         let name = fqn.rsplit('.').next().unwrap_or(fqn);

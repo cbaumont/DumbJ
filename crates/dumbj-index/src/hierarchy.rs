@@ -1,5 +1,3 @@
-//! Dumb type and call hierarchy from `extends`/`implements` clauses; every result is a best guess.
-
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::atomic::AtomicBool;
 
@@ -110,7 +108,6 @@ fn member_and_owner(index: &Index, id: SymbolId) -> Option<(&Symbol, SymbolId)> 
     (is_member_like(symbol) && owner_is_type).then_some((symbol, owner))
 }
 
-/// The nearest overridden member up each supertype branch.
 #[must_use]
 pub fn super_members(index: &Index, id: SymbolId) -> Vec<SymbolId> {
     let Some((member, owner)) = member_and_owner(index, id) else {
