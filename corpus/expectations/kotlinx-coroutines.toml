@@ -1,0 +1,462 @@
+# Hand-checked Go to Declaration cases for Kotlin/kotlinx.coroutines at the commit in ../manifest.toml.
+# Format: see crates/dumbj-index/examples/accuracy.rs.
+
+[[case]]
+file = "kotlinx-coroutines-core/common/src/Await.kt"
+at = 'else AwaitAll(deferreds).aw§ait()'
+target = "kotlinx-coroutines-core/common/src/Await.kt:63"
+
+[[case]]
+file = "kotlinx-coroutines-core/common/src/Await.kt"
+at = 'else AwaitA§ll(deferreds).await()'
+target = "kotlinx-coroutines-core/common/src/Await.kt:60"
+
+[[case]]
+file = "kotlinx-coroutines-core/common/src/Await.kt"
+at = 'if (deferreds.isEm§pty()) emptyList()'
+target = "none"
+
+[[case]]
+file = "kotlinx-coroutines-core/common/src/Await.kt"
+at = 'fun <T> awaitAll(vararg deferreds: Defer§red<T>): List<T>'
+target = "kotlinx-coroutines-core/common/src/Deferred.kt:32"
+
+[[case]]
+file = "kotlinx-coroutines-core/common/src/Await.kt"
+at = 'Unit = jobs.forEach { it.jo§in() }'
+target = "kotlinx-coroutines-core/common/src/Job.kt:289"
+
+[[case]]
+file = "kotlinx-coroutines-core/common/src/Await.kt"
+at = 'val deferred = defer§reds[i]'
+target = "kotlinx-coroutines-core/common/src/Await.kt:60"
+
+[[case]]
+file = "kotlinx-coroutines-core/common/src/Await.kt"
+at = 'deferred.sta§rt() // To properly'
+target = "kotlinx-coroutines-core/common/src/Job.kt:198"
+
+[[case]]
+file = "kotlinx-coroutines-core/common/src/Await.kt"
+at = 'val disposer = DisposeHandlersOn§Cancel(nodes)'
+target = "kotlinx-coroutines-core/common/src/Await.kt:86"
+
+[[case]]
+file = "kotlinx-coroutines-core/common/src/Await.kt"
+at = 'nodes.forEach { it.disposer = dis§poser }'
+target = "kotlinx-coroutines-core/common/src/Await.kt:73"
+
+[[case]]
+file = "kotlinx-coroutines-core/common/src/Await.kt"
+at = 'nodes.forEach { it.dispo§ser = disposer }'
+target = "kotlinx-coroutines-core/common/src/Await.kt:99"
+
+[[case]]
+file = "kotlinx-coroutines-core/common/src/Await.kt"
+at = 'if (cont.isComp§leted) {'
+target = "kotlinx-coroutines-core/common/src/CancellableContinuation.kt:131"
+
+[[case]]
+file = "kotlinx-coroutines-core/common/src/Await.kt"
+at = '(private val nodes: Array<AwaitAllNode>) : Cancel§Handler {'
+target = "kotlinx-coroutines-core/common/src/CancellableContinuationImpl.kt:640"
+
+[[case]]
+file = "kotlinx-coroutines-core/common/src/Await.kt"
+at = 'CancellableContinuation<List<T>>) : Job§Node() {'
+target = "kotlinx-coroutines-core/common/src/JobSupport.kt:1460"
+
+[[case]]
+file = "kotlinx-coroutines-core/common/src/Await.kt"
+at = 'lateinit var handle: Dispos§ableHandle'
+target = "kotlinx-coroutines-core/common/src/Job.kt:402"
+
+[[case]]
+file = "kotlinx-coroutines-core/common/src/Await.kt"
+at = 'continuation.tryResumeWith§Exception(cause)'
+target = "kotlinx-coroutines-core/common/src/CancellableContinuation.kt:180"
+
+[[case]]
+file = "kotlinx-coroutines-core/common/src/Await.kt"
+at = 'continuation.completeResume(tok§en)'
+target = "kotlinx-coroutines-core/common/src/Await.kt:107"
+
+[[case]]
+file = "kotlinx-coroutines-core/common/src/Await.kt"
+at = 'tryResumeWithException(ca§use)'
+target = "kotlinx-coroutines-core/common/src/Await.kt:105"
+
+[[case]]
+file = "kotlinx-coroutines-core/common/src/Await.kt"
+at = 'else if (notCompletedCount.decrement§AndGet() == 0)'
+target = "none"
+
+[[case]]
+file = "kotlinx-coroutines-core/common/src/Await.kt"
+at = 'deferreds.map { it.getComp§leted() }'
+target = "kotlinx-coroutines-core/common/src/Deferred.kt:88"
+
+[[case]]
+file = "kotlinx-coroutines-core/common/src/Await.kt"
+at = 'disposer?.dispose§All()'
+target = "kotlinx-coroutines-core/common/src/Await.kt:87"
+
+[[case]]
+file = "kotlinx-coroutines-core/common/src/Await.kt"
+at = 'nodes.forEach { it.handle.disp§ose() }'
+target = "kotlinx-coroutines-core/common/src/Job.kt:407"
+
+[[case]]
+file = "kotlinx-coroutines-core/common/src/Builders.common.kt"
+at = 'Deferred§Coroutine<T>(newContext, active = true)'
+target = "kotlinx-coroutines-core/common/src/Builders.common.kt:299"
+
+[[case]]
+file = "kotlinx-coroutines-core/common/src/Builders.common.kt"
+at = ': Abstract§Coroutine<Unit>(parentContext, initParentJob = true'
+target = "kotlinx-coroutines-core/common/src/AbstractCoroutine.kt:36"
+
+[[case]]
+file = "kotlinx-coroutines-core/common/src/Builders.common.kt"
+at = 'handleCoroutineException(con§text, exception)'
+target = "kotlinx-coroutines-core/common/src/AbstractCoroutine.kt:57"
+
+[[case]]
+file = "kotlinx-coroutines-core/common/src/Builders.common.kt"
+at = 'handle§CoroutineException(context, exception)'
+target = "kotlinx-coroutines-core/common/src/CoroutineExceptionHandler.kt:18"
+
+[[case]]
+file = "kotlinx-coroutines-core/common/src/Builders.common.kt"
+at = 'ScopeCoroutine(newCon§text, uCont)'
+target = "kotlinx-coroutines-core/common/src/Builders.common.kt:483"
+
+[[case]]
+file = "kotlinx-coroutines-core/common/src/Builders.common.kt"
+at = 'newContext.ensure§Active()'
+target = "kotlinx-coroutines-core/common/src/Job.kt:602"
+
+[[case]]
+file = "kotlinx-coroutines-core/common/src/Builders.common.kt"
+at = 'oldContext.newCoroutine§Context(context)'
+target = "kotlinx-coroutines-core/common/src/CoroutineContext.common.kt:26"
+
+[[case]]
+file = "kotlinx-coroutines-core/common/src/Builders.common.kt"
+at = 'Undispatched§Coroutine(newContext, uCont)'
+target = "kotlinx-coroutines-core/common/src/Builders.common.kt:541"
+
+[[case]]
+file = "kotlinx-coroutines-core/common/src/Builders.common.kt"
+at = 'withContext(this, bl§ock)'
+target = "kotlinx-coroutines-core/common/src/Builders.common.kt:514"
+
+[[case]]
+file = "kotlinx-coroutines-core/common/src/Builders.common.kt"
+at = 'val oldContext = uCont.con§text'
+target = "none"
+
+[[case]]
+file = "kotlinx-coroutines-core/common/src/CoroutineScope.kt"
+at = 'ContextScope(corou§tineContext + context)'
+target = "kotlinx-coroutines-core/common/src/CoroutineScope.kt:451"
+
+[[case]]
+file = "kotlinx-coroutines-core/common/src/CoroutineScope.kt"
+at = 'ContextScope(coroutineContext + con§text)'
+target = "kotlinx-coroutines-core/common/src/CoroutineScope.kt:470"
+
+[[case]]
+file = "kotlinx-coroutines-core/common/src/CoroutineScope.kt"
+at = 'SupervisorJob() + Dispatchers.Ma§in)'
+target = "kotlinx-coroutines-core/common/src/Dispatchers.common.kt:38"
+
+[[case]]
+file = "kotlinx-coroutines-core/common/src/CoroutineScope.kt"
+at = 'ContextScope(Supervisor§Job() + Dispatchers.Main)'
+target = "kotlinx-coroutines-core/common/src/Supervisor.kt:27"
+
+[[case]]
+file = "kotlinx-coroutines-core/common/src/CoroutineScope.kt"
+at = 'get() = coroutineContext[Job]?.is§Active ?: true'
+target = "kotlinx-coroutines-core/common/src/Job.kt:151"
+
+[[case]]
+file = "kotlinx-coroutines-core/common/src/CoroutineScope.kt"
+at = 'context else context + Jo§b())'
+target = "kotlinx-coroutines-core/common/src/Job.kt:391"
+
+[[case]]
+file = "kotlinx-coroutines-core/common/src/CoroutineScope.kt"
+at = 'Unit = corou§tineContext.ensureActive()'
+target = "kotlinx-coroutines-core/common/src/CoroutineScope.kt:451"
+
+[[case]]
+file = "kotlinx-coroutines-core/common/src/CoroutineScope.kt"
+at = 'coroutineContext.ensure§Active()'
+target = "kotlinx-coroutines-core/common/src/Job.kt:602"
+
+[[case]]
+file = "kotlinx-coroutines-core/common/src/CoroutineScope.kt"
+at = 'CoroutineContext = corout§ineContext'
+target = "none"
+
+[[case]]
+file = "kotlinx-coroutines-core/common/src/CoroutineScope.kt"
+at = 'public object GlobalScope : Coroutine§Scope {'
+target = "kotlinx-coroutines-core/common/src/CoroutineScope.kt:437"
+
+[[case]]
+file = "kotlinx-coroutines-core/common/src/Timeout.kt"
+at = 'setup§Timeout(TimeoutCoroutine(timeMillis, uCont), block)'
+target = "kotlinx-coroutines-core/common/src/Timeout.kt:223"
+
+[[case]]
+file = "kotlinx-coroutines-core/common/src/Timeout.kt"
+at = 'var coroutine: Timeout§Coroutine<T?, T?>? = null'
+target = "kotlinx-coroutines-core/common/src/Timeout.kt:236"
+
+[[case]]
+file = "kotlinx-coroutines-core/common/src/Timeout.kt"
+at = 'if (e.coroutine === corou§tine) {'
+target = "kotlinx-coroutines-core/common/src/Timeout.kt:154"
+
+[[case]]
+file = "kotlinx-coroutines-core/common/src/Timeout.kt"
+at = 'if (e.corou§tine === coroutine) {'
+target = "kotlinx-coroutines-core/common/src/Timeout.kt:255"
+
+[[case]]
+file = "kotlinx-coroutines-core/common/src/Timeout.kt"
+at = 'val cont = coroutine.uC§ont'
+target = "kotlinx-coroutines-core/common/src/internal/Scopes.kt:13"
+
+[[case]]
+file = "kotlinx-coroutines-core/common/src/Timeout.kt"
+at = 'coroutine.dispose§OnCompletion(context.delay'
+target = "kotlinx-coroutines-core/common/src/Job.kt:492"
+
+[[case]]
+file = "kotlinx-coroutines-core/common/src/Timeout.kt"
+at = 'val delay = context.de§lay'
+target = "kotlinx-coroutines-core/common/src/Delay.kt:149"
+
+[[case]]
+file = "kotlinx-coroutines-core/common/src/Timeout.kt"
+at = '.invokeOn§Timeout(coroutine.time'
+target = "kotlinx-coroutines-core/common/src/Delay.kt:52"
+
+[[case]]
+file = "kotlinx-coroutines-core/common/src/Timeout.kt"
+at = 'val name = context[CoroutineName]?.na§me'
+target = "kotlinx-coroutines-core/common/src/CoroutineName.kt:14"
+
+[[case]]
+file = "kotlinx-coroutines-core/common/src/Timeout.kt"
+at = 'cancelCor§outine(TimeoutCancellationException('
+target = "kotlinx-coroutines-core/common/src/JobSupport.kt:689"
+
+[[case]]
+file = "kotlinx-coroutines-core/common/src/Timeout.kt"
+at = 'TimeoutCancellation§Exception(time, delay, this, name)'
+target = "kotlinx-coroutines-core/common/src/Timeout.kt:268"
+
+[[case]]
+file = "kotlinx-coroutines-core/common/src/Timeout.kt"
+at = '?.timeout§Message(time.milliseconds)'
+target = "kotlinx-coroutines-core/common/src/Delay.kt:66"
+
+[[case]]
+file = "kotlinx-coroutines-core/common/src/Timeout.kt"
+at = '(delay as? DelayWith§TimeoutDiagnostics)'
+target = "kotlinx-coroutines-core/common/src/Delay.kt:62"
+
+[[case]]
+file = "kotlinx-coroutines-core/common/src/Timeout.kt"
+at = 'withTimeout(timeout.toDelay§Millis(), block)'
+target = "kotlinx-coroutines-core/common/src/Delay.kt:155"
+
+[[case]]
+file = "kotlinx-coroutines-core/common/src/Timeout.kt"
+at = 'import kotlin.time.Duration.Companion.milli§seconds'
+target = "none"
+
+[[case]]
+file = "kotlinx-coroutines-core/common/src/CompletableDeferred.kt"
+at = 'result.fold({ comp§lete(it) }'
+target = "kotlinx-coroutines-core/common/src/CompletableDeferred.kt:32"
+
+[[case]]
+file = "kotlinx-coroutines-core/common/src/CompletableDeferred.kt"
+at = '{ completeEx§ceptionally(it) })'
+target = "kotlinx-coroutines-core/common/src/CompletableDeferred.kt:44"
+
+[[case]]
+file = "kotlinx-coroutines-core/common/src/CompletableDeferred.kt"
+at = 'CompletableDeferredImpl(par§ent)'
+target = "kotlinx-coroutines-core/common/src/CompletableDeferred.kt:64"
+
+[[case]]
+file = "kotlinx-coroutines-core/common/src/CompletableDeferred.kt"
+at = 'Completable§DeferredImpl(parent)'
+target = "kotlinx-coroutines-core/common/src/CompletableDeferred.kt:108"
+
+[[case]]
+file = "kotlinx-coroutines-core/common/src/CompletableDeferred.kt"
+at = 'CompletableDeferredImpl<T>(null).apply { comp§lete(value) }'
+target = "kotlinx-coroutines-core/common/src/CompletableDeferred.kt:117"
+
+[[case]]
+file = "kotlinx-coroutines-core/common/src/CompletableDeferred.kt"
+at = '= Readonly§Deferred(this)'
+target = "kotlinx-coroutines-core/common/src/CompletableDeferred.kt:97"
+
+[[case]]
+file = "kotlinx-coroutines-core/common/src/CompletableDeferred.kt"
+at = ') : Deferred<T> by defe§rred {'
+target = "kotlinx-coroutines-core/common/src/CompletableDeferred.kt:98"
+
+[[case]]
+file = "kotlinx-coroutines-core/common/src/CompletableDeferred.kt"
+at = 'init { initPar§entJob(parent) }'
+target = "kotlinx-coroutines-core/common/src/JobSupport.kt:141"
+
+[[case]]
+file = "kotlinx-coroutines-core/common/src/CompletableDeferred.kt"
+at = 'makeComp§leting(value)'
+target = "kotlinx-coroutines-core/common/src/JobSupport.kt:835"
+
+[[case]]
+file = "kotlinx-coroutines-core/common/src/CompletableDeferred.kt"
+at = 'makeCompleting(CompletedEx§ceptionally(exception))'
+target = "kotlinx-coroutines-core/common/src/CompletionState.kt:26"
+
+[[case]]
+file = "kotlinx-coroutines-core/common/src/CompletableDeferred.kt"
+at = ') : JobSupport(true), Completable§Deferred<T> {'
+target = "kotlinx-coroutines-core/common/src/CompletableDeferred.kt:21"
+
+[[case]]
+file = "kotlinx-coroutines-core/common/src/AbstractCoroutine.kt"
+at = 'import kotlinx.coroutines.internal.Scope§Coroutine'
+target = "kotlinx-coroutines-core/common/src/internal/Scopes.kt:11"
+
+[[case]]
+file = "kotlinx-coroutines-core/common/src/AbstractCoroutine.kt"
+at = 'Continuation<T>, Coroutine§Scope {'
+target = "kotlinx-coroutines-core/common/src/CoroutineScope.kt:437"
+
+[[case]]
+file = "kotlinx-coroutines-core/common/src/AbstractCoroutine.kt"
+at = '= pare§ntContext + this'
+target = "kotlinx-coroutines-core/common/src/AbstractCoroutine.kt:37"
+
+[[case]]
+file = "kotlinx-coroutines-core/common/src/AbstractCoroutine.kt"
+at = 'if (state is Completed§Exceptionally)'
+target = "kotlinx-coroutines-core/common/src/CompletionState.kt:26"
+
+[[case]]
+file = "kotlinx-coroutines-core/common/src/AbstractCoroutine.kt"
+at = 'onCancelled(state.ca§use, state.handled)'
+target = "kotlinx-coroutines-core/common/src/CompletionState.kt:27"
+
+[[case]]
+file = "kotlinx-coroutines-core/common/src/AbstractCoroutine.kt"
+at = 'val state = makeCompleting§Once(result.toState())'
+target = "kotlinx-coroutines-core/common/src/JobSupport.kt:857"
+
+[[case]]
+file = "kotlinx-coroutines-core/common/src/AbstractCoroutine.kt"
+at = 'if (state === COMPLETING_WAIT§ING_CHILDREN) return'
+target = "kotlinx-coroutines-core/common/src/JobSupport.kt:1401"
+
+[[case]]
+file = "kotlinx-coroutines-core/common/src/AbstractCoroutine.kt"
+at = 'context.coroutine§Name ?: return'
+target = "kotlinx-coroutines-core/common/src/CoroutineContext.common.kt:36"
+
+[[case]]
+file = "kotlinx-coroutines-core/common/src/AbstractCoroutine.kt"
+at = 'onCompleted(sta§te as T)'
+target = "kotlinx-coroutines-core/common/src/AbstractCoroutine.kt:88"
+
+[[case]]
+file = "kotlinx-coroutines-core/common/src/channels/Produce.kt"
+at = 'pro§duce(context, capacity, BufferOverflow.SUSPEND, CoroutineStart.DEFAULT'
+target = "kotlinx-coroutines-core/common/src/channels/Produce.kt:328"
+
+[[case]]
+file = "kotlinx-coroutines-core/common/src/channels/Produce.kt"
+at = 'val newContext = newCoroutine§Context(context)'
+target = "kotlinx-coroutines-core/common/src/CoroutineContext.common.kt:19"
+
+[[case]]
+file = "kotlinx-coroutines-core/common/src/channels/Produce.kt"
+at = 'ProducerCoroutine(newContext, chan§nel)'
+target = "kotlinx-coroutines-core/common/src/channels/Produce.kt:336"
+
+[[case]]
+file = "kotlinx-coroutines-core/common/src/channels/Produce.kt"
+at = 'coroutine.sta§rt(start, coroutine, block)'
+target = "kotlinx-coroutines-core/common/src/AbstractCoroutine.kt:133"
+
+[[case]]
+file = "kotlinx-coroutines-core/common/src/channels/Produce.kt"
+at = 'ChannelCoroutine<E>(parentContext, channel, true, active = true), Producer§Scope<E> {'
+target = "kotlinx-coroutines-core/common/src/channels/Produce.kt:10"
+
+[[case]]
+file = "kotlinx-coroutines-core/common/src/channels/Produce.kt"
+at = 'handleCoroutineException(context, ca§use)'
+target = "kotlinx-coroutines-core/common/src/channels/Produce.kt:354"
+
+[[case]]
+file = "kotlinx-coroutines-core/common/src/flow/Channels.kt"
+at = 'emit(elem§ent)'
+target = "kotlinx-coroutines-core/common/src/flow/Channels.kt:32"
+
+[[case]]
+file = "kotlinx-coroutines-core/common/src/flow/Channels.kt"
+at = 'cause = §e'
+target = "kotlinx-coroutines-core/common/src/flow/Channels.kt:35"
+
+[[case]]
+file = "kotlinx-coroutines-core/common/src/flow/Builders.kt"
+at = 'for (element in elem§ents) {'
+target = "kotlinx-coroutines-core/common/src/flow/Builders.kt:118"
+
+[[case]]
+file = "kotlinx-coroutines-core/jvm/src/Builders.kt"
+at = 'coroutine.start(CoroutineStart.DE§FAULT, coroutine, block)'
+target = "kotlinx-coroutines-core/common/src/CoroutineStart.kt:78"
+
+[[case]]
+file = "kotlinx-coroutines-core/jvm/src/Builders.kt"
+at = 'return coroutine.joinBlock§ing()'
+target = "kotlinx-coroutines-core/jvm/src/Builders.kt:48"
+
+[[case]]
+file = "kotlinx-coroutines-core/jvm/src/Builders.kt"
+at = 'eventLoop?.incrementUse§Count()'
+target = "kotlinx-coroutines-core/common/src/EventLoop.common.kt:92"
+
+[[case]]
+file = "kotlinx-coroutines-core/jvm/src/Builders.kt"
+at = 'throw it.ca§use'
+target = "kotlinx-coroutines-core/common/src/CompletionState.kt:27"
+
+[[case]]
+file = "kotlinx-coroutines-core/jvm/src/Builders.kt"
+at = '!= blocked§Thread)'
+target = "kotlinx-coroutines-core/jvm/src/Builders.kt:35"
+
+[[case]]
+file = "kotlinx-coroutines-core/jvm/src/Builders.kt"
+at = 'val state = this.state.unbox§State()'
+target = "kotlinx-coroutines-core/common/src/JobSupport.kt:1395"
+
+[[case]]
+file = "kotlinx-coroutines-core/common/src/CoroutineStart.kt"
+at = 'get() = this === LA§ZY'
+target = "kotlinx-coroutines-core/common/src/CoroutineStart.kt:163"

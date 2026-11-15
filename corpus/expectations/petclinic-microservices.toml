@@ -1,0 +1,277 @@
+# Hand-checked Go to Declaration cases for spring-petclinic/spring-petclinic-microservices at the commit in ../manifest.toml.
+# Format: see crates/dumbj-index/examples/accuracy.rs.
+
+[[case]]
+file = "spring-petclinic-customers-service/src/main/java/org/springframework/samples/petclinic/customers/web/OwnerResource.java"
+at = 'customers.web.mapper.OwnerEntityMa§pper;'
+target = "spring-petclinic-customers-service/src/main/java/org/springframework/samples/petclinic/customers/web/mapper/OwnerEntityMapper.java:8"
+
+[[case]]
+file = "spring-petclinic-customers-service/src/main/java/org/springframework/samples/petclinic/customers/web/OwnerResource.java"
+at = 'customers.model.Ow§nerRepository;'
+target = "spring-petclinic-customers-service/src/main/java/org/springframework/samples/petclinic/customers/model/OwnerRepository.java:30"
+
+[[case]]
+file = "spring-petclinic-customers-service/src/main/java/org/springframework/samples/petclinic/customers/web/OwnerResource.java"
+at = 'private final Owner§Repository ownerRepository;'
+target = "spring-petclinic-customers-service/src/main/java/org/springframework/samples/petclinic/customers/model/OwnerRepository.java:30"
+
+[[case]]
+file = "spring-petclinic-customers-service/src/main/java/org/springframework/samples/petclinic/customers/web/OwnerResource.java"
+at = 'return ownerRepository.sa§ve(owner);'
+target = "none"
+
+[[case]]
+file = "spring-petclinic-customers-service/src/main/java/org/springframework/samples/petclinic/customers/web/OwnerResource.java"
+at = 'ownerEntityMapper.ma§p(new Owner(), ownerRequest)'
+target = "spring-petclinic-customers-service/src/main/java/org/springframework/samples/petclinic/customers/web/mapper/OwnerEntityMapper.java:11"
+
+[[case]]
+file = "spring-petclinic-customers-service/src/main/java/org/springframework/samples/petclinic/customers/web/OwnerResource.java"
+at = 'ownerEntityMapper.ma§p(ownerModel, ownerRequest);'
+target = "spring-petclinic-customers-service/src/main/java/org/springframework/samples/petclinic/customers/web/mapper/OwnerEntityMapper.java:11"
+
+[[case]]
+file = "spring-petclinic-customers-service/src/main/java/org/springframework/samples/petclinic/customers/web/OwnerResource.java"
+at = 'ownerEntityMapper.map(new Own§er(), ownerRequest)'
+target = "spring-petclinic-customers-service/src/main/java/org/springframework/samples/petclinic/customers/model/Owner.java:39"
+
+[[case]]
+file = "spring-petclinic-customers-service/src/main/java/org/springframework/samples/petclinic/customers/web/OwnerResource.java"
+at = 'lo§g.info("Saving owner'
+target = "spring-petclinic-customers-service/src/main/java/org/springframework/samples/petclinic/customers/web/OwnerResource.java:44"
+
+[[case]]
+file = "spring-petclinic-customers-service/src/main/java/org/springframework/samples/petclinic/customers/web/OwnerResource.java"
+at = 'ownerEntityMapper.map(ownerMo§del, ownerRequest);'
+target = "spring-petclinic-customers-service/src/main/java/org/springframework/samples/petclinic/customers/web/OwnerResource.java:86"
+
+[[case]]
+file = "spring-petclinic-customers-service/src/main/java/org/springframework/samples/petclinic/customers/web/OwnerResource.java"
+at = 'new ResourceNotFoun§dException("Owner "'
+target = "spring-petclinic-customers-service/src/main/java/org/springframework/samples/petclinic/customers/web/ResourceNotFoundException.java:7"
+
+[[case]]
+file = "spring-petclinic-customers-service/src/main/java/org/springframework/samples/petclinic/customers/web/OwnerResource.java"
+at = '@Ti§med('
+target = "none"
+
+[[case]]
+file = "spring-petclinic-customers-service/src/main/java/org/springframework/samples/petclinic/customers/web/OwnerResource.java"
+at = 'ownerRepository.findB§yId(ownerId).orElseThrow'
+target = "none"
+
+[[case]]
+file = "spring-petclinic-customers-service/src/main/java/org/springframework/samples/petclinic/customers/web/OwnerResource.java"
+at = 'findById(ownerId).orElse§Throw('
+target = "none"
+
+[[case]]
+file = "spring-petclinic-customers-service/src/main/java/org/springframework/samples/petclinic/customers/web/OwnerResource.java"
+at = 'this.ownerRepository = ownerRepo§sitory;'
+target = "spring-petclinic-customers-service/src/main/java/org/springframework/samples/petclinic/customers/web/OwnerResource.java:49"
+
+[[case]]
+file = "spring-petclinic-customers-service/src/main/java/org/springframework/samples/petclinic/customers/web/PetResource.java"
+at = 'private final PetRepo§sitory petRepository;'
+target = "spring-petclinic-customers-service/src/main/java/org/springframework/samples/petclinic/customers/model/PetRepository.java:35"
+
+[[case]]
+file = "spring-petclinic-customers-service/src/main/java/org/springframework/samples/petclinic/customers/web/PetResource.java"
+at = 'petRepository.findPetTy§pes()'
+target = "spring-petclinic-customers-service/src/main/java/org/springframework/samples/petclinic/customers/model/PetRepository.java:42"
+
+[[case]]
+file = "spring-petclinic-customers-service/src/main/java/org/springframework/samples/petclinic/customers/web/PetResource.java"
+at = 'petRepository.findPetTypeB§yId(petRequest.typeId())'
+target = "spring-petclinic-customers-service/src/main/java/org/springframework/samples/petclinic/customers/model/PetRepository.java:45"
+
+[[case]]
+file = "spring-petclinic-customers-service/src/main/java/org/springframework/samples/petclinic/customers/web/PetResource.java"
+at = 'petRequest.typ§eId()'
+target = "spring-petclinic-customers-service/src/main/java/org/springframework/samples/petclinic/customers/web/PetRequest.java:32"
+
+[[case]]
+file = "spring-petclinic-customers-service/src/main/java/org/springframework/samples/petclinic/customers/web/PetResource.java"
+at = 'pet.setBi§rthDate(petRequest.birthDate())'
+target = "spring-petclinic-customers-service/src/main/java/org/springframework/samples/petclinic/customers/model/Pet.java:97"
+
+[[case]]
+file = "spring-petclinic-customers-service/src/main/java/org/springframework/samples/petclinic/customers/web/PetResource.java"
+at = '.ifPresent(pet::setTy§pe)'
+target = "spring-petclinic-customers-service/src/main/java/org/springframework/samples/petclinic/customers/model/Pet.java:101"
+
+[[case]]
+file = "spring-petclinic-customers-service/src/main/java/org/springframework/samples/petclinic/customers/web/PetResource.java"
+at = 'owner.addPe§t(pet)'
+target = "spring-petclinic-customers-service/src/main/java/org/springframework/samples/petclinic/customers/model/Owner.java:82"
+
+[[case]]
+file = "spring-petclinic-customers-service/src/main/java/org/springframework/samples/petclinic/customers/web/PetResource.java"
+at = 'return sa§ve(pet, petRequest);'
+target = "spring-petclinic-customers-service/src/main/java/org/springframework/samples/petclinic/customers/web/PetResource.java:77"
+
+[[case]]
+file = "spring-petclinic-customers-service/src/main/java/org/springframework/samples/petclinic/customers/web/PetResource.java"
+at = 'return petRepository.fin§dById(petId)'
+target = "none"
+
+[[case]]
+file = "spring-petclinic-customers-service/src/main/java/org/springframework/samples/petclinic/customers/web/PetResource.java"
+at = 'return new PetDetails(pe§t);'
+target = "spring-petclinic-customers-service/src/main/java/org/springframework/samples/petclinic/customers/web/PetDetails.java:41"
+
+[[case]]
+file = "spring-petclinic-customers-service/src/main/java/org/springframework/samples/petclinic/customers/web/PetDetails.java"
+at = 'pet.getNa§me(), pet.getOwner()'
+target = "spring-petclinic-customers-service/src/main/java/org/springframework/samples/petclinic/customers/model/Pet.java:73"
+
+[[case]]
+file = "spring-petclinic-customers-service/src/main/java/org/springframework/samples/petclinic/customers/web/PetDetails.java"
+at = 'getOwner().getFirstNa§me()'
+target = "spring-petclinic-customers-service/src/main/java/org/springframework/samples/petclinic/customers/model/Owner.java:103"
+
+[[case]]
+file = "spring-petclinic-customers-service/src/main/java/org/springframework/samples/petclinic/customers/web/PetDetails.java"
+at = 'customers.model.PetTy§pe;'
+target = "spring-petclinic-customers-service/src/main/java/org/springframework/samples/petclinic/customers/model/PetType.java:27"
+
+[[case]]
+file = "spring-petclinic-customers-service/src/main/java/org/springframework/samples/petclinic/customers/web/mapper/OwnerEntityMapper.java"
+at = 'implements Map§per<OwnerRequest, Owner>'
+target = "spring-petclinic-customers-service/src/main/java/org/springframework/samples/petclinic/customers/web/mapper/Mapper.java:3"
+
+[[case]]
+file = "spring-petclinic-customers-service/src/main/java/org/springframework/samples/petclinic/customers/web/mapper/OwnerEntityMapper.java"
+at = 'owner.setCi§ty(request.city())'
+target = "spring-petclinic-customers-service/src/main/java/org/springframework/samples/petclinic/customers/model/Owner.java:135"
+
+[[case]]
+file = "spring-petclinic-customers-service/src/main/java/org/springframework/samples/petclinic/customers/web/mapper/OwnerEntityMapper.java"
+at = 'request.fir§stName()'
+target = "spring-petclinic-customers-service/src/main/java/org/springframework/samples/petclinic/customers/web/OwnerRequest.java:6"
+
+[[case]]
+file = "spring-petclinic-customers-service/src/main/java/org/springframework/samples/petclinic/customers/model/Owner.java"
+at = 'this.getLast§Name()'
+target = "spring-petclinic-customers-service/src/main/java/org/springframework/samples/petclinic/customers/model/Owner.java:107"
+
+[[case]]
+file = "spring-petclinic-customers-service/src/main/java/org/springframework/samples/petclinic/customers/model/Owner.java"
+at = 'new ArrayList<>(getPetsInternal§())'
+target = "spring-petclinic-customers-service/src/main/java/org/springframework/samples/petclinic/customers/model/Owner.java:69"
+
+[[case]]
+file = "spring-petclinic-customers-service/src/main/java/org/springframework/samples/petclinic/customers/model/Owner.java"
+at = 'new Hash§Set<>()'
+target = "none"
+
+[[case]]
+file = "spring-petclinic-customers-service/src/main/java/org/springframework/samples/petclinic/customers/model/Owner.java"
+at = 'pet.setOw§ner(this)'
+target = "spring-petclinic-customers-service/src/main/java/org/springframework/samples/petclinic/customers/model/Pet.java:105"
+
+[[case]]
+file = "spring-petclinic-customers-service/src/main/java/org/springframework/samples/petclinic/customers/model/Owner.java"
+at = 'private Set<Pe§t> pets;'
+target = "spring-petclinic-customers-service/src/main/java/org/springframework/samples/petclinic/customers/model/Pet.java:36"
+
+[[case]]
+file = "spring-petclinic-customers-service/src/main/java/org/springframework/samples/petclinic/customers/model/Owner.java"
+at = 'if (this.pe§ts == null)'
+target = "spring-petclinic-customers-service/src/main/java/org/springframework/samples/petclinic/customers/model/Owner.java:67"
+
+[[case]]
+file = "spring-petclinic-customers-service/src/main/java/org/springframework/samples/petclinic/customers/model/Pet.java"
+at = 'this.getType().getNa§me()'
+target = "spring-petclinic-customers-service/src/main/java/org/springframework/samples/petclinic/customers/model/PetType.java:40"
+
+[[case]]
+file = "spring-petclinic-customers-service/src/main/java/org/springframework/samples/petclinic/customers/model/Pet.java"
+at = 'this.getOwner().getFirstNa§me()'
+target = "spring-petclinic-customers-service/src/main/java/org/springframework/samples/petclinic/customers/model/Owner.java:103"
+
+[[case]]
+file = "spring-petclinic-api-gateway/src/main/java/org/springframework/samples/petclinic/api/boundary/web/ApiGatewayController.java"
+at = 'customersServiceClient.getOw§ner(ownerId)'
+target = "spring-petclinic-api-gateway/src/main/java/org/springframework/samples/petclinic/api/application/CustomersServiceClient.java:35"
+
+[[case]]
+file = "spring-petclinic-api-gateway/src/main/java/org/springframework/samples/petclinic/api/boundary/web/ApiGatewayController.java"
+at = 'owner.getPetI§ds()'
+target = "spring-petclinic-api-gateway/src/main/java/org/springframework/samples/petclinic/api/dto/OwnerDetails.java:35"
+
+[[case]]
+file = "spring-petclinic-api-gateway/src/main/java/org/springframework/samples/petclinic/api/boundary/web/ApiGatewayController.java"
+at = 'owner.pe§ts()'
+target = "spring-petclinic-api-gateway/src/main/java/org/springframework/samples/petclinic/api/dto/OwnerDetails.java:32"
+
+[[case]]
+file = "spring-petclinic-api-gateway/src/main/java/org/springframework/samples/petclinic/api/boundary/web/ApiGatewayController.java"
+at = 'pet.vis§its()'
+target = "spring-petclinic-api-gateway/src/main/java/org/springframework/samples/petclinic/api/dto/PetDetails.java:30"
+
+[[case]]
+file = "spring-petclinic-api-gateway/src/main/java/org/springframework/samples/petclinic/api/boundary/web/ApiGatewayController.java"
+at = 'visits.ite§ms()'
+target = "spring-petclinic-api-gateway/src/main/java/org/springframework/samples/petclinic/api/dto/Visits.java:26"
+
+[[case]]
+file = "spring-petclinic-api-gateway/src/main/java/org/springframework/samples/petclinic/api/boundary/web/ApiGatewayController.java"
+at = 'v.petI§d() == pet.id()'
+target = "spring-petclinic-api-gateway/src/main/java/org/springframework/samples/petclinic/api/dto/VisitDetails.java:23"
+
+[[case]]
+file = "spring-petclinic-api-gateway/src/main/java/org/springframework/samples/petclinic/api/boundary/web/ApiGatewayController.java"
+at = 'Mono.just(new Visi§ts(List.of()))'
+target = "spring-petclinic-api-gateway/src/main/java/org/springframework/samples/petclinic/api/dto/Visits.java:25"
+
+[[case]]
+file = "spring-petclinic-api-gateway/src/main/java/org/springframework/samples/petclinic/api/boundary/web/ApiGatewayController.java"
+at = 'cbFactory.cre§ate("getOwnerDetails")'
+target = "none"
+
+[[case]]
+file = "spring-petclinic-api-gateway/src/main/java/org/springframework/samples/petclinic/api/boundary/web/ApiGatewayController.java"
+at = 'emptyVisitsFor§Pets());'
+target = "spring-petclinic-api-gateway/src/main/java/org/springframework/samples/petclinic/api/boundary/web/ApiGatewayController.java:80"
+
+[[case]]
+file = "spring-petclinic-api-gateway/src/main/java/org/springframework/samples/petclinic/api/boundary/web/ApiGatewayController.java"
+at = '.map(addVisitsTo§Owner(owner))'
+target = "spring-petclinic-api-gateway/src/main/java/org/springframework/samples/petclinic/api/boundary/web/ApiGatewayController.java:68"
+
+[[case]]
+file = "spring-petclinic-visits-service/src/main/java/org/springframework/samples/petclinic/visits/web/VisitResource.java"
+at = 'visit.setPe§tId(petId)'
+target = "spring-petclinic-visits-service/src/main/java/org/springframework/samples/petclinic/visits/model/Visit.java:79"
+
+[[case]]
+file = "spring-petclinic-visits-service/src/main/java/org/springframework/samples/petclinic/visits/web/VisitResource.java"
+at = 'visitRepository.findByPetI§dIn(petIds)'
+target = "spring-petclinic-visits-service/src/main/java/org/springframework/samples/petclinic/visits/model/VisitRepository.java:37"
+
+[[case]]
+file = "spring-petclinic-visits-service/src/main/java/org/springframework/samples/petclinic/visits/web/VisitResource.java"
+at = 'visitRepository.findByPetI§d(petId)'
+target = "spring-petclinic-visits-service/src/main/java/org/springframework/samples/petclinic/visits/model/VisitRepository.java:35"
+
+[[case]]
+file = "spring-petclinic-visits-service/src/main/java/org/springframework/samples/petclinic/visits/web/VisitResource.java"
+at = 'new Visi§ts(byPetIdIn)'
+target = "spring-petclinic-visits-service/src/main/java/org/springframework/samples/petclinic/visits/web/VisitResource.java:78"
+
+[[case]]
+file = "spring-petclinic-vets-service/src/main/java/org/springframework/samples/petclinic/vets/web/VetResource.java"
+at = 'vetRepository.findA§ll()'
+target = "none"
+
+[[case]]
+file = "spring-petclinic-vets-service/src/main/java/org/springframework/samples/petclinic/vets/web/VetResource.java"
+at = '@Cache§able("vets")'
+target = "none"
+
+[[case]]
+file = "spring-petclinic-vets-service/src/main/java/org/springframework/samples/petclinic/vets/web/VetResource.java"
+at = 'vets.model.V§et;'
+target = "spring-petclinic-vets-service/src/main/java/org/springframework/samples/petclinic/vets/model/Vet.java:38"

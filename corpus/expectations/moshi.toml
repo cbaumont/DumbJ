@@ -10,3 +10,298 @@ target = "moshi/src/main/java/com/squareup/moshi/JsonReader.kt:643"
 file = "moshi/src/main/java/com/squareup/moshi/JsonAdapter.kt"
 at = "public fun fromJson(source: Buffered§Source): T"
 target = "none"
+
+[[case]]
+file = "examples/src/main/java/com/squareup/moshi/recipes/CustomAdapterFactory.java"
+at = 'import com.squareup.moshi.Ty§pes;'
+target = "moshi/src/main/java/com/squareup/moshi/Types.kt:37"
+
+[[case]]
+file = "examples/src/main/java/com/squareup/moshi/recipes/CustomAdapterFactory.java"
+at = 'new Moshi.Buil§der().add(new SortedSetAdapterFactory())'
+target = "moshi/src/main/java/com/squareup/moshi/Moshi.kt:207"
+
+[[case]]
+file = "examples/src/main/java/com/squareup/moshi/recipes/CustomAdapterFactory.java"
+at = 'new SortedSetAdapterFact§ory()).build()'
+target = "examples/src/main/java/com/squareup/moshi/recipes/CustomAdapterFactory.java:87"
+
+[[case]]
+file = "examples/src/main/java/com/squareup/moshi/recipes/CustomAdapterFactory.java"
+at = 'Types.newParame§terizedType(SortedSet.class, String.class)'
+target = "moshi/src/main/java/com/squareup/moshi/Types.kt:101"
+
+[[case]]
+file = "examples/src/main/java/com/squareup/moshi/recipes/CustomAdapterFactory.java"
+at = 'newParameterizedType(Sorted§Set.class, String.class)'
+target = "none"
+
+[[case]]
+file = "examples/src/main/java/com/squareup/moshi/recipes/CustomAdapterFactory.java"
+at = 'result.add(elementAdapter.fromJson(rea§der));'
+target = "examples/src/main/java/com/squareup/moshi/recipes/CustomAdapterFactory.java:61"
+
+[[case]]
+file = "examples/src/main/java/com/squareup/moshi/recipes/CustomAdapterFactory.java"
+at = 'result.add(elementAdapter.from§Json(reader));'
+target = "moshi/src/main/java/com/squareup/moshi/JsonAdapter.kt:44"
+
+[[case]]
+file = "examples/src/main/java/com/squareup/moshi/recipes/CustomAdapterFactory.java"
+at = 'JsonAdapter<Object> elementAdapter = moshi.adapt§er(elementType);'
+target = "moshi/src/main/java/com/squareup/moshi/Moshi.kt:56"
+
+[[case]]
+file = "examples/src/main/java/com/squareup/moshi/recipes/CustomAdapterFactory.java"
+at = 'new SortedSetAdapter<>(elementAdapter).nullSa§fe()'
+target = "moshi/src/main/java/com/squareup/moshi/JsonAdapter.kt:160"
+
+[[case]]
+file = "examples/src/main/java/com/squareup/moshi/recipes/CustomAdapterFactory.java"
+at = 'this.element§Adapter = elementAdapter;'
+target = "examples/src/main/java/com/squareup/moshi/recipes/CustomAdapterFactory.java:54"
+
+[[case]]
+file = "examples/src/main/java/com/squareup/moshi/recipes/CustomAdapterFactory.java"
+at = 'parameterizedType.getRawT§ype()'
+target = "none"
+
+[[case]]
+file = "examples/src/main/java/com/squareup/moshi/recipes/ReadJsonList.java"
+at = 'jsonAdapter.from§Json(json)'
+target = "moshi/src/main/java/com/squareup/moshi/JsonAdapter.kt:64"
+
+[[case]]
+file = "examples/src/main/java/com/squareup/moshi/recipes/ReadJsonList.java"
+at = 'Types.newParameterizedType(List.class, Car§d.class)'
+target = "examples/src/main/java/com/squareup/moshi/recipes/models/Card.java:18"
+
+[[case]]
+file = "examples/src/main/java/com/squareup/moshi/recipes/CardAdapter.java"
+at = 'return card.ra§nk + card.suit'
+target = "examples/src/main/java/com/squareup/moshi/recipes/models/Card.java:19"
+
+[[case]]
+file = "examples/src/main/java/com/squareup/moshi/recipes/CardAdapter.java"
+at = 'new Card(rank, Suit.CL§UBS)'
+target = "examples/src/main/java/com/squareup/moshi/recipes/models/Suit.java:19"
+
+[[case]]
+file = "examples/src/main/java/com/squareup/moshi/recipes/CardAdapter.java"
+at = 'card.suit.na§me().substring'
+target = "none"
+
+[[case]]
+file = "examples/src/main/java/com/squareup/moshi/recipes/CardAdapter.java"
+at = 'throw new JsonDataExc§eption("Unknown card: "'
+target = "moshi/src/main/java/com/squareup/moshi/JsonDataException.kt:30"
+
+[[case]]
+file = "examples/src/main/java/com/squareup/moshi/recipes/FallbackEnum.java"
+at = 'Types.getRaw§Type(type)'
+target = "moshi/src/main/java/com/squareup/moshi/Types.kt:158"
+
+[[case]]
+file = "examples/src/main/java/com/squareup/moshi/recipes/FallbackEnum.java"
+at = 'JsonReader.Options.o§f(nameStrings)'
+target = "moshi/src/main/java/com/squareup/moshi/JsonReader.kt:571"
+
+[[case]]
+file = "examples/src/main/java/com/squareup/moshi/recipes/FallbackEnum.java"
+at = 'Util.json§Name(enumType.getField'
+target = "moshi/src/main/java/com/squareup/moshi/internal/Util.kt:85"
+
+[[case]]
+file = "examples/src/main/java/com/squareup/moshi/recipes/FallbackEnum.java"
+at = 'annotation instanceof Fall§back'
+target = "examples/src/main/java/com/squareup/moshi/recipes/FallbackEnum.java:37"
+
+[[case]]
+file = "examples/src/main/java/com/squareup/moshi/recipes/FallbackEnum.java"
+at = 'Enum.valueOf(enumType, fall§backName)'
+target = "examples/src/main/java/com/squareup/moshi/recipes/FallbackEnum.java:73"
+
+[[case]]
+file = "examples/src/main/java/com/squareup/moshi/recipes/FallbackEnum.java"
+at = 'reader.select§String(options)'
+target = "moshi/src/main/java/com/squareup/moshi/JsonReader.kt:342"
+
+[[case]]
+file = "examples/src/main/java/com/squareup/moshi/recipes/JsonString.kt"
+at = 'import com.squareup.moshi.JsonQual§ifier'
+target = "moshi/src/main/java/com/squareup/moshi/JsonQualifier.kt:25"
+
+[[case]]
+file = "examples/src/main/java/com/squareup/moshi/recipes/JsonString.kt"
+at = '@Retention(RUNTIME) @JsonQ§ualifier'
+target = "moshi/src/main/java/com/squareup/moshi/JsonQualifier.kt:25"
+
+[[case]]
+file = "examples/src/main/java/com/squareup/moshi/recipes/JsonString.kt"
+at = 'Types.nextAnno§tations(annotations, JsonString'
+target = "moshi/src/main/java/com/squareup/moshi/Types.kt:76"
+
+[[case]]
+file = "examples/src/main/java/com/squareup/moshi/recipes/JsonString.kt"
+at = 'nextAnnotations(annota§tions, JsonString'
+target = "examples/src/main/java/com/squareup/moshi/recipes/JsonString.kt:36"
+
+[[case]]
+file = "examples/src/main/java/com/squareup/moshi/recipes/JsonString.kt"
+at = 'JsonStringJsonAdapter().nullS§afe()'
+target = "moshi/src/main/java/com/squareup/moshi/JsonAdapter.kt:160"
+
+[[case]]
+file = "examples/src/main/java/com/squareup/moshi/recipes/JsonString.kt"
+at = 'return JsonStringJsonAdap§ter().nullSafe()'
+target = "examples/src/main/java/com/squareup/moshi/recipes/JsonString.kt:42"
+
+[[case]]
+file = "examples/src/main/java/com/squareup/moshi/recipes/JsonString.kt"
+at = 'reader.nextSo§urce().use(BufferedSource::readUtf8)'
+target = "moshi/src/main/java/com/squareup/moshi/JsonReader.kt:427"
+
+[[case]]
+file = "examples/src/main/java/com/squareup/moshi/recipes/JsonString.kt"
+at = 'Buffered§Source::readUtf8'
+target = "none"
+
+[[case]]
+file = "examples/src/main/java/com/squareup/moshi/recipes/JsonString.kt"
+at = 'writer.value§Sink().use'
+target = "moshi/src/main/java/com/squareup/moshi/JsonWriter.kt:361"
+
+[[case]]
+file = "examples/src/main/java/com/squareup/moshi/recipes/JsonString.kt"
+at = 'sink.writeUtf8(va§lue)'
+target = "examples/src/main/java/com/squareup/moshi/recipes/JsonString.kt:46"
+
+[[case]]
+file = "examples/src/main/java/com/squareup/moshi/recipes/JsonString.kt"
+at = 'moshi.adapter<ExampleClass>().fromJson(js§on)'
+target = "examples/src/main/java/com/squareup/moshi/recipes/JsonString.kt:54"
+
+[[case]]
+file = "examples/src/main/java/com/squareup/moshi/recipes/JsonString.kt"
+at = 'moshi.adap§ter<ExampleClass>()'
+target = "moshi/src/main/java/com/squareup/moshi/Moshi.kt:92"
+
+[[case]]
+file = "examples/src/main/java/com/squareup/moshi/recipes/JsonString.kt"
+at = 'val moshi = Build§er()'
+target = "moshi/src/main/java/com/squareup/moshi/Moshi.kt:207"
+
+[[case]]
+file = "examples/src/main/java/com/squareup/moshi/recipes/ReadJsonListKt.kt"
+at = 'import com.squareup.moshi.ad§apter'
+target = "moshi/src/main/java/com/squareup/moshi/-MoshiKotlinExtensions.kt:31"
+
+[[case]]
+file = "examples/src/main/java/com/squareup/moshi/recipes/ReadJsonListKt.kt"
+at = 'import com.squareup.moshi.recipes.models.Ca§rd'
+target = "examples/src/main/java/com/squareup/moshi/recipes/models/Card.java:18"
+
+[[case]]
+file = "examples/src/main/java/com/squareup/moshi/recipes/ReadJsonListKt.kt"
+at = 'jsonAdapter.fromJson(json§String)'
+target = "examples/src/main/java/com/squareup/moshi/recipes/ReadJsonListKt.kt:25"
+
+[[case]]
+file = "examples/src/main/java/com/squareup/moshi/recipes/ReadJsonListKt.kt"
+at = 'println(ra§nk)'
+target = "examples/src/main/java/com/squareup/moshi/recipes/models/Card.java:19"
+
+[[case]]
+file = "examples/src/main/java/com/squareup/moshi/recipes/ReadJsonListKt.kt"
+at = 'ReadJsonListKt().readJson§List()'
+target = "examples/src/main/java/com/squareup/moshi/recipes/ReadJsonListKt.kt:39"
+
+[[case]]
+file = "moshi/src/main/java/com/squareup/moshi/Moshi.kt"
+at = 'addAll(BUILT_IN_FACT§ORIES)'
+target = "moshi/src/main/java/com/squareup/moshi/Moshi.kt:365"
+
+[[case]]
+file = "moshi/src/main/java/com/squareup/moshi/Moshi.kt"
+at = 'import com.squareup.moshi.internal.NO_ANNOT§ATIONS'
+target = "moshi/src/main/java/com/squareup/moshi/internal/Util.kt:45"
+
+[[case]]
+file = "moshi/src/main/java/com/squareup/moshi/Moshi.kt"
+at = 'lookupChain.exceptionWith§LookupStack(e)'
+target = "moshi/src/main/java/com/squareup/moshi/Moshi.kt:327"
+
+[[case]]
+file = "moshi/src/main/java/com/squareup/moshi/Moshi.kt"
+at = 'lookupChain.pu§sh<T>(cleanedType'
+target = "moshi/src/main/java/com/squareup/moshi/Moshi.kt:281"
+
+[[case]]
+file = "moshi/src/main/java/com/squareup/moshi/Moshi.kt"
+at = 'factories.indexOf(skipPa§st)'
+target = "moshi/src/main/java/com/squareup/moshi/Moshi.kt:172"
+
+[[case]]
+file = "moshi/src/main/java/com/squareup/moshi/Moshi.kt"
+at = 'adapter is NullSafe§JsonAdapter<*> ||'
+target = "moshi/src/main/java/com/squareup/moshi/internal/NullSafeJsonAdapter.kt:22"
+
+[[case]]
+file = "moshi/src/main/java/com/squareup/moshi/Moshi.kt"
+at = 'adapter.non§Null()'
+target = "moshi/src/main/java/com/squareup/moshi/JsonAdapter.kt:176"
+
+[[case]]
+file = "moshi/src/main/java/com/squareup/moshi/Moshi.kt"
+at = 'ktype.is§MarkedNullable'
+target = "none"
+
+[[case]]
+file = "moshi/src/main/java/com/squareup/moshi/Moshi.kt"
+at = 'factories[i].cre§ate(cleanedType, annotations, this) as JsonAdapter<T?>?'
+target = "moshi/src/main/java/com/squareup/moshi/JsonAdapter.kt:307"
+
+[[case]]
+file = "moshi/src/main/java/com/squareup/moshi/Moshi.kt"
+at = 'annotation.isAnnotation§Present(JsonQualifier'
+target = "none"
+
+[[case]]
+file = "moshi/src/main/java/com/squareup/moshi/Moshi.kt"
+at = 'annotations.isAnnotation§Present(annotation)'
+target = "moshi/src/main/java/com/squareup/moshi/internal/Util.kt:115"
+
+[[case]]
+file = "moshi/src/main/java/com/squareup/moshi/internal/CollectionJsonAdapter.kt"
+at = 'markNot§Null(value)'
+target = "moshi/src/main/java/com/squareup/moshi/internal/Util.kt:579"
+
+[[case]]
+file = "moshi/src/main/java/com/squareup/moshi/internal/CollectionJsonAdapter.kt"
+at = 'newArrayList§Adapter<Any>(type'
+target = "moshi/src/main/java/com/squareup/moshi/internal/CollectionJsonAdapter.kt:70"
+
+[[case]]
+file = "moshi/src/main/java/com/squareup/moshi/internal/CollectionJsonAdapter.kt"
+at = 'return when (type.raw§Type) {'
+target = "moshi/src/main/java/com/squareup/moshi/-MoshiKotlinTypesExtensions.kt:28"
+
+[[case]]
+file = "moshi/src/main/java/com/squareup/moshi/internal/CollectionJsonAdapter.kt"
+at = 'elementAdapter.toJson(writer, elem§ent)'
+target = "moshi/src/main/java/com/squareup/moshi/internal/CollectionJsonAdapter.kt:45"
+
+[[case]]
+file = "moshi/src/main/java/com/squareup/moshi/internal/CollectionJsonAdapter.kt"
+at = 'val result = newColle§ction()'
+target = "moshi/src/main/java/com/squareup/moshi/internal/CollectionJsonAdapter.kt:30"
+
+[[case]]
+file = "moshi/src/main/java/com/squareup/moshi/internal/CollectionJsonAdapter.kt"
+at = 'companion object Factory : JsonAdapter.Fac§tory'
+target = "moshi/src/main/java/com/squareup/moshi/JsonAdapter.kt:297"
+
+[[case]]
+file = "moshi/src/main/java/com/squareup/moshi/internal/CollectionJsonAdapter.kt"
+at = '= Array§List()'
+target = "none"
