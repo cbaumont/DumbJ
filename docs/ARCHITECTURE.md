@@ -60,17 +60,11 @@ Remote: `github.com/cbaumont/DumbJ`. Jobs run in a `fedora:latest` container wit
 ### 2026-11-14: Toolchain via rustup
 The toolchain is installed with user-local rustup so that `rust-toolchain.toml` pinning applies. GPUI's system deps and `mold` come from dnf.
 
-### 2026-11-14: GPUI spike pass/fail policy
-Hard blockers, which stop work and go to the owner: no working IME on GNOME Wayland, no way to detect double-Shift or capture two-stroke chords, or scrolling far below 60 fps with no plausible fix. Any other failed criterion is recorded here with a workaround plan, and work continues.
-
 ### 2026-11-14: Screenshots via headless sway + grim
 Milestone screenshots come from DumbJ running under a headless sway (wlroots) compositor, captured with `grim`. This also covers 1.25× and 1.5× output scales and works in CI. GNOME-specific checks (IBus, Mutter fractional scaling) stay manual.
 
-### 2026-11-14: M0 scope details
-The third grammar is YAML. The M0 actions are CloseContent, NextTab, PreviousTab, ActivateProjectToolWindow, HideAllWindows, GotoLine, Find, FindNext, FindPrevious, EditorSelectWord (word level only until M1), and Open Folder. None of them need the index.
-
 ### 2026-11-14: Tags index stored in SQLite
-The on-disk symbol/tags index uses SQLite via `rusqlite` (bundled). It is transactional for incremental re-indexing, can be inspected with the `sqlite3` CLI, and is rebuilt automatically if found corrupt. Search Everywhere fuzzy matching runs on in-memory structures loaded from it. Index entries are keyed by git blob OID where possible, so revisions share work.
+The on-disk cache of per-file facts uses SQLite via `rusqlite` (bundled), keyed by path, mtime and size, and is rebuilt when corrupt or written by another schema version. Navigation and search run on the in-memory `Index` built from it.
 
 ### 2026-11-14: Other revisions are read from git objects
 Diff sides, PR heads and bases are served by a read-only "revision filesystem" backed by `gix`, which reads git objects directly. The working tree is never checked out for review. Navigation from such a revision stays in it and opens read-only tabs with a revision badge. "Open working-tree version" is an explicit action.
@@ -80,9 +74,6 @@ PR refs go under `refs/dumbj/pr/<n>/` (BRIEF §4.5). Why: the objects must survi
 
 ### 2026-11-14: IDEA-style autosave, undo only
 Autosave like IDEA, with undo and git as the only safety net (BRIEF §2.5). Why: IDEA muscle memory matters more than guarding against stray keystrokes, and a local-history feature is out of scope for a reading tool.
-
-### 2026-11-14: Dumb jump rule
-Go to Declaration jumps directly only when exactly one candidate is in the highest rank tier (scope-local > same file > explicit import > same package > same module > repo) and its kind matches the reference position. Otherwise the chooser opens, sorted by rank. A wildcard import with collisions, an extension function, or member access on an unknown receiver always gets the chooser. The accuracy benchmark measures this. The 2026-11-15 entry "Refined dumb jump rule" supersedes the extension-function sentence.
 
 ### 2026-11-14: Library sources via a global source-jar class index
 Every `*-sources.jar` under `~/.gradle/caches/modules-2/` and `~/.m2/repository/` is indexed lazily by package and class name, and cached by jar path and mtime. Versions named in build files or `libs.versions.toml` are preferred, then the newest. When several versions match, the result is labelled best guess and shows the version.
@@ -148,22 +139,19 @@ Evaluated in M1a on 1,531 Kotlin files (5.9 MB) from kotlinx.coroutines, Now in 
 ### 2026-11-14: Editing lands in M1b
 Typing, undo/redo with grouping, atomic autosave and the reload prompt for files changed on disk are part of M1b (the owner left the placement open). Why: M1b already carries editor-surface work, and M2's "rollback changed lines" needs a modifiable buffer. Multi-caret, comment toggle and move/duplicate line follow in M1b if it stays reviewable, otherwise they are split out.
 
-### 2026-11-15: Refined dumb jump rule
-Go to Declaration still ranks candidates into tiers (local, scope, same file, explicit import, same package, wildcard import, same module, repo) and jumps only when exactly one candidate is in the best tier and nothing in the lookup was a guess; otherwise it opens a chooser. What changed is how often the lookup counts as a guess. This supersedes the 2026-11-14 sentence that an extension function always gets the chooser.
+### 2026-11-15: Dumb jump rule
+Go to Declaration ranks candidates into tiers (local, scope, same file, explicit import, same package, wildcard import, same module, repo) and jumps only when exactly one candidate is in the best tier, its kind fits the reference, and nothing in the lookup was a guess; otherwise it opens a chooser sorted by rank. The accuracy benchmark measures this.
 - A receiver that is a call result has the callee's return type; a local without a written type has the type of its initialiser; a type parameter is not a type.
 - A Kotlin extension jumps directly when the receiver's type is known and the file can see the extension (imported or same package), and stays a guess otherwise. Its extension receiver acts as an implicit `this`. A member beats an extension of the same name.
 - An interface gives way to a same-named factory function.
 - Receivers of unknown type stay guesses. That includes `Any` and `Object` (smart casts) and lambda parameters without a written type.
-Why: the strict rule produced choosers where a human sees one obvious target, and the benchmark showed that the cases above can be decided safely.
+Why: a wrong jump is worse than a chooser, but choosers where a human sees one obvious target make navigation slow; the benchmark shows these cases are decided safely.
 
 ### 2026-11-15: Overloads are picked conservatively
 Overloads and Kotlin constructors are narrowed by the call's arguments: count, named arguments, defaults, `vararg` and a trailing lambda. Types remove a candidate only where a mismatch is certain, because library types are invisible to the index and a guess about them would produce wrong jumps. Among the survivors, a single overload whose parameter types equal the argument types wins; anything else stays a chooser. Why: a wrong jump is worse than a chooser (CLAUDE.md), and dropping the true overload because a library type looked different is the likeliest way to get one.
 
 ### 2026-11-15: Kotlin expect and actual are one target, paired by path
 An `expect` declaration and its `actual`s count as one target; the `actual` in the source set the reference is written in wins, otherwise the `expect`. Declarations are paired by qualified name, extension receiver and parameter types, and the source set is found by the path the `actual` shares with the `expect` (`select_platform` in `resolve.rs`), not by evaluating the build's source-set configuration. Why: the project model never runs Gradle (BRIEF §5.1), and the directory names (`commonMain`, `jvmMain`) carry the information needed.
-
-### 2026-11-15: Accuracy benchmark result
-264 hand-checked cases over the four pinned repositories: 222 correct (84.1%), 38 chooser containing the target (14.4%), 4 missed (1.5%), 0 wrong jumps. Java: 78 cases, 92.3% correct. Kotlin: 186 cases, 80.6% correct. The day started at 69.7% correct with one wrong jump. The main remaining causes of choosers are the types of lambda parameters (`it`, `{ x -> }`), then indexing (`a[i].b`), smart casts and scope functions (`apply { }`). One miss is a grammar gap: a parse error hides an `object` declaration in a Compose file. Run it with `scripts/fetch-corpus.sh` then `cargo run --release -p dumbj-index --example accuracy`.
 
 ### 2026-11-15: The nightly benchmark fails on any wrong jump
 `.github/workflows/accuracy.yml` runs the benchmark nightly and on demand, caches the corpus by the hash of `corpus/manifest.toml`, and fails on a malformed case or on any wrong jump. It does not fail on a lower percentage. Why: the jump rule says a wrong jump is worse than none, so one is a regression, while the correct and chooser counts are expected to move as the engine improves.
