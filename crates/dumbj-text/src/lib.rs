@@ -1,7 +1,8 @@
 //! DumbJ's text model: a rope [`Buffer`] addressed with typed positions, plus plain-text
-//! search. No UI and no I/O.
+//! search, undo history and crash-safe saving. No UI.
 
 mod buffer;
+pub mod disk;
 mod history;
 mod position;
 pub mod search;
