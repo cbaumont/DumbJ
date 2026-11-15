@@ -69,9 +69,14 @@ impl NavigationHistory {
 const CHOOSER_ROW_HEIGHT: f32 = 26.;
 
 pub(super) struct ChooserItem {
-    label: String,
-    detail: String,
-    location: Location,
+    pub(super) label: String,
+    pub(super) detail: String,
+    pub(super) location: Location,
+    /// A one-based line to jump to instead of `location.offset`, for places that are
+    /// remembered by line.
+    pub(super) line: Option<usize>,
+    /// A key that picks this item without moving the selection.
+    pub(super) key: Option<char>,
 }
 
 impl ChooserItem {
@@ -80,6 +85,27 @@ impl ChooserItem {
             label,
             detail,
             location,
+            line: None,
+            key: None,
+        }
+    }
+
+    pub(super) fn at_line(
+        label: String,
+        detail: String,
+        path: PathBuf,
+        line: usize,
+        key: Option<char>,
+    ) -> Self {
+        Self {
+            label,
+            detail,
+            location: Location {
+                path,
+                offset: ByteOffset::ZERO,
+            },
+            line: Some(line),
+            key,
         }
     }
 }
@@ -89,16 +115,34 @@ pub(super) struct Chooser {
     items: Vec<ChooserItem>,
     selected: usize,
     scroll: UniformListScrollHandle,
+    /// How reliable the items are, shown next to the title; `None` for exact lists.
+    badge: Option<&'static str>,
 }
 
 impl Chooser {
+    /// A list of dumb-engine results, labelled "best guess".
     pub(super) fn new(title: String, items: Vec<ChooserItem>) -> Self {
         Self {
             title,
             items,
             selected: 0,
             scroll: UniformListScrollHandle::new(),
+            badge: Some("best guess"),
         }
+    }
+
+    /// A list the user made, such as bookmarks.
+    pub(super) fn exact(title: String, items: Vec<ChooserItem>) -> Self {
+        Self {
+            badge: None,
+            ..Self::new(title, items)
+        }
+    }
+
+    /// The item that `key` picks.
+    pub(super) fn item_for_key(&self, key: char) -> Option<usize> {
+        let key = key.to_ascii_uppercase();
+        self.items.iter().position(|item| item.key == Some(key))
     }
 }
 
@@ -200,7 +244,7 @@ impl Workspace {
         }
     }
 
-    fn current_location(&self, cx: &Context<Self>) -> Option<Location> {
+    pub(super) fn current_location(&self, cx: &Context<Self>) -> Option<Location> {
         let tab = self.active_tab()?;
         Some(Location {
             path: tab.path.clone(),
@@ -222,6 +266,7 @@ impl Workspace {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        self.record_current_location(cx);
         if let Some(from) = self.current_location(cx) {
             self.history.record_jump(from, to.clone());
         }
@@ -229,12 +274,14 @@ impl Workspace {
     }
 
     pub(super) fn go_back(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.record_current_location(cx);
         if let Some(location) = self.history.back() {
             self.show_location(location, window, cx);
         }
     }
 
     pub(super) fn go_forward(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.record_current_location(cx);
         if let Some(location) = self.history.forward() {
             self.show_location(location, window, cx);
         }
@@ -261,11 +308,7 @@ impl Workspace {
             path: target.path.clone(),
             offset: target.range.start,
         };
-        ChooserItem {
-            label,
-            detail,
-            location,
-        }
+        ChooserItem::new(label, detail, location)
     }
 
     pub(super) fn goto_declaration(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -334,14 +377,23 @@ impl Workspace {
         cx.notify();
     }
 
-    fn accept_chooser(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
-        let location = self
+    pub(super) fn accept_chooser(
+        &mut self,
+        index: usize,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let item = self
             .chooser
             .take()
-            .and_then(|chooser| chooser.items.into_iter().nth(index))
-            .map(|item| item.location);
-        match location {
-            Some(location) => self.navigate_to(location, window, cx),
+            .and_then(|chooser| chooser.items.into_iter().nth(index));
+        match item {
+            Some(ChooserItem {
+                location,
+                line: Some(line),
+                ..
+            }) => self.navigate_to_line(location.path, line, window, cx),
+            Some(item) => self.navigate_to(item.location, window, cx),
             None => self.focus_fallback(window, cx),
         }
         cx.notify();
@@ -448,15 +500,15 @@ impl Workspace {
             .pb(px(6.))
             .text_color(theme::ui(cx, UiRole::TextMuted))
             .child(chooser.title.clone())
-            .child(
+            .children(chooser.badge.map(|badge| {
                 div()
                     .px(px(6.))
                     .rounded(px(4.))
                     .bg(theme::ui(cx, UiRole::InputBackground))
                     .text_color(theme::ui(cx, UiRole::Warning))
                     .text_size(px(11.))
-                    .child("best guess"),
-            );
+                    .child(badge)
+            }));
         let popup = div()
             .w(px(720.))
             .flex()

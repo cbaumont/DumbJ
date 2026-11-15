@@ -169,6 +169,14 @@ pub(crate) struct GutterIcon {
 
 pub(crate) struct GutterIconClicked(pub(crate) GutterIcon);
 
+/// A bookmark marker beside a line number.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct BookmarkMark {
+    /// One-based.
+    pub(crate) line: usize,
+    pub(crate) mnemonic: Option<char>,
+}
+
 pub(crate) struct EditorView {
     path: PathBuf,
     focus: FocusHandle,
@@ -185,12 +193,14 @@ pub(crate) struct EditorView {
     painted: Option<PaintedLines>,
     drag: Option<Drag>,
     pending_offset: Option<ByteOffset>,
+    pending_go_to: Option<(usize, Option<usize>)>,
     benchmark: Option<ScrollBenchmark>,
     gutter_icons: Vec<GutterIcon>,
     index: Option<Arc<Index>>,
     usages: Arc<Vec<UsageHighlight>>,
     usages_at: Option<ByteOffset>,
     usages_task: Option<Task<()>>,
+    bookmarks: Vec<BookmarkMark>,
     load_cancel: Arc<AtomicBool>,
     _load: Task<()>,
 }
@@ -225,6 +235,9 @@ impl EditorView {
                         if let Some(offset) = this.pending_offset.take() {
                             this.go_to_offset(offset, cx);
                         }
+                        if let Some((line, column)) = this.pending_go_to.take() {
+                            this.go_to(line, column, cx);
+                        }
                     }
                     Err(message) => this.state = LoadState::Failed(message),
                 }
@@ -246,12 +259,14 @@ impl EditorView {
             painted: None,
             drag: None,
             pending_offset: None,
+            pending_go_to: None,
             benchmark: None,
             gutter_icons: Vec::new(),
             index: None,
             usages: Arc::new(Vec::new()),
             usages_at: None,
             usages_task: None,
+            bookmarks: Vec::new(),
             load_cancel,
             _load: task,
         }
@@ -324,6 +339,15 @@ impl EditorView {
             point.line.display_number(),
             self.model.buffer().char_column(point) + 1,
         )
+    }
+
+    /// The trimmed text of the caret's line; `None` until the file has loaded.
+    pub(crate) fn caret_line_text(&self) -> Option<String> {
+        let buffer = self.model.buffer();
+        matches!(self.state, LoadState::Ready).then(|| {
+            let line = buffer.line(self.model.caret_point().line);
+            line.trim().chars().take(200).collect()
+        })
     }
 
     pub(crate) fn selection_for_search(&self) -> Option<String> {
@@ -483,6 +507,11 @@ impl EditorView {
         cx.notify();
     }
 
+    pub(crate) fn set_bookmarks(&mut self, marks: Vec<BookmarkMark>, cx: &mut Context<Self>) {
+        self.bookmarks = marks;
+        cx.notify();
+    }
+
     fn gutter_icon_on_line(&self, line: usize) -> Option<GutterIcon> {
         let buffer = self.model.buffer();
         self.gutter_icons
@@ -559,6 +588,10 @@ impl EditorView {
     }
 
     pub(crate) fn go_to(&mut self, line: usize, column: Option<usize>, cx: &mut Context<Self>) {
+        if matches!(self.state, LoadState::Loading) {
+            self.pending_go_to = Some((line, column));
+            return;
+        }
         self.model.go_to(line, column);
         self.reveal = Some(Reveal::Center);
         cx.notify();
@@ -1051,12 +1084,20 @@ impl EditorView {
                 caret = Some(fill(caret_bounds, theme::ui(cx, UiRole::EditorCaret)));
             }
 
-            let number = line_index.display_number().to_string();
+            let bookmark = self
+                .bookmarks
+                .iter()
+                .find(|mark| mark.line == line_index.display_number());
             let is_caret_line = line == caret_point.line.get();
-            let color = if is_caret_line {
-                active_number_color
-            } else {
-                number_color
+            let (number, color) = match bookmark {
+                Some(mark) => (
+                    mark.mnemonic.map_or("●".to_owned(), String::from),
+                    theme::ui(cx, UiRole::Warning),
+                ),
+                None if is_caret_line => {
+                    (line_index.display_number().to_string(), active_number_color)
+                }
+                None => (line_index.display_number().to_string(), number_color),
             };
             let number = shape(window, number.clone(), &[run(number.len(), color)]);
             let number_x = bounds.left() + gutter_width - GUTTER_PADDING_RIGHT - number.width;

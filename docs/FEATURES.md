@@ -10,7 +10,7 @@
 - [~] Status bar — breadcrumb, line:col, language
 - [~] Project tool window — tree; no git status colours
 - [ ] Structure tool window
-- [~] Find tool window — Find Usages results only
+- [x] Find tool window — Find Usages and Find in Files results, grouped by file
 - [ ] Git tool window
 - [ ] Review tool window
 - [ ] Bookmarks tool window
@@ -53,9 +53,9 @@
 - [x] File Structure popup
 - [~] Call Hierarchy / Type Hierarchy — callers only, no callees
 - [x] Navigate Back / Forward
-- [ ] Recent Files / Recent Locations / Last Edit Location / Switcher
-- [ ] Find in Files / Replace in Files
-- [ ] Bookmarks
+- [~] Recent Files, Recent Locations — per project, kept in the state dir; no Last Edit Location or Switcher
+- [~] Find in Files — regex, case, whole word, file mask, directory scope, gitignore; no Replace in Files
+- [x] Bookmarks — anonymous and mnemonic, gutter markers, list popup, kept per project in the state dir
 - [ ] Copy Reference / Path / permalink
 - [ ] Navigation bar jump
 
@@ -106,8 +106,8 @@ Search & go to
 - [x] GotoFile
 - [x] GotoSymbol
 - [x] GotoLine
-- [ ] RecentFiles
-- [ ] RecentLocations
+- [x] RecentFiles
+- [x] RecentLocations
 - [ ] Switcher
 
 Code navigation
@@ -139,14 +139,14 @@ Find
 - [ ] Replace
 - [x] FindNext
 - [x] FindPrevious
-- [ ] FindInPath
+- [x] FindInPath
 - [ ] ReplaceInPath
 
 Bookmarks
-- [ ] ToggleBookmark
-- [ ] ToggleBookmarkWithMnemonic
-- [ ] ShowBookmarks
-- [ ] GotoBookmark0…9
+- [x] ToggleBookmark
+- [x] ToggleBookmarkWithMnemonic
+- [x] ShowBookmarks
+- [x] GotoBookmark0…9 — with ToggleBookmark0…9
 
 Selection & editing
 - [x] EditorSelectWord

@@ -38,6 +38,32 @@ Linux uses the `macOS For All` keymap and macOS uses IntelliJ's `Mac OS X 10.5+`
 | Type Hierarchy | `navigate.type-hierarchy` | `TypeHierarchy` | `Ctrl+H` | `⌃H` |
 | Call Hierarchy | `navigate.call-hierarchy` | `CallHierarchy` | `Ctrl+Alt+H` | `⌃⌥H` |
 | Hierarchy | `tool-window.hierarchy` | `ActivateHierarchyToolWindow` | — | — |
+| Find in Files… | `search.find-in-files` | `FindInPath` | `Ctrl+Shift+F` | `⇧⌘F` |
+| Recent Files | `navigate.recent-files` | `RecentFiles` | `Ctrl+E` | `⌘E` |
+| Recent Locations | `navigate.recent-locations` | `RecentLocations` | `Ctrl+Shift+E` | `⇧⌘E` |
+| Toggle Bookmark | `bookmarks.toggle` | `ToggleBookmark` | `F3` | `F3` |
+| Toggle Bookmark with Mnemonic | `bookmarks.toggle-with-mnemonic` | `ToggleBookmarkWithMnemonic` | `Alt+F3` | `⌥F3` |
+| Show Bookmarks | `bookmarks.show` | `ShowBookmarks` | `Ctrl+F3` | `⌘F3` |
+| Toggle Bookmark 0 | `bookmarks.toggle-0` | `ToggleBookmark0` | `Ctrl+Shift+0` | `⌃⇧0` |
+| Toggle Bookmark 1 | `bookmarks.toggle-1` | `ToggleBookmark1` | `Ctrl+Shift+1` | `⌃⇧1` |
+| Toggle Bookmark 2 | `bookmarks.toggle-2` | `ToggleBookmark2` | `Ctrl+Shift+2` | `⌃⇧2` |
+| Toggle Bookmark 3 | `bookmarks.toggle-3` | `ToggleBookmark3` | `Ctrl+Shift+3` | `⌃⇧3` |
+| Toggle Bookmark 4 | `bookmarks.toggle-4` | `ToggleBookmark4` | `Ctrl+Shift+4` | `⌃⇧4` |
+| Toggle Bookmark 5 | `bookmarks.toggle-5` | `ToggleBookmark5` | `Ctrl+Shift+5` | `⌃⇧5` |
+| Toggle Bookmark 6 | `bookmarks.toggle-6` | `ToggleBookmark6` | `Ctrl+Shift+6` | `⌃⇧6` |
+| Toggle Bookmark 7 | `bookmarks.toggle-7` | `ToggleBookmark7` | `Ctrl+Shift+7` | `⌃⇧7` |
+| Toggle Bookmark 8 | `bookmarks.toggle-8` | `ToggleBookmark8` | `Ctrl+Shift+8` | `⌃⇧8` |
+| Toggle Bookmark 9 | `bookmarks.toggle-9` | `ToggleBookmark9` | `Ctrl+Shift+9` | `⌃⇧9` |
+| Go to Bookmark 0 | `bookmarks.goto-0` | `GotoBookmark0` | `Ctrl+0` | `⌃0` |
+| Go to Bookmark 1 | `bookmarks.goto-1` | `GotoBookmark1` | `Ctrl+1` | `⌃1` |
+| Go to Bookmark 2 | `bookmarks.goto-2` | `GotoBookmark2` | `Ctrl+2` | `⌃2` |
+| Go to Bookmark 3 | `bookmarks.goto-3` | `GotoBookmark3` | `Ctrl+3` | `⌃3` |
+| Go to Bookmark 4 | `bookmarks.goto-4` | `GotoBookmark4` | `Ctrl+4` | `⌃4` |
+| Go to Bookmark 5 | `bookmarks.goto-5` | `GotoBookmark5` | `Ctrl+5` | `⌃5` |
+| Go to Bookmark 6 | `bookmarks.goto-6` | `GotoBookmark6` | `Ctrl+6` | `⌃6` |
+| Go to Bookmark 7 | `bookmarks.goto-7` | `GotoBookmark7` | `Ctrl+7` | `⌃7` |
+| Go to Bookmark 8 | `bookmarks.goto-8` | `GotoBookmark8` | `Ctrl+8` | `⌃8` |
+| Go to Bookmark 9 | `bookmarks.goto-9` | `GotoBookmark9` | `Ctrl+9` | `⌃9` |
 | Move Caret Left | `text.move-left` | `EditorLeft` | `Left` | `Left` / `⌃B` |
 | Move Caret Right | `text.move-right` | `EditorRight` | `Right` | `Right` / `⌃F` |
 | Move Caret Up | `text.move-up` | `EditorUp` | `Up` | `Up` / `⌃P` |

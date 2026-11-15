@@ -42,6 +42,32 @@ pub enum Action {
     TypeHierarchy,
     CallHierarchy,
     ActivateHierarchyToolWindow,
+    FindInPath,
+    RecentFiles,
+    RecentLocations,
+    ToggleBookmark,
+    ToggleBookmarkWithMnemonic,
+    ShowBookmarks,
+    ToggleBookmark0,
+    ToggleBookmark1,
+    ToggleBookmark2,
+    ToggleBookmark3,
+    ToggleBookmark4,
+    ToggleBookmark5,
+    ToggleBookmark6,
+    ToggleBookmark7,
+    ToggleBookmark8,
+    ToggleBookmark9,
+    GotoBookmark0,
+    GotoBookmark1,
+    GotoBookmark2,
+    GotoBookmark3,
+    GotoBookmark4,
+    GotoBookmark5,
+    GotoBookmark6,
+    GotoBookmark7,
+    GotoBookmark8,
+    GotoBookmark9,
     MoveLeft,
     MoveRight,
     MoveUp,
@@ -273,6 +299,162 @@ const REGISTRY: &[ActionInfo] = &[
         Scope::Window,
     ),
     info(
+        Action::FindInPath,
+        "search.find-in-files",
+        "Find in Files…",
+        Scope::Window,
+    ),
+    info(
+        Action::RecentFiles,
+        "navigate.recent-files",
+        "Recent Files",
+        Scope::Window,
+    ),
+    info(
+        Action::RecentLocations,
+        "navigate.recent-locations",
+        "Recent Locations",
+        Scope::Window,
+    ),
+    info(
+        Action::ToggleBookmark,
+        "bookmarks.toggle",
+        "Toggle Bookmark",
+        Scope::Editor,
+    ),
+    info(
+        Action::ToggleBookmarkWithMnemonic,
+        "bookmarks.toggle-with-mnemonic",
+        "Toggle Bookmark with Mnemonic",
+        Scope::Editor,
+    ),
+    info(
+        Action::ShowBookmarks,
+        "bookmarks.show",
+        "Show Bookmarks",
+        Scope::Window,
+    ),
+    info(
+        Action::ToggleBookmark0,
+        "bookmarks.toggle-0",
+        "Toggle Bookmark 0",
+        Scope::Editor,
+    ),
+    info(
+        Action::ToggleBookmark1,
+        "bookmarks.toggle-1",
+        "Toggle Bookmark 1",
+        Scope::Editor,
+    ),
+    info(
+        Action::ToggleBookmark2,
+        "bookmarks.toggle-2",
+        "Toggle Bookmark 2",
+        Scope::Editor,
+    ),
+    info(
+        Action::ToggleBookmark3,
+        "bookmarks.toggle-3",
+        "Toggle Bookmark 3",
+        Scope::Editor,
+    ),
+    info(
+        Action::ToggleBookmark4,
+        "bookmarks.toggle-4",
+        "Toggle Bookmark 4",
+        Scope::Editor,
+    ),
+    info(
+        Action::ToggleBookmark5,
+        "bookmarks.toggle-5",
+        "Toggle Bookmark 5",
+        Scope::Editor,
+    ),
+    info(
+        Action::ToggleBookmark6,
+        "bookmarks.toggle-6",
+        "Toggle Bookmark 6",
+        Scope::Editor,
+    ),
+    info(
+        Action::ToggleBookmark7,
+        "bookmarks.toggle-7",
+        "Toggle Bookmark 7",
+        Scope::Editor,
+    ),
+    info(
+        Action::ToggleBookmark8,
+        "bookmarks.toggle-8",
+        "Toggle Bookmark 8",
+        Scope::Editor,
+    ),
+    info(
+        Action::ToggleBookmark9,
+        "bookmarks.toggle-9",
+        "Toggle Bookmark 9",
+        Scope::Editor,
+    ),
+    info(
+        Action::GotoBookmark0,
+        "bookmarks.goto-0",
+        "Go to Bookmark 0",
+        Scope::Window,
+    ),
+    info(
+        Action::GotoBookmark1,
+        "bookmarks.goto-1",
+        "Go to Bookmark 1",
+        Scope::Window,
+    ),
+    info(
+        Action::GotoBookmark2,
+        "bookmarks.goto-2",
+        "Go to Bookmark 2",
+        Scope::Window,
+    ),
+    info(
+        Action::GotoBookmark3,
+        "bookmarks.goto-3",
+        "Go to Bookmark 3",
+        Scope::Window,
+    ),
+    info(
+        Action::GotoBookmark4,
+        "bookmarks.goto-4",
+        "Go to Bookmark 4",
+        Scope::Window,
+    ),
+    info(
+        Action::GotoBookmark5,
+        "bookmarks.goto-5",
+        "Go to Bookmark 5",
+        Scope::Window,
+    ),
+    info(
+        Action::GotoBookmark6,
+        "bookmarks.goto-6",
+        "Go to Bookmark 6",
+        Scope::Window,
+    ),
+    info(
+        Action::GotoBookmark7,
+        "bookmarks.goto-7",
+        "Go to Bookmark 7",
+        Scope::Window,
+    ),
+    info(
+        Action::GotoBookmark8,
+        "bookmarks.goto-8",
+        "Go to Bookmark 8",
+        Scope::Window,
+    ),
+    info(
+        Action::GotoBookmark9,
+        "bookmarks.goto-9",
+        "Go to Bookmark 9",
+        Scope::Window,
+    ),
+    info(
         Action::MoveLeft,
         "text.move-left",
         "Move Caret Left",
@@ -459,6 +641,18 @@ impl Action {
         self.info().scope
     }
 
+    /// The digit of `ToggleBookmark0` to `ToggleBookmark9`.
+    #[must_use]
+    pub fn toggle_bookmark_digit(self) -> Option<char> {
+        digit_of(self, Self::ToggleBookmark0)
+    }
+
+    /// The digit of `GotoBookmark0` to `GotoBookmark9`.
+    #[must_use]
+    pub fn goto_bookmark_digit(self) -> Option<char> {
+        digit_of(self, Self::GotoBookmark0)
+    }
+
     #[must_use]
     pub fn from_id(id: &str) -> Option<Self> {
         REGISTRY
@@ -474,11 +668,28 @@ impl fmt::Display for Action {
     }
 }
 
+/// The variants of a digit family are declared consecutively, 0 to 9.
+fn digit_of(action: Action, zero: Action) -> Option<char> {
+    let digit = u32::try_from((action as usize).checked_sub(zero as usize)?).ok()?;
+    char::from_digit(digit, 10)
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeSet;
 
     use super::*;
+
+    #[test]
+    fn bookmark_digit_families_are_consecutive() {
+        let digits = |digit_of: fn(Action) -> Option<char>| -> String {
+            Action::all().filter_map(digit_of).collect()
+        };
+        assert_eq!(digits(Action::toggle_bookmark_digit), "0123456789");
+        assert_eq!(digits(Action::goto_bookmark_digit), "0123456789");
+        assert_eq!(Action::GotoBookmark3.goto_bookmark_digit(), Some('3'));
+        assert_eq!(Action::ToggleBookmark3.goto_bookmark_digit(), None);
+    }
 
     #[test]
     fn registry_matches_the_enum() {

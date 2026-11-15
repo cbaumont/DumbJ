@@ -1,9 +1,13 @@
+use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use dumbj_actions::Action;
-use dumbj_index::{FileId, HitTarget, Index, SearchHit, SearchScope, file_structure, search};
+use dumbj_index::{
+    FileId, HitTarget, Index, SearchHit, SearchScope, file_structure, fuzzy_match, search,
+};
 use dumbj_settings::UiRole;
+use dumbj_settings::{ProjectState, RecentLocation};
 use dumbj_syntax::SymbolKind;
 use dumbj_text::ByteOffset;
 use gpui::{
@@ -23,6 +27,13 @@ const MAX_VISIBLE_ROWS: f32 = 14.;
 pub(super) enum SearchMode {
     Project(SearchScope),
     Structure(FileId),
+    Recent(RecentKind),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum RecentKind {
+    Files,
+    Locations,
 }
 
 const SCOPES: [(SearchScope, &str); 4] = [
@@ -137,6 +148,104 @@ fn row(index: &Index, hit: SearchHit, structure: bool) -> Option<Row> {
     }
 }
 
+/// Which engine the rows come from; recent lists are not index results.
+fn source_label(mode: SearchMode) -> &'static str {
+    match mode {
+        SearchMode::Recent(_) => "",
+        _ => "dumb index",
+    }
+}
+
+/// The recent files or places that match `query`, most recent first for an empty query and
+/// best match first otherwise.
+fn recent_rows(state: &ProjectState, root: &Path, kind: RecentKind, query: &str) -> Vec<Row> {
+    let mut scored: Vec<(i32, Row)> = match kind {
+        RecentKind::Files => state
+            .recent_files
+            .iter()
+            .filter_map(|path| recent_file_row(state, root, path, query))
+            .collect(),
+        RecentKind::Locations => state
+            .recent_locations
+            .iter()
+            .filter_map(|place| recent_location_row(place, query))
+            .collect(),
+    };
+    if !query.trim().is_empty() {
+        scored.sort_by_key(|(score, _)| std::cmp::Reverse(*score));
+    }
+    scored.into_iter().map(|(_, row)| row).collect()
+}
+
+fn recent_file_row(
+    state: &ProjectState,
+    root: &Path,
+    path: &Path,
+    query: &str,
+) -> Option<(i32, Row)> {
+    let relative = path
+        .strip_prefix(root)
+        .unwrap_or(path)
+        .display()
+        .to_string();
+    let (folder, name) = relative.rsplit_once('/').unwrap_or(("", &relative));
+    let (matched, name, detail) = match fuzzy_match(query, name) {
+        Some(found) => (found, name.to_owned(), folder.to_owned()),
+        None => (
+            fuzzy_match(query, &relative)?,
+            relative.clone(),
+            String::new(),
+        ),
+    };
+    // Reopen where the caret was last, as IDEA does.
+    let offset = state
+        .recent_locations
+        .iter()
+        .find(|place| place.path == path)
+        .map_or(ByteOffset::ZERO, |place| ByteOffset(place.offset));
+    Some((
+        matched.score,
+        Row {
+            kind: "file",
+            name,
+            positions: matched.positions,
+            detail,
+            location: Location {
+                path: path.to_path_buf(),
+                offset,
+            },
+        },
+    ))
+}
+
+fn recent_location_row(place: &RecentLocation, query: &str) -> Option<(i32, Row)> {
+    let file = place
+        .path
+        .file_name()
+        .map_or_else(String::new, |name| name.to_string_lossy().into_owned());
+    let detail = format!("{file}:{}", place.line);
+    let (matched, positions) = match fuzzy_match(query, &place.text) {
+        Some(found) => {
+            let positions = found.positions.clone();
+            (found, positions)
+        }
+        None => (fuzzy_match(query, &detail)?, Vec::new()),
+    };
+    Some((
+        matched.score,
+        Row {
+            kind: "",
+            name: place.text.clone(),
+            positions,
+            detail,
+            location: Location {
+                path: place.path.clone(),
+                offset: ByteOffset(place.offset),
+            },
+        },
+    ))
+}
+
 fn find_rows(
     index: &Index,
     mode: SearchMode,
@@ -144,6 +253,7 @@ fn find_rows(
     cancel: &AtomicBool,
 ) -> Option<Vec<Row>> {
     let (hits, structure) = match mode {
+        SearchMode::Recent(_) => return Some(Vec::new()),
         SearchMode::Project(scope) => (
             search(index, query, scope, MAX_RESULTS, || {
                 cancel.load(Ordering::Relaxed)
@@ -195,7 +305,27 @@ impl Workspace {
         }
     }
 
+    fn run_recent_search(&mut self, kind: RecentKind, cx: &mut Context<Self>) {
+        let (Some(project), Some(popup)) = (self.project.as_ref(), self.search.as_mut()) else {
+            return;
+        };
+        let query = self.search_input.read(cx).text().to_owned();
+        popup.rows = recent_rows(&self.state, &project.root, kind, &query);
+        // The newest file is the one already open, so start on the one before it.
+        popup.selected = usize::from(
+            kind == RecentKind::Files && query.trim().is_empty() && popup.rows.len() > 1,
+        );
+        popup
+            .scroll
+            .scroll_to_item(popup.selected, ScrollStrategy::Top);
+        cx.notify();
+    }
+
     pub(super) fn run_search(&mut self, cx: &mut Context<Self>) {
+        if let Some(SearchMode::Recent(kind)) = self.search.as_ref().map(|popup| popup.mode) {
+            self.run_recent_search(kind, cx);
+            return;
+        }
         let (Some(index), Some(popup)) = (self.index.clone(), self.search.as_mut()) else {
             return;
         };
@@ -334,14 +464,14 @@ impl Workspace {
                     this.accept_search(index, window, cx);
                 }),
             )
-            .child(
+            .children((!row.kind.is_empty()).then(|| {
                 div()
                     .w(px(76.))
                     .flex_none()
                     .text_size(px(11.))
                     .text_color(theme::ui(cx, UiRole::TextFaint))
-                    .child(row.kind),
-            )
+                    .child(row.kind)
+            }))
             .child(name)
             .child(
                 div()
@@ -383,6 +513,14 @@ impl Workspace {
                             )
                             .child(*label)
                     }))
+            }
+            SearchMode::Recent(kind) => {
+                div()
+                    .text_color(theme::ui(cx, UiRole::TextMuted))
+                    .child(match kind {
+                        RecentKind::Files => "Recent Files",
+                        RecentKind::Locations => "Recent Locations",
+                    })
             }
             SearchMode::Structure(_) => {
                 let file = self
@@ -477,7 +615,7 @@ impl Workspace {
                         div()
                             .text_size(px(11.))
                             .text_color(theme::ui(cx, UiRole::TextFaint))
-                            .child("dumb index"),
+                            .child(source_label(popup.mode)),
                     ),
             )
             .child(field)
@@ -596,6 +734,76 @@ mod tests {
         assert_eq!(
             rows(SearchMode::Structure(file), "to"),
             ["field total [Cart] @10"]
+        );
+    }
+
+    fn recent_state() -> ProjectState {
+        let place = |path: &str, line: usize, offset: usize, text: &str| RecentLocation {
+            path: PathBuf::from(path),
+            line,
+            column: 1,
+            offset,
+            text: text.to_owned(),
+        };
+        let mut state = ProjectState::default();
+        for path in ["/p/src/Util.java", "/p/src/Cart.java", "/p/README.md"] {
+            state.record_file(Path::new(path));
+        }
+        state.record_location(place("/p/src/Cart.java", 12, 300, "int total = 0;"));
+        state.record_location(place("/p/README.md", 1, 0, "# Shop"));
+        state
+    }
+
+    fn recent(kind: RecentKind, query: &str) -> Vec<String> {
+        recent_rows(&recent_state(), Path::new("/p"), kind, query)
+            .iter()
+            .map(|row| {
+                format!(
+                    "{} [{}] @{}",
+                    row.name,
+                    row.detail,
+                    row.location.offset.get()
+                )
+            })
+            .collect()
+    }
+
+    #[test]
+    fn recent_files_list_the_newest_first_and_reopen_at_the_last_caret() {
+        assert_eq!(
+            recent(RecentKind::Files, ""),
+            [
+                "README.md [] @0",
+                "Cart.java [src] @300",
+                "Util.java [src] @0"
+            ]
+        );
+    }
+
+    #[test]
+    fn recent_files_filter_by_name_then_by_path() {
+        assert_eq!(recent(RecentKind::Files, "cart"), ["Cart.java [src] @300"]);
+        assert_eq!(recent(RecentKind::Files, "src/ut"), ["src/Util.java [] @0"]);
+        assert_eq!(recent(RecentKind::Files, "zzz"), [] as [String; 0]);
+    }
+
+    #[test]
+    fn recent_locations_show_the_line_and_filter_by_its_text() {
+        assert_eq!(
+            recent(RecentKind::Locations, ""),
+            [
+                "# Shop [README.md:1] @0",
+                "int total = 0; [Cart.java:12] @300"
+            ]
+        );
+        assert_eq!(
+            recent(RecentKind::Locations, "total"),
+            ["int total = 0; [Cart.java:12] @300"]
+        );
+        assert_eq!(
+            recent(RecentKind::Locations, "readme"),
+            ["# Shop [README.md:1] @0"],
+            "the file name matches too"
         );
     }
 }

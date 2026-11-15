@@ -17,16 +17,23 @@ use crate::keys::{modifiers_from_gpui, stroke_from_gpui};
 use crate::text_input::{TextChanged, TextInput};
 use crate::theme;
 
+mod bookmarks;
+mod find_in_files;
 mod hierarchy;
 mod library;
 mod navigation;
 mod search_popup;
+mod state;
 mod usages;
 
+use bookmarks::MnemonicPrompt;
 use dumbj_index::SearchScope;
+use dumbj_settings::ProjectState;
+use find_in_files::FindInFiles;
 use hierarchy::HierarchyWindow;
 use navigation::{Chooser, Indexing, NavigationHistory};
-use search_popup::{SearchMode, SearchPopup};
+use search_popup::{RecentKind, SearchMode, SearchPopup};
+use state::StateSave;
 use usages::FindWindow;
 
 const HEADER_HEIGHT: Pixels = px(40.);
@@ -68,6 +75,7 @@ enum FocusArea {
     HierarchyWindow,
     Chooser,
     Search,
+    FindInFiles,
     GotoLine,
     Find,
     Tree,
@@ -96,6 +104,14 @@ pub(crate) struct Workspace {
     chooser: Option<Chooser>,
     search_input: Entity<TextInput>,
     search: Option<SearchPopup>,
+    find_in_files: Option<FindInFiles>,
+    mnemonic_prompt: Option<MnemonicPrompt>,
+    find_query: Entity<TextInput>,
+    find_mask: Entity<TextInput>,
+    state: ProjectState,
+    /// Where `state` is saved; known once the background lookup has finished.
+    state_dir: Option<PathBuf>,
+    state_save: StateSave,
     find_window: Option<FindWindow>,
     find_window_focus: FocusHandle,
     hierarchy_window: Option<HierarchyWindow>,
@@ -164,6 +180,13 @@ impl Workspace {
         let on_search_changed = cx.subscribe(&search_input, |this, _, _: &TextChanged, cx| {
             this.run_search(cx);
         });
+        let find_query = cx.new(|cx| TextInput::new("Text to find", cx));
+        let find_mask = cx.new(|cx| TextInput::new("*.java, *.kt, !*.test.kt", cx));
+        let on_find_in_files_changed = [&find_query, &find_mask].map(|input| {
+            cx.subscribe(input, |this, _, _: &TextChanged, cx| {
+                this.schedule_find_in_files(cx);
+            })
+        });
         let on_find_changed = cx.subscribe(&find, |this, find, _: &TextChanged, cx| {
             let query = find.read(cx).text().to_owned();
             if let Some(editor) = this.active_editor() {
@@ -190,6 +213,13 @@ impl Workspace {
             chooser: None,
             search_input,
             search: None,
+            find_in_files: None,
+            mnemonic_prompt: None,
+            find_query,
+            find_mask,
+            state: ProjectState::default(),
+            state_dir: None,
+            state_save: StateSave::Idle,
             find_window: None,
             find_window_focus: cx.focus_handle(),
             hierarchy_window: None,
@@ -198,7 +228,10 @@ impl Workspace {
             usages_cancel: std::sync::Arc::default(),
             pending_focus: None,
             status_message: None,
-            subscriptions: vec![on_find_changed, on_search_changed],
+            subscriptions: [on_find_changed, on_search_changed]
+                .into_iter()
+                .chain(on_find_in_files_changed)
+                .collect(),
         }
     }
 
@@ -227,6 +260,8 @@ impl Workspace {
             FocusArea::Chooser
         } else if self.search.is_some() {
             FocusArea::Search
+        } else if self.find_in_files.is_some() {
+            FocusArea::FindInFiles
         } else if self.goto_line_open && self.goto_line.read(cx).focus_handle().is_focused(window) {
             FocusArea::GotoLine
         } else if self.find_open && self.find.read(cx).focus_handle().is_focused(window) {
@@ -271,6 +306,7 @@ impl Workspace {
         let handle = tree.read(cx).focus_handle().clone();
         window.focus(&handle, cx);
         self.start_indexing(root.clone(), cx);
+        self.load_project_state(root.clone(), cx);
         self.start_jar_indexing(cx);
         self.project = Some(Project { root, name, tree });
         self.project_window = ToolWindowState::Visible;
@@ -279,6 +315,7 @@ impl Workspace {
     }
 
     fn open_file(&mut self, path: PathBuf, window: &mut Window, cx: &mut Context<Self>) {
+        let opened = path.clone();
         let index = self
             .tabs
             .iter()
@@ -314,9 +351,17 @@ impl Workspace {
                 self.tabs.len() - 1
             });
         self.activate_tab(index, window, cx);
+        self.record_recent_file(&opened, cx);
+        self.refresh_bookmark_marks(cx);
     }
 
     fn activate_tab(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
+        if index >= self.tabs.len() {
+            return;
+        }
+        if self.active != Some(index) {
+            self.record_current_location(cx);
+        }
         let Some(tab) = self.tabs.get(index) else {
             return;
         };
@@ -335,6 +380,9 @@ impl Workspace {
     fn close_tab(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
         if index >= self.tabs.len() {
             return;
+        }
+        if self.active == Some(index) {
+            self.record_current_location(cx);
         }
         self.tabs.remove(index);
         let active = self.active.unwrap_or(0);
@@ -431,7 +479,10 @@ impl Workspace {
         let has_editor = self.active.is_some();
         // The search actions stay available while the search popup is open, so that
         // pressing another one switches its scope.
-        let other_popup = self.goto_line_open || self.chooser.is_some();
+        let other_popup = self.goto_line_open
+            || self.chooser.is_some()
+            || self.find_in_files.is_some()
+            || self.mnemonic_prompt.is_some();
         let popup_open = other_popup || self.search.is_some();
         match action {
             Action::OpenFolder => !popup_open,
@@ -445,6 +496,33 @@ impl Workspace {
             | Action::GotoFile
             | Action::GotoSymbol => self.index.is_some() && !other_popup,
             Action::FileStructure => has_editor && self.index.is_some() && !other_popup,
+            Action::RecentFiles | Action::RecentLocations => {
+                self.project.is_some()
+                    && !(self.goto_line_open
+                        || self.chooser.is_some()
+                        || self.find_in_files.is_some())
+            }
+            Action::FindInPath => {
+                self.project.is_some()
+                    && !(self.goto_line_open
+                        || self.chooser.is_some()
+                        || self.search.is_some()
+                        || self.mnemonic_prompt.is_some())
+            }
+            Action::ToggleBookmark | Action::ToggleBookmarkWithMnemonic => {
+                has_editor && self.project.is_some() && !popup_open
+            }
+            Action::ShowBookmarks => self.project.is_some() && !popup_open,
+            _ if action.toggle_bookmark_digit().is_some() => {
+                has_editor && self.project.is_some() && !popup_open
+            }
+            _ if action.goto_bookmark_digit().is_some() => {
+                // Without such a bookmark the shortcut falls through, as IDEA's does.
+                !popup_open
+                    && action
+                        .goto_bookmark_digit()
+                        .is_some_and(|digit| self.state.bookmark_with_mnemonic(digit).is_some())
+            }
             Action::FindUsages
             | Action::ShowUsages
             | Action::GotoDeclaration
@@ -494,6 +572,26 @@ impl Workspace {
                 self.open_search(SearchMode::Project(SearchScope::Symbols), window, cx);
             }
             Action::FileStructure => self.open_file_structure(window, cx),
+            Action::FindInPath => self.open_find_in_files(window, cx),
+            Action::ToggleBookmark => self.toggle_bookmark(cx),
+            Action::ToggleBookmarkWithMnemonic => self.open_mnemonic_prompt(window, cx),
+            Action::ShowBookmarks => self.show_bookmarks(window, cx),
+            _ if action.toggle_bookmark_digit().is_some() => {
+                if let Some(digit) = action.toggle_bookmark_digit() {
+                    self.toggle_bookmark_mnemonic(digit, cx);
+                }
+            }
+            _ if action.goto_bookmark_digit().is_some() => {
+                if let Some(digit) = action.goto_bookmark_digit() {
+                    self.goto_bookmark(digit, window, cx);
+                }
+            }
+            Action::RecentFiles => {
+                self.open_search(SearchMode::Recent(RecentKind::Files), window, cx);
+            }
+            Action::RecentLocations => {
+                self.open_search(SearchMode::Recent(RecentKind::Locations), window, cx);
+            }
             Action::FindUsages => self.find_usages(false, cx),
             Action::ShowUsages => self.find_usages(true, cx),
             Action::ActivateFindToolWindow => self.toggle_find_window(window, cx),
@@ -621,6 +719,7 @@ impl Workspace {
             FocusArea::HierarchyWindow => self.hierarchy_window_action(action, window, cx),
             FocusArea::Chooser => self.chooser_action(action, window, cx),
             FocusArea::Search => self.search_action(action, window, cx),
+            FocusArea::FindInFiles => self.find_in_files_action(action, window, cx),
             FocusArea::GotoLine => match action {
                 Action::Enter => self.submit_goto_line(window, cx),
                 Action::Escape => {
@@ -666,6 +765,10 @@ impl Workspace {
         let Some(stroke) = stroke_from_gpui(&event.keystroke) else {
             return;
         };
+        if self.handle_bookmark_key(&event.keystroke, window, cx) {
+            cx.stop_propagation();
+            return;
+        }
         let enabled = self.enabled_actions(window, cx);
         let dispatch = self
             .dispatcher
@@ -1223,12 +1326,19 @@ impl Render for Workspace {
                 .children(hierarchy_window)
                 .children(find_window),
         );
-        let popup = match (&self.chooser, &self.search) {
-            (Some(chooser), _) => Some(Self::render_chooser(chooser, cx).into_any_element()),
-            (None, Some(search)) => Some(self.render_search(search, cx).into_any_element()),
-            (None, None) => self
-                .goto_line_open
-                .then(|| self.render_goto_line_popup(cx).into_any_element()),
+        let popup = match (&self.chooser, &self.search, &self.find_in_files) {
+            (Some(chooser), ..) => Some(Self::render_chooser(chooser, cx).into_any_element()),
+            (None, Some(search), _) => Some(self.render_search(search, cx).into_any_element()),
+            (None, None, Some(open)) => Some(
+                self.render_find_in_files(open, window, cx)
+                    .into_any_element(),
+            ),
+            (None, None, None) => match &self.mnemonic_prompt {
+                Some(prompt) => Some(self.render_mnemonic_prompt(prompt, cx).into_any_element()),
+                None => self
+                    .goto_line_open
+                    .then(|| self.render_goto_line_popup(cx).into_any_element()),
+            },
         };
         div()
             .id("workspace")
