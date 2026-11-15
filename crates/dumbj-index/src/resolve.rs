@@ -1381,6 +1381,62 @@ impl Lookup<'_> {
         }
     }
 
+    /// `libs.kotlinx.coroutines.core` in a Gradle Kotlin script is an entry of the version
+    /// catalog: `kotlinx-coroutines-core` under `[libraries]`.
+    fn find_in_catalog(&self, qualifier: &Qualifier, name: &str) -> Option<Found> {
+        let (Qualifier::Name(path) | Qualifier::Path(path)) = qualifier else {
+            return None;
+        };
+        let index = self.site.index;
+        let in_build_script = index
+            .file(self.site.file)
+            .is_some_and(|file| file.relative.ends_with(".gradle.kts"));
+        let mut parts: Vec<&str> = path.split('.').collect();
+        if !in_build_script || parts.first() != Some(&"libs") {
+            return None;
+        }
+        parts.remove(0);
+        parts.push(name);
+        let (section, rest) = match parts.split_first() {
+            Some((first, rest)) if matches!(*first, "plugins" | "versions" | "bundles") => {
+                (*first, rest)
+            }
+            _ => ("libraries", parts.as_slice()),
+        };
+        let accessor = rest.join(".");
+        let mut exact = Vec::new();
+        let mut partial = Vec::new();
+        for (file, indexed) in index.files() {
+            if !indexed.relative.ends_with(".versions.toml") {
+                continue;
+            }
+            for (position, symbol) in indexed.facts.symbols.iter().enumerate() {
+                let in_section = symbol
+                    .parent
+                    .and_then(|parent| indexed.facts.symbols.get(parent))
+                    .is_some_and(|table| table.name == section);
+                if symbol.kind != SymbolKind::Key || !in_section {
+                    continue;
+                }
+                let key = symbol.name.trim_matches('"').replace(['-', '_'], ".");
+                let id = SymbolId {
+                    file,
+                    index: u32::try_from(position).ok()?,
+                };
+                if key == accessor {
+                    exact.push((id, Tier::Scope));
+                } else if key.starts_with(&format!("{accessor}.")) {
+                    partial.push((id, Tier::Scope));
+                }
+            }
+        }
+        Some(if exact.is_empty() {
+            Found::guess(partial)
+        } else {
+            Found::sure(exact)
+        })
+    }
+
     fn find_qualified(
         &self,
         query: Query<'_>,
@@ -1388,6 +1444,9 @@ impl Lookup<'_> {
         applicable: &dyn Fn(SymbolId) -> bool,
     ) -> Found {
         let Query { name, role, .. } = query;
+        if let Some(found) = self.find_in_catalog(qualifier, name) {
+            return found;
+        }
         let file = self.site.file;
         if role == ReferenceRole::Type
             && let Qualifier::Name(prefix) | Qualifier::Path(prefix) = qualifier

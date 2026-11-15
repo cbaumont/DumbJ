@@ -694,3 +694,31 @@ fn java_sees_jvm_names() {
         "Jump Rates.kt:13 Tariff.active Scope"
     );
 }
+
+#[test]
+fn gradle_scripts_reach_the_version_catalog() {
+    let index = freight_index();
+    let go = |snippet: &str| go_in(&freight_root(), &index, "build.gradle.kts", snippet);
+    assert_eq!(
+        go("libs.kotlinx.coroutines.co§re)"),
+        "Jump libs.versions.toml:5 libraries.kotlinx-coroutines-core Scope"
+    );
+    assert_eq!(
+        go("libs.ok§io)"),
+        "Jump libs.versions.toml:7 libraries.okio Scope"
+    );
+    assert_eq!(
+        go("libs.plugins.kotlin.j§vm)"),
+        "Jump libs.versions.toml:10 plugins.kotlin-jvm Scope"
+    );
+    assert_eq!(
+        go("libs.versions.kot§lin.get()"),
+        "Jump libs.versions.toml:2 versions.kotlin Scope"
+    );
+    assert_eq!(
+        go("testImplementation(libs.kotlinx.corou§tines.test)"),
+        "Choose [libs.versions.toml:5 libraries.kotlinx-coroutines-core Scope] \
+         [libs.versions.toml:6 libraries.kotlinx-coroutines-test Scope]",
+        "a partial accessor offers the entries under it"
+    );
+}
