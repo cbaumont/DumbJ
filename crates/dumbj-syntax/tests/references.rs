@@ -426,3 +426,19 @@ fn finds_every_identifier_with_a_name() {
     assert_eq!(found[2].qualifier, Some(Qualifier::This));
     assert_eq!(tree.references_named(&buffer, "nope"), []);
 }
+
+#[test]
+fn enclosing_ranges_grow_one_node_at_a_time() {
+    let source = "class A { void m() { int x = f(1, 2); } }";
+    let buffer = Buffer::new(source);
+    let tree = parse(Language::Java, &buffer, || false).unwrap().unwrap();
+    let text = |range: dumbj_text::ByteRange| source[range.start.get()..range.end.get()].to_owned();
+    let start = source.find("1, 2").unwrap();
+    let one = ByteOffset(start)..ByteOffset(start + 1);
+    let arguments = tree.enclosing_range(one).unwrap();
+    assert_eq!(text(arguments.clone()), "(1, 2)");
+    let call = tree.enclosing_range(arguments).unwrap();
+    assert_eq!(text(call.clone()), "f(1, 2)");
+    let whole = ByteOffset(0)..ByteOffset(source.len());
+    assert_eq!(tree.enclosing_range(whole), None);
+}

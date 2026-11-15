@@ -88,3 +88,21 @@ pub fn parse(
         buffer_version: buffer.version(),
     }))
 }
+
+impl SyntaxTree {
+    /// The smallest syntax node strictly larger than `range` that contains it.
+    #[must_use]
+    pub fn enclosing_range(&self, range: dumbj_text::ByteRange) -> Option<dumbj_text::ByteRange> {
+        let mut node = self
+            .tree()
+            .root_node()
+            .descendant_for_byte_range(range.start.get(), range.end.get())?;
+        loop {
+            let found = ByteOffset(node.start_byte())..ByteOffset(node.end_byte());
+            if found.start <= range.start && range.end <= found.end && found != range {
+                return Some(found);
+            }
+            node = node.parent()?;
+        }
+    }
+}

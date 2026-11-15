@@ -17,6 +17,7 @@ Linux uses the `macOS For All` keymap and macOS uses IntelliJ's `Mac OS X 10.5+`
 | Find Next | `editor.find-next` | `FindNext` | `Ctrl+G` | `⌘G` |
 | Find Previous | `editor.find-previous` | `FindPrevious` | `Alt+Shift+G` | `⇧⌘G` |
 | Extend Selection | `editor.extend-selection` | `EditorSelectWord` | `Alt+Up` | `⌥Up` |
+| Shrink Selection | `editor.shrink-selection` | `EditorUnSelectWord` | `Alt+Down` | `⌥Down` |
 | Go to Declaration | `navigate.goto-declaration` | `GotoDeclaration` | `Ctrl+B` / `Ctrl+Click` | `⌘B` / `⌘Click` / `Middle Click` |
 | Back | `navigate.back` | `Back` | `Ctrl+Alt+Left` / `Ctrl+[` / `Mouse Back` | `⌘[` / `⌥⌘Left` / `Mouse Back` |
 | Forward | `navigate.forward` | `Forward` | `Ctrl+Alt+Right` / `Ctrl+]` / `Mouse Forward` | `⌘]` / `⌥⌘Right` / `Mouse Forward` |

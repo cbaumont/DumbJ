@@ -29,6 +29,8 @@ pub(crate) struct EditorModel {
     caret: ByteOffset,
     /// The character column vertical movement tries to return to.
     goal_column: Option<usize>,
+    /// Each Extend Selection step as (before, after), for Shrink Selection.
+    extended: Vec<(ByteRange, ByteRange)>,
 }
 
 impl EditorModel {
@@ -99,8 +101,51 @@ impl EditorModel {
         word.is_some()
     }
 
-    pub(crate) fn extend_selection(&mut self) -> bool {
-        !self.has_selection() && self.select_word_at(self.caret)
+    pub(crate) fn extend_selection(
+        &mut self,
+        enclosing: impl Fn(ByteRange) -> Option<ByteRange>,
+    ) -> bool {
+        let current = self.selection();
+        if self
+            .extended
+            .last()
+            .is_some_and(|(_, after)| *after != current)
+        {
+            self.extended.clear();
+        }
+        let word = (!self.has_selection())
+            .then(|| self.buffer.word_range_at(self.caret))
+            .flatten();
+        let Some(next) = word.or_else(|| enclosing(current.clone())) else {
+            return false;
+        };
+        let caret = self.caret;
+        self.select(next.clone());
+        let before = if current.is_empty() {
+            caret..caret
+        } else {
+            current
+        };
+        self.extended.push((before, next));
+        true
+    }
+
+    pub(crate) fn shrink_selection(&mut self) -> bool {
+        let current = self.selection();
+        match self.extended.pop() {
+            Some((before, after)) if after == current => {
+                if before.is_empty() {
+                    self.move_to(before.start, false);
+                } else {
+                    self.select(before);
+                }
+                true
+            }
+            _ => {
+                self.extended.clear();
+                false
+            }
+        }
     }
 
     /// Puts the caret at a one-based line and optional one-based character column.
@@ -451,13 +496,44 @@ mod tests {
         assert_eq!(m.selected_text(), "one two\n");
         m.select_line(LineIndex(2));
         assert_eq!(m.selected_text(), "", "the last empty line");
-        m.move_to(ByteOffset(3), false);
-        assert!(m.extend_selection());
-        assert_eq!(m.selected_text(), "one");
-        assert!(!m.extend_selection(), "word level only for now");
+        let none = |_: ByteRange| None;
         let mut blank = model("   ");
         blank.move_to(ByteOffset(1), false);
-        assert!(!blank.extend_selection());
+        assert!(!blank.extend_selection(none));
+    }
+
+    #[test]
+    fn extend_and_shrink_selection_step_through_enclosing_ranges() {
+        let mut m = model("call(one, two)");
+        // A stand-in for the syntax tree: the arguments, then the whole call.
+        let enclosing = |range: ByteRange| match (range.start.get(), range.end.get()) {
+            (5, 8) => Some(ByteOffset(4)..ByteOffset(14)),
+            (4, 14) => Some(ByteOffset(0)..ByteOffset(14)),
+            _ => None,
+        };
+        m.move_to(ByteOffset(6), false);
+        assert!(m.extend_selection(enclosing));
+        assert_eq!(m.selected_text(), "one", "first the word");
+        assert!(m.extend_selection(enclosing));
+        assert_eq!(m.selected_text(), "(one, two)");
+        assert!(m.extend_selection(enclosing));
+        assert_eq!(m.selected_text(), "call(one, two)");
+        assert!(
+            !m.extend_selection(enclosing),
+            "nothing encloses the whole text"
+        );
+        assert!(m.shrink_selection());
+        assert_eq!(m.selected_text(), "(one, two)");
+        assert!(m.shrink_selection());
+        assert!(m.shrink_selection());
+        assert!(!m.has_selection());
+        assert_eq!(m.caret(), ByteOffset(6), "back where the caret was");
+        assert!(!m.shrink_selection());
+
+        m.move_to(ByteOffset(6), false);
+        assert!(m.extend_selection(enclosing));
+        m.move_to(ByteOffset(0), false);
+        assert!(!m.shrink_selection(), "moving the caret forgets the steps");
     }
 
     #[test]

@@ -21,6 +21,7 @@ pub enum Action {
     FindNext,
     FindPrevious,
     ExtendSelection,
+    ShrinkSelection,
     GotoDeclaration,
     Back,
     Forward,
@@ -144,6 +145,12 @@ const REGISTRY: &[ActionInfo] = &[
         Action::ExtendSelection,
         "editor.extend-selection",
         "Extend Selection",
+        Scope::Editor,
+    ),
+    info(
+        Action::ShrinkSelection,
+        "editor.shrink-selection",
+        "Shrink Selection",
         Scope::Editor,
     ),
     info(

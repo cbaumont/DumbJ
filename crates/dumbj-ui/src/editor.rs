@@ -364,7 +364,12 @@ impl EditorView {
         match action {
             Action::SelectAll => self.model.select_all(),
             Action::ExtendSelection => {
-                self.model.extend_selection();
+                let syntax = &self.syntax;
+                self.model
+                    .extend_selection(|range| syntax.as_ref()?.enclosing_range(range));
+            }
+            Action::ShrinkSelection => {
+                self.model.shrink_selection();
             }
             Action::Copy => {
                 let selected = self.model.selected_text();
