@@ -188,3 +188,101 @@ impl SyntaxTree {
         found
     }
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum FoldKind {
+    Code,
+    Comment,
+    Imports,
+}
+
+/// A foldable stretch of lines, `start..=end`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Fold {
+    /// Where the declaration that owns the region starts: Collapse anywhere from here
+    /// folds it.
+    pub header: dumbj_text::LineIndex,
+    pub start: dumbj_text::LineIndex,
+    pub end: dumbj_text::LineIndex,
+    pub kind: FoldKind,
+}
+
+fn fold_kind(language: Language, kind: &str) -> Option<FoldKind> {
+    match (language, kind) {
+        (_, "block_comment" | "multiline_comment") => Some(FoldKind::Comment),
+        (
+            Language::Java,
+            "class_body"
+            | "interface_body"
+            | "enum_body"
+            | "annotation_type_body"
+            | "block"
+            | "constructor_body"
+            | "switch_block"
+            | "array_initializer",
+        )
+        | (
+            Language::Kotlin,
+            "class_body"
+            | "enum_class_body"
+            | "function_body"
+            | "control_structure_body"
+            | "lambda_literal"
+            | "when_expression"
+            | "annotated_lambda",
+        ) => Some(FoldKind::Code),
+        _ => None,
+    }
+}
+
+impl SyntaxTree {
+    /// Foldable regions spanning two lines or more: bodies, blocks, lambdas, block
+    /// comments, and the run of imports.
+    #[must_use]
+    pub fn folds(&self, buffer: &Buffer) -> Vec<Fold> {
+        let language = self.language();
+        let line = |byte: usize| buffer.point_at(ByteOffset(byte)).line;
+        let mut found = Vec::new();
+        let mut imports: Option<(dumbj_text::LineIndex, dumbj_text::LineIndex)> = None;
+        let mut cursor = self.tree().root_node().walk();
+        loop {
+            let node = cursor.node();
+            let (start, end) = (
+                line(node.start_byte()),
+                line(node.end_byte().saturating_sub(1)),
+            );
+            if matches!(node.kind(), "import_declaration" | "import_header") {
+                imports = Some(imports.map_or((start, end), |(first, _)| (first, end)));
+            } else if let Some(kind) = fold_kind(language, node.kind())
+                && end > start
+            {
+                let owner = node
+                    .parent()
+                    .filter(|parent| is_scope(language, parent.kind()))
+                    .map_or(start, |parent| line(parent.start_byte()));
+                found.push(Fold {
+                    header: owner.min(start),
+                    start,
+                    end,
+                    kind,
+                });
+            }
+            if cursor.goto_first_child() {
+                continue;
+            }
+            while !cursor.goto_next_sibling() {
+                if !cursor.goto_parent() {
+                    if let Some((start, end)) = imports.filter(|(start, end)| end > start) {
+                        found.push(Fold {
+                            header: start,
+                            start,
+                            end,
+                            kind: FoldKind::Imports,
+                        });
+                    }
+                    return found;
+                }
+            }
+        }
+    }
+}

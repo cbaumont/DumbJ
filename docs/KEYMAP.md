@@ -18,6 +18,10 @@ Linux uses the `macOS For All` keymap and macOS uses IntelliJ's `Mac OS X 10.5+`
 | Find Previous | `editor.find-previous` | `FindPrevious` | `Alt+Shift+G` | `⇧⌘G` |
 | Extend Selection | `editor.extend-selection` | `EditorSelectWord` | `Alt+Up` | `⌥Up` |
 | Shrink Selection | `editor.shrink-selection` | `EditorUnSelectWord` | `Alt+Down` | `⌥Down` |
+| Collapse | `editor.fold` | `CollapseRegion` | `Ctrl+Num-` / `Ctrl+-` | `⌘Num-` / `⌘-` |
+| Expand | `editor.unfold` | `ExpandRegion` | `Ctrl+Num+` / `Ctrl+=` | `⌘Num+` / `⌘=` |
+| Collapse All | `editor.fold-all` | `CollapseAllRegions` | `Ctrl+Shift+Num-` / `Ctrl+Shift+-` | `⇧⌘Num-` / `⇧⌘-` |
+| Expand All | `editor.unfold-all` | `ExpandAllRegions` | `Ctrl+Shift+Num+` / `Ctrl+Shift+=` | `⇧⌘Num+` / `⇧⌘=` |
 | Go to Declaration | `navigate.goto-declaration` | `GotoDeclaration` | `Ctrl+B` / `Ctrl+Click` | `⌘B` / `⌘Click` / `Middle Click` |
 | Back | `navigate.back` | `Back` | `Ctrl+Alt+Left` / `Ctrl+[` / `Mouse Back` | `⌘[` / `⌥⌘Left` / `Mouse Back` |
 | Forward | `navigate.forward` | `Forward` | `Ctrl+Alt+Right` / `Ctrl+]` / `Mouse Forward` | `⌘]` / `⌥⌘Right` / `Mouse Forward` |

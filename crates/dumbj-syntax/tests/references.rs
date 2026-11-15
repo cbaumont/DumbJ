@@ -489,3 +489,42 @@ fn sticky_scopes_are_the_enclosing_headers() {
         .collect();
     assert_eq!(lines, [1], "a header does not stick above itself");
 }
+
+#[test]
+fn fold_regions() {
+    let folds = |language: Language, source: &str| {
+        let buffer = Buffer::new(source);
+        let tree = parse(language, &buffer, || false).unwrap().unwrap();
+        let mut found: Vec<String> = tree
+            .folds(&buffer)
+            .into_iter()
+            .map(|fold| {
+                format!(
+                    "{}-{} {:?}",
+                    fold.start.get() + 1,
+                    fold.end.get() + 1,
+                    fold.kind
+                )
+            })
+            .collect();
+        found.sort();
+        found
+    };
+    let java = "import a.B;\nimport a.C;\n\n/**\n * Doc.\n */\nclass A {\n  void m() {\n    run();\n  }\n  void one() { }\n}\n";
+    assert_eq!(
+        folds(Language::Java, java),
+        ["1-2 Imports", "4-6 Comment", "7-12 Code", "8-10 Code"],
+        "a one-line body does not fold"
+    );
+    let kotlin = "import a.B\nimport a.C\n\nclass A {\n  fun m() {\n    list.map {\n      it\n    }\n  }\n}\n";
+    assert_eq!(
+        folds(Language::Kotlin, kotlin),
+        [
+            "1-2 Imports",
+            "4-10 Code",
+            "5-9 Code",
+            "6-8 Code",
+            "6-8 Code"
+        ]
+    );
+}

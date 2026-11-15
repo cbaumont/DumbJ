@@ -31,6 +31,7 @@ pub(crate) struct EditorModel {
     goal_column: Option<usize>,
     /// Each Extend Selection step as (before, after), for Shrink Selection.
     extended: Vec<(ByteRange, ByteRange)>,
+    pub(crate) folds: Folds,
 }
 
 impl EditorModel {
@@ -67,6 +68,8 @@ impl EditorModel {
 
     pub(crate) fn move_to(&mut self, offset: ByteOffset, extend: bool) {
         self.caret = self.buffer.clamp(offset);
+        self.folds
+            .reveal(self.buffer.point_at(self.caret).line.get());
         if !extend {
             self.anchor = self.caret;
         }
@@ -76,6 +79,8 @@ impl EditorModel {
     pub(crate) fn select(&mut self, range: ByteRange) {
         self.anchor = self.buffer.clamp(range.start);
         self.caret = self.buffer.clamp(range.end);
+        self.folds
+            .reveal(self.buffer.point_at(self.caret).line.get());
         self.goal_column = None;
     }
 
@@ -167,13 +172,19 @@ impl EditorModel {
         })
     }
 
-    fn vertical(&mut self, lines: isize) -> ByteOffset {
+    fn vertical(&mut self, rows: isize) -> ByteOffset {
         let point = self.caret_point();
         let goal = *self
             .goal_column
             .get_or_insert_with(|| self.buffer.char_column(point));
         let last = self.buffer.line_count() - 1;
-        let target = point.line.get().saturating_add_signed(lines).min(last);
+        let last_row = self.folds.row_count(self.buffer.line_count()) - 1;
+        let row = self.folds.row_of(point.line.get());
+        let target = self
+            .folds
+            .line_of(row.saturating_add_signed(rows).min(last_row))
+            .min(last);
+        let lines = rows;
         if lines < 0 && point.line.get() == 0 {
             return ByteOffset::ZERO;
         }
@@ -258,6 +269,174 @@ impl EditorModel {
         let goal = self.goal_column.filter(|_| keep_goal);
         self.move_to(target, extend);
         self.goal_column = goal;
+    }
+}
+
+pub(crate) use dumbj_syntax::FoldKind;
+
+/// Lines `start..=end`; folded, `start` stays visible and the rest are hidden.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) struct FoldRegion {
+    pub(crate) header: usize,
+    pub(crate) start: usize,
+    pub(crate) end: usize,
+    pub(crate) kind: FoldKind,
+}
+
+impl FoldRegion {
+    fn contains(&self, line: usize) -> bool {
+        self.header <= line && line <= self.end
+    }
+}
+
+#[derive(Debug, Default)]
+pub(crate) struct Folds {
+    /// One region per start line (the largest), sorted by start.
+    regions: Vec<FoldRegion>,
+    collapsed: std::collections::BTreeSet<usize>,
+    /// Hidden line ranges, sorted and merged.
+    hidden: Vec<std::ops::Range<usize>>,
+}
+
+impl Folds {
+    pub(crate) fn set_regions(&mut self, mut regions: Vec<FoldRegion>) {
+        regions.retain(|region| region.end > region.start);
+        regions.sort_by_key(|region| (region.start, std::cmp::Reverse(region.end)));
+        regions.dedup_by_key(|region| region.start);
+        self.regions = regions;
+        let starts: std::collections::BTreeSet<usize> =
+            self.regions.iter().map(|region| region.start).collect();
+        self.collapsed.retain(|start| starts.contains(start));
+        self.recompute();
+    }
+
+    fn recompute(&mut self) {
+        let mut hidden: Vec<std::ops::Range<usize>> = self
+            .regions
+            .iter()
+            .filter(|region| self.collapsed.contains(&region.start))
+            .map(|region| region.start + 1..region.end + 1)
+            .collect();
+        hidden.sort_by_key(|range| range.start);
+        let mut merged: Vec<std::ops::Range<usize>> = Vec::new();
+        for range in hidden {
+            match merged.last_mut() {
+                Some(last) if range.start <= last.end => last.end = last.end.max(range.end),
+                _ => merged.push(range),
+            }
+        }
+        self.hidden = merged;
+    }
+
+    pub(crate) fn region_starting(&self, line: usize) -> Option<FoldRegion> {
+        self.regions
+            .binary_search_by_key(&line, |region| region.start)
+            .ok()
+            .and_then(|position| self.regions.get(position).copied())
+    }
+
+    pub(crate) fn is_collapsed(&self, start: usize) -> bool {
+        self.collapsed.contains(&start)
+    }
+
+    pub(crate) fn toggle(&mut self, start: usize) -> bool {
+        if self.region_starting(start).is_none() {
+            return false;
+        }
+        if !self.collapsed.remove(&start) {
+            self.collapsed.insert(start);
+        }
+        self.recompute();
+        true
+    }
+
+    /// Collapses the innermost expanded region around `line`.
+    pub(crate) fn collapse_at(&mut self, line: usize) -> bool {
+        let innermost = self
+            .regions
+            .iter()
+            .filter(|region| region.contains(line) && !self.collapsed.contains(&region.start))
+            .min_by_key(|region| region.end - region.start)
+            .copied();
+        innermost.is_some_and(|region| self.toggle(region.start))
+    }
+
+    /// Expands the collapsed region that starts on `line`, else the innermost one around it.
+    pub(crate) fn expand_at(&mut self, line: usize) -> bool {
+        let target = self
+            .regions
+            .iter()
+            .filter(|region| region.contains(line) && self.collapsed.contains(&region.start))
+            .min_by_key(|region| (region.start != line, region.end - region.start))
+            .copied();
+        target.is_some_and(|region| self.toggle(region.start))
+    }
+
+    pub(crate) fn collapse_all(&mut self, kind: Option<FoldKind>) {
+        let starts: Vec<usize> = self
+            .regions
+            .iter()
+            .filter(|region| kind.is_none_or(|kind| region.kind == kind))
+            .map(|region| region.start)
+            .collect();
+        self.collapsed.extend(starts);
+        self.recompute();
+    }
+
+    pub(crate) fn expand_all(&mut self) {
+        self.collapsed.clear();
+        self.recompute();
+    }
+
+    /// Unfolds whatever hides `line`.
+    pub(crate) fn reveal(&mut self, line: usize) -> bool {
+        if !self.is_hidden(line) {
+            return false;
+        }
+        let regions = &self.regions;
+        self.collapsed.retain(|start| {
+            regions
+                .iter()
+                .find(|region| region.start == *start)
+                .is_none_or(|region| !(region.start < line && line <= region.end))
+        });
+        self.recompute();
+        true
+    }
+
+    pub(crate) fn is_hidden(&self, line: usize) -> bool {
+        self.hidden.iter().any(|range| range.contains(&line))
+    }
+
+    /// The display row of `line`; a hidden line maps to the row of its fold's first line.
+    pub(crate) fn row_of(&self, line: usize) -> usize {
+        let mut hidden_before = 0;
+        for range in &self.hidden {
+            if line < range.start {
+                break;
+            }
+            if range.contains(&line) {
+                return range.start - 1 - hidden_before;
+            }
+            hidden_before += range.len();
+        }
+        line - hidden_before
+    }
+
+    pub(crate) fn line_of(&self, row: usize) -> usize {
+        let mut line = row;
+        for range in &self.hidden {
+            if range.start <= line {
+                line += range.len();
+            } else {
+                break;
+            }
+        }
+        line
+    }
+
+    pub(crate) fn row_count(&self, line_count: usize) -> usize {
+        line_count - self.hidden.iter().map(std::ops::Range::len).sum::<usize>()
     }
 }
 
@@ -534,6 +713,68 @@ mod tests {
         assert!(m.extend_selection(enclosing));
         m.move_to(ByteOffset(0), false);
         assert!(!m.shrink_selection(), "moving the caret forgets the steps");
+    }
+
+    fn region(start: usize, end: usize) -> FoldRegion {
+        FoldRegion {
+            header: start,
+            start,
+            end,
+            kind: FoldKind::Code,
+        }
+    }
+
+    #[test]
+    fn folds_map_lines_to_rows() {
+        let mut folds = Folds::default();
+        folds.set_regions(vec![region(2, 5), region(3, 4), region(8, 9), region(8, 8)]);
+        assert_eq!(folds.row_count(12), 12);
+        assert!(folds.toggle(2));
+        assert_eq!(folds.row_count(12), 9, "lines 3-5 are hidden");
+        assert_eq!(folds.row_of(2), 2);
+        assert_eq!(folds.row_of(4), 2, "a hidden line maps to its fold's row");
+        assert_eq!(folds.row_of(6), 3);
+        assert_eq!(folds.line_of(3), 6);
+        assert!(folds.collapse_at(8));
+        assert_eq!(folds.line_of(5), 8);
+        assert_eq!(folds.line_of(6), 10, "line 9 is hidden too");
+        assert!(folds.reveal(9));
+        assert!(!folds.is_collapsed(8));
+        assert!(
+            folds.is_collapsed(2),
+            "revealing one fold leaves the others"
+        );
+        assert!(
+            folds.collapse_at(3),
+            "the inner region inside an expanded outer one"
+        );
+        assert!(folds.expand_at(2));
+        assert!(folds.is_hidden(4), "the inner fold stays collapsed");
+        folds.expand_all();
+        assert_eq!(folds.row_count(12), 12);
+        folds.set_regions(vec![region(8, 9)]);
+        assert_eq!(folds.region_starting(2), None);
+    }
+
+    #[test]
+    fn vertical_moves_skip_folded_lines() {
+        let mut m = model("a\nb {\nc\nd\n}\ne\n");
+        m.folds.set_regions(vec![region(1, 4)]);
+        m.folds.toggle(1);
+        m.move_to(ByteOffset(2), false);
+        m.apply_motion(Motion::Down, false);
+        assert_eq!(
+            m.caret_point().line.get(),
+            5,
+            "from the fold header to after the fold"
+        );
+        m.apply_motion(Motion::Up, false);
+        assert_eq!(m.caret_point().line.get(), 1);
+        m.move_to(m.buffer().line_start(LineIndex(3)), false);
+        assert!(
+            !m.folds.is_collapsed(1),
+            "putting the caret inside a fold opens it"
+        );
     }
 
     #[test]
