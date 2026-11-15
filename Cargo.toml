@@ -39,6 +39,7 @@ tree-sitter-kotlin-ng = "1.1"
 tree-sitter-kotlin-sg = "0.4"
 tree-sitter-xml = "0.7"
 tree-sitter-properties = "0.3"
+tree-sitter-json = "0.24"
 tree-sitter-yaml = "0.7"
 
 # Pinned exactly: GPUI's API moves fast. Upgrade deliberately. Only dumbj-ui may depend on it.

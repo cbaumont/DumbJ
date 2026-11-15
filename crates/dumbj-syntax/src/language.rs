@@ -15,6 +15,7 @@ pub enum Language {
     Yaml,
     Xml,
     Properties,
+    Json,
 }
 
 impl Language {
@@ -24,6 +25,7 @@ impl Language {
         Self::Yaml,
         Self::Xml,
         Self::Properties,
+        Self::Json,
     ];
 
     /// Picks the language from a file name's extension.
@@ -37,6 +39,7 @@ impl Language {
             // Maven's pom.xml and Android's layouts are XML; so are IDE project files.
             "xml" | "xsd" | "xsl" | "xslt" | "svg" | "wsdl" | "pom" | "fxml" => Some(Self::Xml),
             "properties" => Some(Self::Properties),
+            "json" | "jsonc" | "geojson" | "webmanifest" => Some(Self::Json),
             _ => None,
         }
     }
@@ -50,6 +53,7 @@ impl Language {
             Self::Yaml => "YAML",
             Self::Xml => "XML",
             Self::Properties => "Properties",
+            Self::Json => "JSON",
         }
     }
 
@@ -63,6 +67,7 @@ impl Language {
             Self::Yaml => "yaml",
             Self::Xml => "xml",
             Self::Properties => "properties",
+            Self::Json => "json",
         }
     }
 
@@ -85,6 +90,7 @@ impl Language {
             Self::Yaml => tree_sitter_yaml::LANGUAGE.into(),
             Self::Xml => tree_sitter_xml::LANGUAGE_XML.into(),
             Self::Properties => tree_sitter_properties::LANGUAGE.into(),
+            Self::Json => tree_sitter_json::LANGUAGE.into(),
         }
     }
 
@@ -95,6 +101,7 @@ impl Language {
             Self::Yaml => include_str!("../queries/yaml/highlights.scm"),
             Self::Xml => include_str!("../queries/xml/highlights.scm"),
             Self::Properties => include_str!("../queries/properties/highlights.scm"),
+            Self::Json => include_str!("../queries/json/highlights.scm"),
         }
     }
 

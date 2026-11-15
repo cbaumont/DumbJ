@@ -80,6 +80,11 @@ fn properties_highlights() {
 }
 
 #[test]
+fn json_highlights() {
+    insta::assert_snapshot!(render("package.json"));
+}
+
+#[test]
 fn a_range_query_matches_the_same_part_of_a_full_query() {
     for name in [
         "Sample.java",
@@ -87,6 +92,7 @@ fn a_range_query_matches_the_same_part_of_a_full_query() {
         "sample.yaml",
         "pom.xml",
         "application.properties",
+        "package.json",
     ] {
         let (language, buffer) = fixture(name);
         let tree = parse(language, &buffer, || false).unwrap().unwrap();

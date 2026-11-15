@@ -19,6 +19,7 @@ tree-sitter-kotlin-sg = { workspace = true, optional = true }
 tree-sitter-kotlin-ng = { workspace = true, optional = true }
 tree-sitter-xml.workspace = true
 tree-sitter-properties.workspace = true
+tree-sitter-json.workspace = true
 tree-sitter-yaml.workspace = true
 
 [features]
