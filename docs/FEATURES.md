@@ -55,7 +55,7 @@
 - [x] Navigate Back / Forward
 - [~] Recent Files, Recent Locations — per project, kept in the state dir; no Last Edit Location or Switcher
 - [~] Find in Files — regex, case, whole word, file mask, directory scope, gitignore; no Replace in Files
-- [ ] Bookmarks
+- [x] Bookmarks — anonymous and mnemonic, gutter markers, list popup, kept per project in the state dir
 - [ ] Copy Reference / Path / permalink
 - [ ] Navigation bar jump
 
@@ -143,10 +143,10 @@ Find
 - [ ] ReplaceInPath
 
 Bookmarks
-- [ ] ToggleBookmark
-- [ ] ToggleBookmarkWithMnemonic
-- [ ] ShowBookmarks
-- [ ] GotoBookmark0…9
+- [x] ToggleBookmark
+- [x] ToggleBookmarkWithMnemonic
+- [x] ShowBookmarks
+- [x] GotoBookmark0…9 — with ToggleBookmark0…9
 
 Selection & editing
 - [~] EditorSelectWord — word level only

@@ -5,8 +5,17 @@ use gpui::{AppContext, Context};
 
 use super::Workspace;
 
+/// Whether the project state is being written.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum StateSave {
+    Idle,
+    Running,
+    /// The state changed while a save was running, so another save follows it.
+    RunningStale,
+}
+
 /// Library sources are virtual paths inside a jar; they are not the project's files.
-fn is_project_file(path: &Path) -> bool {
+pub(super) fn is_project_file(path: &Path) -> bool {
     dumbj_jars::split_virtual_path(path).is_none()
 }
 
@@ -14,6 +23,7 @@ fn is_project_file(path: &Path) -> bool {
 fn forget_missing_files(state: &mut ProjectState) {
     state.recent_files.retain(|path| path.exists());
     state.recent_locations.retain(|place| place.path.exists());
+    state.bookmarks.retain(|bookmark| bookmark.path.exists());
 }
 
 impl Workspace {
@@ -53,20 +63,47 @@ impl Workspace {
         for place in early.recent_locations.into_iter().rev() {
             self.state.record_location(place);
         }
+        for bookmark in early.bookmarks {
+            if self
+                .state
+                .bookmark_at(&bookmark.path, bookmark.line)
+                .is_none()
+            {
+                self.state.bookmarks.push(bookmark);
+            }
+        }
+        self.refresh_bookmark_marks(cx);
         self.save_project_state(cx);
     }
 
-    /// Writes the state in the background. A newer save replaces one that has not started.
+    /// Writes the state in the background, one save at a time so that an older snapshot
+    /// can never overwrite a newer one.
     pub(super) fn save_project_state(&mut self, cx: &mut Context<Self>) {
         let Some(dir) = self.state_dir.clone() else {
             return;
         };
+        if self.state_save != StateSave::Idle {
+            self.state_save = StateSave::RunningStale;
+            return;
+        }
+        self.state_save = StateSave::Running;
         let state = self.state.clone();
-        self.state_save = Some(cx.background_spawn(async move {
-            if let Err(error) = state.save(&dir) {
-                tracing::warn!(%error, "cannot save the project state");
-            }
-        }));
+        cx.spawn(async move |this, cx| {
+            cx.background_spawn(async move {
+                if let Err(error) = state.save(&dir) {
+                    tracing::warn!(%error, "cannot save the project state");
+                }
+            })
+            .await;
+            let _ = this.update(cx, |this, cx| {
+                let changed = this.state_save == StateSave::RunningStale;
+                this.state_save = StateSave::Idle;
+                if changed {
+                    this.save_project_state(cx);
+                }
+            });
+        })
+        .detach();
     }
 
     pub(super) fn record_recent_file(&mut self, path: &Path, cx: &mut Context<Self>) {

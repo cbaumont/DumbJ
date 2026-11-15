@@ -6,7 +6,7 @@ use dumbj_settings::UiRole;
 use gpui::{
     AnyElement, App, Bounds, Context, CursorStyle, Decorations, Entity, FocusHandle, IntoElement,
     KeyDownEvent, ModifiersChangedEvent, MouseButton, MouseDownEvent, PathPromptOptions, Pixels,
-    Point, Render, ResizeEdge, Size, Subscription, Task, Window, WindowBounds, WindowDecorations,
+    Point, Render, ResizeEdge, Size, Subscription, Window, WindowBounds, WindowDecorations,
     WindowOptions, div, prelude::*, px, size, svg,
 };
 
@@ -17,6 +17,7 @@ use crate::keys::{modifiers_from_gpui, stroke_from_gpui};
 use crate::text_input::{TextChanged, TextInput};
 use crate::theme;
 
+mod bookmarks;
 mod find_in_files;
 mod hierarchy;
 mod library;
@@ -25,12 +26,14 @@ mod search_popup;
 mod state;
 mod usages;
 
+use bookmarks::MnemonicPrompt;
 use dumbj_index::SearchScope;
 use dumbj_settings::ProjectState;
 use find_in_files::FindInFiles;
 use hierarchy::HierarchyWindow;
 use navigation::{Chooser, Indexing, NavigationHistory};
 use search_popup::{RecentKind, SearchMode, SearchPopup};
+use state::StateSave;
 use usages::FindWindow;
 
 const HEADER_HEIGHT: Pixels = px(40.);
@@ -102,12 +105,13 @@ pub(crate) struct Workspace {
     search_input: Entity<TextInput>,
     search: Option<SearchPopup>,
     find_in_files: Option<FindInFiles>,
+    mnemonic_prompt: Option<MnemonicPrompt>,
     find_query: Entity<TextInput>,
     find_mask: Entity<TextInput>,
     state: ProjectState,
     /// Where `state` is saved; known once the background lookup has finished.
     state_dir: Option<PathBuf>,
-    state_save: Option<Task<()>>,
+    state_save: StateSave,
     find_window: Option<FindWindow>,
     find_window_focus: FocusHandle,
     hierarchy_window: Option<HierarchyWindow>,
@@ -210,11 +214,12 @@ impl Workspace {
             search_input,
             search: None,
             find_in_files: None,
+            mnemonic_prompt: None,
             find_query,
             find_mask,
             state: ProjectState::default(),
             state_dir: None,
-            state_save: None,
+            state_save: StateSave::Idle,
             find_window: None,
             find_window_focus: cx.focus_handle(),
             hierarchy_window: None,
@@ -347,6 +352,7 @@ impl Workspace {
             });
         self.activate_tab(index, window, cx);
         self.record_recent_file(&opened, cx);
+        self.refresh_bookmark_marks(cx);
     }
 
     fn activate_tab(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
@@ -473,8 +479,10 @@ impl Workspace {
         let has_editor = self.active.is_some();
         // The search actions stay available while the search popup is open, so that
         // pressing another one switches its scope.
-        let other_popup =
-            self.goto_line_open || self.chooser.is_some() || self.find_in_files.is_some();
+        let other_popup = self.goto_line_open
+            || self.chooser.is_some()
+            || self.find_in_files.is_some()
+            || self.mnemonic_prompt.is_some();
         let popup_open = other_popup || self.search.is_some();
         match action {
             Action::OpenFolder => !popup_open,
@@ -496,7 +504,24 @@ impl Workspace {
             }
             Action::FindInPath => {
                 self.project.is_some()
-                    && !(self.goto_line_open || self.chooser.is_some() || self.search.is_some())
+                    && !(self.goto_line_open
+                        || self.chooser.is_some()
+                        || self.search.is_some()
+                        || self.mnemonic_prompt.is_some())
+            }
+            Action::ToggleBookmark | Action::ToggleBookmarkWithMnemonic => {
+                has_editor && self.project.is_some() && !popup_open
+            }
+            Action::ShowBookmarks => self.project.is_some() && !popup_open,
+            _ if action.toggle_bookmark_digit().is_some() => {
+                has_editor && self.project.is_some() && !popup_open
+            }
+            _ if action.goto_bookmark_digit().is_some() => {
+                // Without such a bookmark the shortcut falls through, as IDEA's does.
+                !popup_open
+                    && action
+                        .goto_bookmark_digit()
+                        .is_some_and(|digit| self.state.bookmark_with_mnemonic(digit).is_some())
             }
             Action::FindUsages
             | Action::ShowUsages
@@ -548,6 +573,19 @@ impl Workspace {
             }
             Action::FileStructure => self.open_file_structure(window, cx),
             Action::FindInPath => self.open_find_in_files(window, cx),
+            Action::ToggleBookmark => self.toggle_bookmark(cx),
+            Action::ToggleBookmarkWithMnemonic => self.open_mnemonic_prompt(window, cx),
+            Action::ShowBookmarks => self.show_bookmarks(window, cx),
+            _ if action.toggle_bookmark_digit().is_some() => {
+                if let Some(digit) = action.toggle_bookmark_digit() {
+                    self.toggle_bookmark_mnemonic(digit, cx);
+                }
+            }
+            _ if action.goto_bookmark_digit().is_some() => {
+                if let Some(digit) = action.goto_bookmark_digit() {
+                    self.goto_bookmark(digit, window, cx);
+                }
+            }
             Action::RecentFiles => {
                 self.open_search(SearchMode::Recent(RecentKind::Files), window, cx);
             }
@@ -727,6 +765,10 @@ impl Workspace {
         let Some(stroke) = stroke_from_gpui(&event.keystroke) else {
             return;
         };
+        if self.handle_bookmark_key(&event.keystroke, window, cx) {
+            cx.stop_propagation();
+            return;
+        }
         let enabled = self.enabled_actions(window, cx);
         let dispatch = self
             .dispatcher
@@ -1291,9 +1333,12 @@ impl Render for Workspace {
                 self.render_find_in_files(open, window, cx)
                     .into_any_element(),
             ),
-            (None, None, None) => self
-                .goto_line_open
-                .then(|| self.render_goto_line_popup(cx).into_any_element()),
+            (None, None, None) => match &self.mnemonic_prompt {
+                Some(prompt) => Some(self.render_mnemonic_prompt(prompt, cx).into_any_element()),
+                None => self
+                    .goto_line_open
+                    .then(|| self.render_goto_line_popup(cx).into_any_element()),
+            },
         };
         div()
             .id("workspace")

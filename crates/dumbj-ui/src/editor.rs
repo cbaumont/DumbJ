@@ -147,6 +147,14 @@ pub(crate) struct GutterIcon {
 
 pub(crate) struct GutterIconClicked(pub(crate) GutterIcon);
 
+/// A bookmark marker beside a line number.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct BookmarkMark {
+    /// One-based.
+    pub(crate) line: usize,
+    pub(crate) mnemonic: Option<char>,
+}
+
 pub(crate) struct EditorView {
     path: PathBuf,
     focus: FocusHandle,
@@ -163,8 +171,10 @@ pub(crate) struct EditorView {
     painted: Option<PaintedLines>,
     drag: Option<Drag>,
     pending_offset: Option<ByteOffset>,
+    pending_go_to: Option<(usize, Option<usize>)>,
     benchmark: Option<ScrollBenchmark>,
     gutter_icons: Vec<GutterIcon>,
+    bookmarks: Vec<BookmarkMark>,
     load_cancel: Arc<AtomicBool>,
     _load: Task<()>,
 }
@@ -197,6 +207,9 @@ impl EditorView {
                         if let Some(offset) = this.pending_offset.take() {
                             this.go_to_offset(offset, cx);
                         }
+                        if let Some((line, column)) = this.pending_go_to.take() {
+                            this.go_to(line, column, cx);
+                        }
                     }
                     Err(message) => this.state = LoadState::Failed(message),
                 }
@@ -218,8 +231,10 @@ impl EditorView {
             painted: None,
             drag: None,
             pending_offset: None,
+            pending_go_to: None,
             benchmark: None,
             gutter_icons: Vec::new(),
+            bookmarks: Vec::new(),
             load_cancel,
             _load: task,
         }
@@ -396,6 +411,11 @@ impl EditorView {
         cx.notify();
     }
 
+    pub(crate) fn set_bookmarks(&mut self, marks: Vec<BookmarkMark>, cx: &mut Context<Self>) {
+        self.bookmarks = marks;
+        cx.notify();
+    }
+
     fn gutter_icon_on_line(&self, line: usize) -> Option<GutterIcon> {
         let buffer = self.model.buffer();
         self.gutter_icons
@@ -472,6 +492,10 @@ impl EditorView {
     }
 
     pub(crate) fn go_to(&mut self, line: usize, column: Option<usize>, cx: &mut Context<Self>) {
+        if matches!(self.state, LoadState::Loading) {
+            self.pending_go_to = Some((line, column));
+            return;
+        }
         self.model.go_to(line, column);
         self.reveal = Some(Reveal::Center);
         cx.notify();
@@ -905,7 +929,18 @@ impl EditorView {
             };
             let number = shape(window, number.clone(), &[run(number.len(), color)]);
             let number_x = bounds.left() + gutter_width - GUTTER_PADDING_RIGHT - number.width;
+            let bookmark_x = number_x + number.width + px(5.);
             numbers.push((point(number_x, top), number));
+            if let Some(mark) = self
+                .bookmarks
+                .iter()
+                .find(|mark| mark.line == line_index.display_number())
+            {
+                let glyph = mark.mnemonic.map_or("●".to_owned(), String::from);
+                let marker_color = theme::ui(cx, UiRole::Warning);
+                let glyph = shape(window, glyph.clone(), &[run(glyph.len(), marker_color)]);
+                numbers.push((point(bookmark_x, top), glyph));
+            }
             if let Some(icon) = self.gutter_icon_on_line(line) {
                 let (glyph, role) = match (icon.overrides, icon.overridden) {
                     (true, true) => ("↕", UiRole::Accent),
