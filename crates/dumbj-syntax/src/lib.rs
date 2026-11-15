@@ -106,3 +106,85 @@ impl SyntaxTree {
         }
     }
 }
+
+fn is_scope(language: Language, kind: &str) -> bool {
+    match language {
+        Language::Java => matches!(
+            kind,
+            "class_declaration"
+                | "interface_declaration"
+                | "enum_declaration"
+                | "record_declaration"
+                | "annotation_type_declaration"
+                | "method_declaration"
+                | "constructor_declaration"
+                | "compact_constructor_declaration"
+                | "static_initializer"
+                | "if_statement"
+                | "for_statement"
+                | "enhanced_for_statement"
+                | "while_statement"
+                | "do_statement"
+                | "try_statement"
+                | "try_with_resources_statement"
+                | "switch_expression"
+                | "synchronized_statement"
+        ),
+        Language::Kotlin => matches!(
+            kind,
+            "class_declaration"
+                | "object_declaration"
+                | "companion_object"
+                | "function_declaration"
+                | "secondary_constructor"
+                | "anonymous_initializer"
+                | "if_expression"
+                | "for_statement"
+                | "while_statement"
+                | "do_while_statement"
+                | "when_expression"
+                | "try_expression"
+                | "lambda_literal"
+        ),
+        _ => false,
+    }
+}
+
+impl SyntaxTree {
+    /// The first lines of the declarations and blocks that enclose `offset` and start on
+    /// an earlier line, outermost first. A header starts after its annotations.
+    #[must_use]
+    pub fn sticky_scopes(&self, buffer: &Buffer, offset: ByteOffset) -> Vec<dumbj_text::LineIndex> {
+        let line = buffer.point_at(offset).line;
+        let Some(start) = self
+            .tree()
+            .root_node()
+            .descendant_for_byte_range(offset.get(), offset.get())
+        else {
+            return Vec::new();
+        };
+        let mut found = Vec::new();
+        let mut node = Some(start);
+        while let Some(current) = node {
+            if is_scope(self.language(), current.kind()) && current.end_byte() > offset.get() {
+                let mut cursor = current.walk();
+                let header = current
+                    .children(&mut cursor)
+                    .find(|child| {
+                        !matches!(
+                            child.kind(),
+                            "modifiers" | "annotation" | "marker_annotation"
+                        )
+                    })
+                    .unwrap_or(current);
+                let header_line = buffer.point_at(ByteOffset(header.start_byte())).line;
+                if header_line < line && found.last() != Some(&header_line) {
+                    found.push(header_line);
+                }
+            }
+            node = current.parent();
+        }
+        found.reverse();
+        found
+    }
+}

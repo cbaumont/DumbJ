@@ -27,6 +27,7 @@ use crate::theme;
 const FONT_SIZE: Pixels = px(13.);
 const LINE_HEIGHT: Pixels = px(20.);
 const GUTTER_PADDING_LEFT: Pixels = px(18.);
+const MAX_STICKY_LINES: usize = 5;
 const GUTTER_PADDING_RIGHT: Pixels = px(14.);
 const TEXT_PADDING_LEFT: Pixels = px(4.);
 const SCROLLBAR_WIDTH: Pixels = px(10.);
@@ -109,6 +110,7 @@ struct PaintedLines {
     scroll_x: Pixels,
     lines: Arc<Vec<(DisplayLine, ShapedLine)>>,
     scrollbar: Option<Bounds<Pixels>>,
+    sticky_lines: Vec<usize>,
 }
 
 struct ScrollBenchmark {
@@ -657,6 +659,22 @@ impl EditorView {
             self.drag_scrollbar(event.position, grab, cx);
             return;
         }
+        if let Some(painted) = self.painted.as_ref() {
+            let rows = ((event.position.y - painted.bounds.top()) / LINE_HEIGHT).floor();
+            #[expect(
+                clippy::cast_possible_truncation,
+                clippy::cast_sign_loss,
+                reason = "a small non-negative row count"
+            )]
+            let row = rows.max(0.0) as usize;
+            if let Some(&line) = painted.sticky_lines.get(row) {
+                let offset = self.model.buffer().line_start(LineIndex(line));
+                self.model.move_to(offset, false);
+                self.reveal = Some(Reveal::Center);
+                cx.notify();
+                return;
+            }
+        }
         let Some(offset) = self.offset_at(event.position) else {
             return;
         };
@@ -986,6 +1004,85 @@ impl EditorView {
             lines.push((display, shaped));
         }
 
+        let mut sticky_lines: Vec<usize> = Vec::new();
+        if let Some(tree) = self.syntax.as_ref().filter(|_| self.scroll_top > 0.0) {
+            for _ in 0..MAX_STICKY_LINES {
+                let covered = first_line + sticky_lines.len();
+                if covered >= line_count {
+                    break;
+                }
+                let scopes: Vec<usize> = tree
+                    .sticky_scopes(buffer, buffer.line_start(LineIndex(covered)))
+                    .into_iter()
+                    .map(LineIndex::get)
+                    .take(MAX_STICKY_LINES)
+                    .collect();
+                let settled = scopes.len() <= sticky_lines.len();
+                sticky_lines = scopes;
+                if settled {
+                    break;
+                }
+            }
+        }
+        let mut sticky = Vec::new();
+        for (row, &line) in sticky_lines.iter().enumerate() {
+            let line_index = LineIndex(line);
+            #[expect(clippy::cast_precision_loss, reason = "at most a few sticky lines")]
+            let top = bounds.top() + LINE_HEIGHT * row as f32;
+            let (line_start, line_end) =
+                (buffer.line_start(line_index), buffer.line_end(line_index));
+            let display = DisplayLine::new(&buffer.line(line_index), MAX_LINE_BYTES);
+            let spans = self
+                .syntax
+                .as_ref()
+                .and_then(|tree| tree.highlights(buffer, line_start..line_end).ok())
+                .unwrap_or_default();
+            let mut runs = Vec::new();
+            let mut position = 0;
+            for span in &spans {
+                let start = display
+                    .to_display(span.range.start.get().max(line_start.get()) - line_start.get());
+                let end =
+                    display.to_display(span.range.end.get().min(line_end.get()) - line_start.get());
+                if start > position {
+                    runs.push(run(start - position, text_color));
+                }
+                if end > start.max(position) {
+                    runs.push(run(end - start.max(position), theme::syntax(cx, span.kind)));
+                    position = end;
+                }
+            }
+            if display.text.len() > position {
+                runs.push(run(display.text.len() - position, text_color));
+            }
+            let text = shape(window, display.text.clone(), &runs);
+            let number = line_index.display_number().to_string();
+            let number = shape(window, number.clone(), &[run(number.len(), number_color)]);
+            let number_x = bounds.left() + gutter_width - GUTTER_PADDING_RIGHT - number.width;
+            sticky.push(StickyRow {
+                background: fill(
+                    Bounds::from_corners(
+                        point(bounds.left(), top),
+                        point(bounds.right() - SCROLLBAR_WIDTH, top + LINE_HEIGHT),
+                    ),
+                    theme::ui(cx, UiRole::PanelBackground),
+                ),
+                number: (point(number_x, top), number),
+                text: (point(text_left - self.scroll_x, top), text),
+            });
+        }
+        let sticky_separator = (!sticky.is_empty()).then(|| {
+            #[expect(clippy::cast_precision_loss, reason = "at most a few sticky lines")]
+            let bottom = bounds.top() + LINE_HEIGHT * sticky.len() as f32;
+            fill(
+                Bounds::from_corners(
+                    point(bounds.left(), bottom),
+                    point(bounds.right() - SCROLLBAR_WIDTH, bottom + px(1.)),
+                ),
+                theme::ui(cx, UiRole::Border),
+            )
+        });
+
         let text_width = bounds.right() - text_left - SCROLLBAR_WIDTH;
         self.scroll_x = self.scroll_x.min((max_width - text_width / 2.).max(px(0.)));
 
@@ -1020,6 +1117,7 @@ impl EditorView {
             scroll_x: self.scroll_x,
             lines: lines.clone(),
             scrollbar,
+            sticky_lines,
         });
         EditorLayout {
             text_bounds: Bounds::from_corners(
@@ -1031,6 +1129,8 @@ impl EditorView {
             numbers,
             backgrounds,
             caret,
+            sticky,
+            sticky_separator,
             scrollbar: scrollbar.map(|thumb| {
                 let color = theme::ui(cx, UiRole::TextFaint).opacity(0.35);
                 fill(thumb, color).corner_radii(px(4.))
@@ -1079,6 +1179,12 @@ struct EditorElement {
     editor: Entity<EditorView>,
 }
 
+struct StickyRow {
+    background: PaintQuad,
+    number: (Point<Pixels>, ShapedLine),
+    text: (Point<Pixels>, ShapedLine),
+}
+
 struct EditorLayout {
     text_bounds: Bounds<Pixels>,
     text_origin: Point<Pixels>,
@@ -1086,6 +1192,8 @@ struct EditorLayout {
     numbers: Vec<(Point<Pixels>, ShapedLine)>,
     backgrounds: Vec<PaintQuad>,
     caret: Option<PaintQuad>,
+    sticky: Vec<StickyRow>,
+    sticky_separator: Option<PaintQuad>,
     scrollbar: Option<PaintQuad>,
 }
 
@@ -1170,6 +1278,19 @@ impl Element for EditorElement {
                     }
                 },
             );
+            for row in layout.sticky.drain(..) {
+                window.paint_quad(row.background);
+                paint_line(&row.number.1, row.number.0, window, cx);
+                window.with_content_mask(
+                    Some(ContentMask {
+                        bounds: layout.text_bounds,
+                    }),
+                    |window| paint_line(&row.text.1, row.text.0, window, cx),
+                );
+            }
+            if let Some(separator) = layout.sticky_separator.take() {
+                window.paint_quad(separator);
+            }
             if let Some(scrollbar) = layout.scrollbar.take() {
                 window.paint_quad(scrollbar);
             }

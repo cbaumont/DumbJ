@@ -463,3 +463,29 @@ fn writes_are_assignment_targets() {
     assert!(write(Language::Kotlin, kotlin, "x++"));
     assert!(!write(Language::Kotlin, kotlin, "x) }"));
 }
+
+#[test]
+fn sticky_scopes_are_the_enclosing_headers() {
+    let source =
+        "class A {\n  @Override\n  void m() {\n    if (x) {\n      call();\n    }\n  }\n}\n";
+    let buffer = Buffer::new(source);
+    let tree = parse(Language::Java, &buffer, || false).unwrap().unwrap();
+    let at = ByteOffset(source.find("call").unwrap());
+    let lines: Vec<usize> = tree
+        .sticky_scopes(&buffer, at)
+        .into_iter()
+        .map(|line| line.get() + 1)
+        .collect();
+    assert_eq!(
+        lines,
+        [1, 3, 4],
+        "class, the method after its annotation, the if"
+    );
+    let on_header = ByteOffset(source.find("void").unwrap());
+    let lines: Vec<usize> = tree
+        .sticky_scopes(&buffer, on_header)
+        .into_iter()
+        .map(|line| line.get() + 1)
+        .collect();
+    assert_eq!(lines, [1], "a header does not stick above itself");
+}
