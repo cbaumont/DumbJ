@@ -10,7 +10,7 @@ mod structure;
 
 use std::ops::ControlFlow;
 
-use dumbj_text::{Buffer, ByteOffset};
+use dumbj_text::{Buffer, ByteOffset, Edit};
 use thiserror::Error;
 use tree_sitter::{ParseOptions, Parser, Tree};
 
@@ -64,6 +64,25 @@ pub fn parse(
     buffer: &Buffer,
     cancelled: impl Fn() -> bool,
 ) -> Result<Option<SyntaxTree>, SyntaxError> {
+    parse_with(language, buffer, None, cancelled)
+}
+
+/// Parses `buffer` again, reusing the parts of `old` that no edit touched. Every edit made
+/// to the buffer since `old` was parsed must have been passed to [`SyntaxTree::edit`].
+pub fn reparse(
+    old: &SyntaxTree,
+    buffer: &Buffer,
+    cancelled: impl Fn() -> bool,
+) -> Result<Option<SyntaxTree>, SyntaxError> {
+    parse_with(old.language, buffer, Some(&old.tree), cancelled)
+}
+
+fn parse_with(
+    language: Language,
+    buffer: &Buffer,
+    old: Option<&Tree>,
+    cancelled: impl Fn() -> bool,
+) -> Result<Option<SyntaxTree>, SyntaxError> {
     let mut parser = Parser::new();
     parser
         .set_language(&language.grammar())
@@ -81,7 +100,7 @@ pub fn parse(
     let options = ParseOptions::new().progress_callback(&mut progress);
     let tree = parser.parse_with_options(
         &mut |offset, _| buffer.chunk_at(ByteOffset(offset)).as_bytes(),
-        None,
+        old,
         Some(options),
     );
     Ok(tree.map(|tree| SyntaxTree {
@@ -89,6 +108,25 @@ pub fn parse(
         tree,
         buffer_version: buffer.version(),
     }))
+}
+
+impl SyntaxTree {
+    /// Shifts the tree's positions to follow `edit`, so that it stays aligned with the
+    /// buffer until [`reparse`] replaces it. The shifted tree is approximate around the edit.
+    pub fn edit(&mut self, edit: &Edit) {
+        let point = |point: dumbj_text::Point| tree_sitter::Point {
+            row: point.line.get(),
+            column: point.column,
+        };
+        self.tree.edit(&tree_sitter::InputEdit {
+            start_byte: edit.start.get(),
+            old_end_byte: edit.old_end.get(),
+            new_end_byte: edit.new_end.get(),
+            start_position: point(edit.start_point),
+            old_end_position: point(edit.old_end_point),
+            new_end_position: point(edit.new_end_point),
+        });
+    }
 }
 
 impl SyntaxTree {

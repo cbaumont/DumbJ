@@ -7,7 +7,7 @@ use std::fmt::Write as _;
 use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use dumbj_syntax::{Language, parse};
+use dumbj_syntax::{Language, parse, reparse};
 use dumbj_text::{Buffer, ByteOffset};
 
 fn fixture(name: &str) -> (Language, Buffer) {
@@ -205,4 +205,29 @@ fn empty_and_out_of_range_queries_are_empty() {
         []
     );
     assert_eq!(tree.buffer_version(), buffer.version());
+}
+
+#[test]
+fn a_reparse_after_edits_matches_a_fresh_parse() {
+    let (language, mut buffer) = fixture("Sample.kt");
+    let mut tree = parse(language, &buffer, || false).unwrap().unwrap();
+    let text = buffer.to_string();
+    let at = ByteOffset(text.find("override fun run").unwrap());
+    for (range, replacement) in [
+        (at..at, "fun added(a: Int) = a + 1\n\n    "),
+        (ByteOffset(0)..ByteOffset(7), "package"),
+        (ByteOffset(8)..ByteOffset(11), ""),
+    ] {
+        let edit = buffer.replace(range, replacement).unwrap();
+        tree.edit(&edit);
+    }
+    let reparsed = reparse(&tree, &buffer, || false).unwrap().unwrap();
+    let fresh = parse(language, &buffer, || false).unwrap().unwrap();
+    assert_eq!(reparsed.buffer_version(), buffer.version());
+    let all = ByteOffset::ZERO..buffer.len();
+    assert_eq!(
+        reparsed.highlights(&buffer, all.clone()).unwrap(),
+        fresh.highlights(&buffer, all).unwrap()
+    );
+    assert_eq!(reparsed.folds(&buffer), fresh.folds(&buffer));
 }
