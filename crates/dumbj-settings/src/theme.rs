@@ -1,12 +1,9 @@
-//! Themes as data: a palette file plus a mapping from semantic roles to palette colours.
-
 use std::collections::{BTreeMap, HashMap};
 
 use dumbj_syntax::HighlightKind;
 use serde::Deserialize;
 use thiserror::Error;
 
-/// An sRGB colour with alpha.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Rgba {
     pub r: u8,
@@ -16,7 +13,6 @@ pub struct Rgba {
 }
 
 impl Rgba {
-    /// Parses `#rrggbb`.
     fn from_hex(hex: &str) -> Option<Self> {
         let digits = hex.strip_prefix('#').filter(|digits| digits.len() == 6)?;
         let channel = |at: usize| u8::from_str_radix(digits.get(at..at + 2)?, 16).ok();
@@ -38,7 +34,6 @@ impl Rgba {
         Self { a, ..self }
     }
 
-    /// The colour as `0xRRGGBBAA`.
     #[must_use]
     pub fn to_u32(self) -> u32 {
         u32::from_be_bytes([self.r, self.g, self.b, self.a])
@@ -66,7 +61,6 @@ impl Rgba {
     }
 }
 
-/// A colour role in DumbJ's own UI.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum UiRole {
     Background,
@@ -129,7 +123,6 @@ impl UiRole {
         Self::EditorSearchMatchCurrent,
     ];
 
-    /// The role's key in the `[ui]` table of a roles file.
     #[must_use]
     pub fn key(self) -> &'static str {
         match self {
@@ -164,7 +157,6 @@ impl UiRole {
     }
 }
 
-/// The key of a syntax role in the `[syntax]` table of a roles file.
 #[must_use]
 pub fn syntax_key(kind: HighlightKind) -> &'static str {
     match kind {
@@ -195,7 +187,6 @@ pub fn syntax_key(kind: HighlightKind) -> &'static str {
     }
 }
 
-/// Why a theme could not be loaded.
 #[derive(Debug, Error)]
 pub enum ThemeError {
     #[error("theme file is not valid TOML: {0}")]
@@ -234,7 +225,6 @@ struct RolesFile {
     syntax: BTreeMap<String, RoleValue>,
 }
 
-/// A loaded theme: every UI and syntax role resolved to a colour.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Theme {
     name: String,
@@ -286,7 +276,6 @@ fn resolve<R: Copy + Eq + std::hash::Hash>(
 }
 
 impl Theme {
-    /// Builds a theme from a palette file and a roles file.
     pub fn load(palette_toml: &str, roles_toml: &str) -> Result<Self, ThemeError> {
         let palette_file: PaletteFile = toml::from_str(palette_toml)?;
         let roles: RolesFile = toml::from_str(roles_toml)?;
@@ -321,7 +310,6 @@ impl Theme {
         })
     }
 
-    /// Catppuccin Mocha, the default dark theme.
     pub fn catppuccin_mocha() -> Result<Self, ThemeError> {
         Self::load(
             include_str!("../../../themes/catppuccin/mocha.toml"),
@@ -329,7 +317,6 @@ impl Theme {
         )
     }
 
-    /// Catppuccin Latte, the light theme.
     pub fn catppuccin_latte() -> Result<Self, ThemeError> {
         Self::load(
             include_str!("../../../themes/catppuccin/latte.toml"),
@@ -347,7 +334,6 @@ impl Theme {
         self.dark
     }
 
-    /// The colour of a UI role.
     #[must_use]
     pub fn ui(&self, role: UiRole) -> Rgba {
         // `load` guarantees every role is present; the fallback is unreachable.
@@ -359,7 +345,6 @@ impl Theme {
         })
     }
 
-    /// The colour of a syntax role.
     #[must_use]
     pub fn syntax(&self, kind: HighlightKind) -> Rgba {
         self.syntax
