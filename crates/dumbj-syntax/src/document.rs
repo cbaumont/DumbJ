@@ -2,7 +2,7 @@
 //! These are the entries File Structure shows; none of them is a declaration that
 //! navigation can land on from code.
 
-use dumbj_text::ByteOffset;
+use dumbj_text::{ByteOffset, ByteRange};
 use tree_sitter::Node;
 
 use crate::structure::{Collector, SymbolKind, named_children, range_of};
@@ -118,5 +118,107 @@ pub(crate) fn toml(collector: &mut Collector<'_>, root: Node<'_>) {
             }
             _ => {}
         }
+    }
+}
+
+/// The `Name` node of an XML element's start (or empty-element) tag.
+fn xml_tag_name(element: Node<'_>) -> Option<Node<'_>> {
+    let tag = named_children(element)
+        .into_iter()
+        .find(|child| matches!(child.kind(), "STag" | "EmptyElemTag"))?;
+    named_children(tag)
+        .into_iter()
+        .find(|child| child.kind() == "Name")
+}
+
+/// The child elements of an XML element.
+fn xml_children(element: Node<'_>) -> Vec<Node<'_>> {
+    named_children(element)
+        .into_iter()
+        .filter(|child| child.kind() == "content")
+        .flat_map(named_children)
+        .filter(|child| child.kind() == "element")
+        .collect()
+}
+
+/// The text content of an XML element without surrounding whitespace, and where it is.
+fn xml_text(collector: &Collector<'_>, element: Node<'_>) -> Option<(String, ByteRange)> {
+    let content = named_children(element)
+        .into_iter()
+        .find(|part| part.kind() == "content")?;
+    let range = trimmed(collector, content, false)?;
+    let text = collector.source.buffer.text(range.clone()).ok()?;
+    Some((text, range))
+}
+
+/// The text of the first child element called `tag`.
+fn xml_child_text(
+    collector: &Collector<'_>,
+    element: Node<'_>,
+    tag: &str,
+) -> Option<(String, ByteRange)> {
+    let child = xml_children(element).into_iter().find(|child| {
+        xml_tag_name(*child).is_some_and(|name| collector.source.text(name) == tag)
+    })?;
+    xml_text(collector, child)
+}
+
+/// The name of a Maven `dependency` or `plugin`, `groupId:artifactId` (just the
+/// `artifactId` when there is no group, as plugins often do), and where to land: the
+/// artifact id, as a point when the name is not written in one piece.
+fn xml_artifact(collector: &Collector<'_>, element: Node<'_>) -> Option<(String, ByteRange)> {
+    let (artifact, range) = xml_child_text(collector, element, "artifactId")?;
+    match xml_child_text(collector, element, "groupId") {
+        Some((group, _)) => Some((format!("{group}:{artifact}"), range.start..range.start)),
+        None => Some((artifact, range)),
+    }
+}
+
+/// Reports the XML elements worth an outline entry: the root, its direct children, and
+/// anywhere below them the Maven elements that carry an identity, `module`, `dependency`
+/// and `plugin`. A dependency or plugin is named `groupId:artifactId`, a module by its
+/// path. Entries nest under the closest reported ancestor.
+pub(crate) fn xml(collector: &mut Collector<'_>, root: Node<'_>) {
+    if let Some(element) = named_children(root)
+        .into_iter()
+        .find(|child| child.kind() == "element")
+    {
+        xml_element(collector, element, 0, None);
+    }
+}
+
+fn xml_element(
+    collector: &mut Collector<'_>,
+    element: Node<'_>,
+    depth: usize,
+    parent: Option<usize>,
+) {
+    let Some(tag) = xml_tag_name(element) else {
+        return;
+    };
+    let identity = if depth < 2 {
+        None
+    } else {
+        match collector.source.text(tag).as_str() {
+            "module" => xml_text(collector, element),
+            "dependency" | "plugin" => xml_artifact(collector, element),
+            _ => None,
+        }
+    };
+    let entry = if let Some((name, landing)) = identity {
+        Some(collector.push_with_name(
+            SymbolKind::Element,
+            range_of(element),
+            name,
+            landing,
+            parent,
+        ))
+    } else if depth < 2 {
+        Some(collector.push(SymbolKind::Element, element, tag, parent))
+    } else {
+        None
+    };
+    for child in xml_children(element) {
+        xml_element(collector, child, depth + 1, entry.or(parent));
     }
 }

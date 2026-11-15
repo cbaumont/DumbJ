@@ -32,6 +32,9 @@ pub enum SymbolKind {
     Heading,
     /// A TOML table or array of tables.
     Table,
+    /// An element of an XML file: the root and its children, and Maven modules,
+    /// dependencies and plugins.
+    Element,
     /// A key of a configuration file: a TOML or YAML key.
     Key,
 }
@@ -55,6 +58,7 @@ impl SymbolKind {
         Self::EnumConstant,
         Self::Heading,
         Self::Table,
+        Self::Element,
         Self::Key,
     ];
 
@@ -78,6 +82,7 @@ impl SymbolKind {
             Self::EnumConstant => "EnumConstant",
             Self::Heading => "Heading",
             Self::Table => "Table",
+            Self::Element => "Element",
             Self::Key => "Key",
         }
     }
@@ -102,6 +107,7 @@ impl SymbolKind {
             "EnumConstant" => Some(Self::EnumConstant),
             "Heading" => Some(Self::Heading),
             "Table" => Some(Self::Table),
+            "Element" => Some(Self::Element),
             "Key" => Some(Self::Key),
             _ => None,
         }
@@ -127,7 +133,10 @@ impl SymbolKind {
     /// but are not searched for across the project and never resolve a reference.
     #[must_use]
     pub fn is_document(self) -> bool {
-        matches!(self, Self::Heading | Self::Table | Self::Key)
+        matches!(
+            self,
+            Self::Heading | Self::Table | Self::Element | Self::Key
+        )
     }
 
     /// Whether the symbol can be called.
@@ -317,12 +326,26 @@ impl Collector<'_> {
         name_range: ByteRange,
         parent: Option<usize>,
     ) -> usize {
+        let name = self
+            .source
+            .buffer
+            .text(name_range.clone())
+            .unwrap_or_default();
+        self.push_with_name(kind, declaration, name, name_range, parent)
+    }
+
+    /// Adds a symbol named `name`, which need not be written anywhere as such (a Maven
+    /// `groupId:artifactId`); `landing` is where navigation goes, possibly an empty range.
+    pub(crate) fn push_with_name(
+        &mut self,
+        kind: SymbolKind,
+        declaration: ByteRange,
+        name: String,
+        name_range: ByteRange,
+        parent: Option<usize>,
+    ) -> usize {
         self.facts.symbols.push(Symbol {
-            name: self
-                .source
-                .buffer
-                .text(name_range.clone())
-                .unwrap_or_default(),
+            name,
             kind,
             range: declaration,
             name_range,
@@ -354,8 +377,8 @@ impl SyntaxTree {
             Language::Kotlin => crate::kotlin::collect(&mut collector, root, None),
             Language::Markdown => crate::document::markdown(&mut collector, root),
             Language::Toml => crate::document::toml(&mut collector, root),
+            Language::Xml => crate::document::xml(&mut collector, root),
             Language::Yaml
-            | Language::Xml
             | Language::Properties
             | Language::Json
             | Language::Groovy

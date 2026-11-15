@@ -126,6 +126,11 @@ fn toml_structure() {
 }
 
 #[test]
+fn xml_structure() {
+    insta::assert_snapshot!(render("pom.xml"));
+}
+
+#[test]
 fn declarations_survive_syntax_errors() {
     let (_, facts) = facts_of(
         Language::Java,

@@ -1,0 +1,19 @@
+---
+source: crates/dumbj-syntax/tests/structure.rs
+expression: "render(\"pom.xml\")"
+---
+package None
+3:2 Element project
+6:4 Element project.modelVersion
+8:4 Element project.groupId
+9:4 Element project.artifactId
+10:4 Element project.version
+11:4 Element project.packaging
+13:4 Element project.modules
+14:13 Element project.modules.core
+15:13 Element project.modules.app
+18:4 Element project.properties
+23:4 Element project.dependencies
+26:19 Element project.dependencies.org.junit.jupiter:junit-jupiter
+32:4 Element project.build
+35:21 Element project.build.maven-compiler-plugin
