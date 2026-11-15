@@ -18,6 +18,7 @@ pub enum Language {
     Json,
     Toml,
     Groovy,
+    Markdown,
 }
 
 impl Language {
@@ -30,6 +31,7 @@ impl Language {
         Self::Json,
         Self::Toml,
         Self::Groovy,
+        Self::Markdown,
     ];
 
     /// Picks the language from a file name's extension.
@@ -46,6 +48,7 @@ impl Language {
             "json" | "jsonc" | "geojson" | "webmanifest" => Some(Self::Json),
             "toml" => Some(Self::Toml),
             "groovy" | "gradle" => Some(Self::Groovy),
+            "md" | "markdown" | "mdx" => Some(Self::Markdown),
             _ => None,
         }
     }
@@ -62,6 +65,7 @@ impl Language {
             Self::Json => "JSON",
             Self::Toml => "TOML",
             Self::Groovy => "Groovy",
+            Self::Markdown => "Markdown",
         }
     }
 
@@ -78,6 +82,7 @@ impl Language {
             Self::Json => "json",
             Self::Toml => "toml",
             Self::Groovy => "groovy",
+            Self::Markdown => "markdown",
         }
     }
 
@@ -103,6 +108,7 @@ impl Language {
             Self::Json => tree_sitter_json::LANGUAGE.into(),
             Self::Toml => tree_sitter_toml_ng::LANGUAGE.into(),
             Self::Groovy => dekobon_tree_sitter_groovy::LANGUAGE.into(),
+            Self::Markdown => tree_sitter_md::LANGUAGE.into(),
         }
     }
 
@@ -116,6 +122,7 @@ impl Language {
             Self::Json => include_str!("../queries/json/highlights.scm"),
             Self::Toml => include_str!("../queries/toml/highlights.scm"),
             Self::Groovy => include_str!("../queries/groovy/highlights.scm"),
+            Self::Markdown => include_str!("../queries/markdown/highlights.scm"),
         }
     }
 
@@ -149,7 +156,7 @@ mod tests {
         assert_eq!(detect("ci.YML"), Some(Language::Yaml));
         assert_eq!(detect("config.yaml"), Some(Language::Yaml));
         assert_eq!(detect("pom.xml"), Some(Language::Xml));
-        assert_eq!(detect("README.md"), None);
+        assert_eq!(detect("README.md"), Some(Language::Markdown));
         assert_eq!(detect("Makefile"), None);
     }
 

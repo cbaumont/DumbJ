@@ -22,6 +22,7 @@ tree-sitter-properties.workspace = true
 tree-sitter-json.workspace = true
 tree-sitter-toml-ng.workspace = true
 dekobon-tree-sitter-groovy.workspace = true
+tree-sitter-md.workspace = true
 tree-sitter-yaml.workspace = true
 
 [features]

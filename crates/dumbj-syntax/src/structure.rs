@@ -319,7 +319,8 @@ impl SyntaxTree {
             | Language::Properties
             | Language::Json
             | Language::Toml
-            | Language::Groovy => {}
+            | Language::Groovy
+            | Language::Markdown => {}
         }
         collector.facts
     }

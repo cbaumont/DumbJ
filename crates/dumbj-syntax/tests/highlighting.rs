@@ -95,6 +95,11 @@ fn groovy_highlights() {
 }
 
 #[test]
+fn markdown_highlights() {
+    insta::assert_snapshot!(render("README.md"));
+}
+
+#[test]
 fn a_range_query_matches_the_same_part_of_a_full_query() {
     for name in [
         "Sample.java",
@@ -105,6 +110,7 @@ fn a_range_query_matches_the_same_part_of_a_full_query() {
         "package.json",
         "libs.versions.toml",
         "build.gradle",
+        "README.md",
     ] {
         let (language, buffer) = fixture(name);
         let tree = parse(language, &buffer, || false).unwrap().unwrap();
