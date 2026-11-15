@@ -90,6 +90,11 @@ fn toml_highlights() {
 }
 
 #[test]
+fn groovy_highlights() {
+    insta::assert_snapshot!(render("build.gradle"));
+}
+
+#[test]
 fn a_range_query_matches_the_same_part_of_a_full_query() {
     for name in [
         "Sample.java",
@@ -99,6 +104,7 @@ fn a_range_query_matches_the_same_part_of_a_full_query() {
         "application.properties",
         "package.json",
         "libs.versions.toml",
+        "build.gradle",
     ] {
         let (language, buffer) = fixture(name);
         let tree = parse(language, &buffer, || false).unwrap().unwrap();

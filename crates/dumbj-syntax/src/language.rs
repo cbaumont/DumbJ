@@ -17,6 +17,7 @@ pub enum Language {
     Properties,
     Json,
     Toml,
+    Groovy,
 }
 
 impl Language {
@@ -28,6 +29,7 @@ impl Language {
         Self::Properties,
         Self::Json,
         Self::Toml,
+        Self::Groovy,
     ];
 
     /// Picks the language from a file name's extension.
@@ -43,6 +45,7 @@ impl Language {
             "properties" => Some(Self::Properties),
             "json" | "jsonc" | "geojson" | "webmanifest" => Some(Self::Json),
             "toml" => Some(Self::Toml),
+            "groovy" | "gradle" => Some(Self::Groovy),
             _ => None,
         }
     }
@@ -58,6 +61,7 @@ impl Language {
             Self::Properties => "Properties",
             Self::Json => "JSON",
             Self::Toml => "TOML",
+            Self::Groovy => "Groovy",
         }
     }
 
@@ -73,6 +77,7 @@ impl Language {
             Self::Properties => "properties",
             Self::Json => "json",
             Self::Toml => "toml",
+            Self::Groovy => "groovy",
         }
     }
 
@@ -97,6 +102,7 @@ impl Language {
             Self::Properties => tree_sitter_properties::LANGUAGE.into(),
             Self::Json => tree_sitter_json::LANGUAGE.into(),
             Self::Toml => tree_sitter_toml_ng::LANGUAGE.into(),
+            Self::Groovy => dekobon_tree_sitter_groovy::LANGUAGE.into(),
         }
     }
 
@@ -109,6 +115,7 @@ impl Language {
             Self::Properties => include_str!("../queries/properties/highlights.scm"),
             Self::Json => include_str!("../queries/json/highlights.scm"),
             Self::Toml => include_str!("../queries/toml/highlights.scm"),
+            Self::Groovy => include_str!("../queries/groovy/highlights.scm"),
         }
     }
 
