@@ -747,11 +747,19 @@ impl Lookup<'_> {
             .iter()
             .copied()
             .filter(|id| {
-                self.resolver
-                    .symbol(*id)
-                    .is_some_and(|symbol| kind_fits(symbol.kind, role, self.resolver.language))
+                self.resolver.symbol(*id).is_some_and(|symbol| {
+                    kind_fits(symbol.kind, role, self.resolver.language)
+                        || (role == ReferenceRole::Call && self.is_record_component(*id))
+                })
             })
             .collect()
+    }
+
+    /// Whether `id` is a component of a Java record, which is also its accessor method.
+    fn is_record_component(&self, id: SymbolId) -> bool {
+        let kind = |id: SymbolId| self.resolver.symbol(id).map(|symbol| symbol.kind);
+        kind(id) == Some(SymbolKind::Field)
+            && self.site.index.parent(id).and_then(kind) == Some(SymbolKind::Record)
     }
 
     /// The type of an argument. Unlike a receiver, a bare type name is not a value of
@@ -1251,6 +1259,16 @@ impl Lookup<'_> {
                     .collect(),
             );
         }
+        // Every member or extension with this name, as a guess.
+        let guess_all = || {
+            Found::guess(
+                self.named_candidates(name, role)
+                    .into_iter()
+                    .filter(|id| self.is_member(*id) || self.is_extension(*id))
+                    .map(|id| (id, self.resolver.tier(file, &self.enclosing, id, true)))
+                    .collect(),
+            )
+        };
         match self.receiver(qualifier, query.at, query.depth) {
             Receiver::Types(owners) => {
                 let members: Vec<SymbolId> = owners
@@ -1269,16 +1287,17 @@ impl Lookup<'_> {
             // The receiver's type is written but is not in the project (a library type).
             // Its members are not ours; only an extension on that type can match.
             Receiver::External(type_name) => {
-                self.extensions_on(name, role, &[simple_name(&type_name)])
+                let simple = simple_name(&type_name);
+                let extensions = self.extensions_on(name, role, &[simple]);
+                // A member that `Any` or `Object` does not have is reached through a
+                // smart cast the engine cannot see, so the declared type says nothing.
+                if extensions.ranked.is_empty() && matches!(simple, "Any" | "Object") {
+                    guess_all()
+                } else {
+                    extensions
+                }
             }
-            // Unknown receiver: every member or extension with this name is a guess.
-            Receiver::Unknown | Receiver::Function => Found::guess(
-                self.named_candidates(name, role)
-                    .into_iter()
-                    .filter(|id| self.is_member(*id) || self.is_extension(*id))
-                    .map(|id| (id, self.resolver.tier(file, &self.enclosing, id, true)))
-                    .collect(),
-            ),
+            Receiver::Unknown | Receiver::Function => guess_all(),
         }
     }
 

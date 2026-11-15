@@ -74,3 +74,5 @@ fun demoExtensions(carrier: NamedCarrier, text: String) {
     text.shout()
     text.cheap(sample())
 }
+
+fun amountOf(state: Any?): Int = if (state is Money) state.amount else 0

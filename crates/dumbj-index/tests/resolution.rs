@@ -551,3 +551,23 @@ fn kotlin_multiplatform_pairs_are_one_target() {
     assert!(target("jvm/src/Report.kt", "no§w(\"local\")").ends_with("jvm/src/Clock.kt"));
     assert!(target("jvm/src/Report.kt", "Zone.na§me").ends_with("jvm/src/Clock.kt"));
 }
+
+#[test]
+fn receivers_of_unknown_type_are_guesses() {
+    let index = freight_index();
+    assert_eq!(
+        go_in(
+            &freight_root(),
+            &index,
+            "src/main/java/freight/app/Invoice.java",
+            "each.tot§al()"
+        ),
+        "Choose [Invoice.java:5 Invoice.total Scope]",
+        "an untyped lambda parameter; a record component is its accessor"
+    );
+    assert_eq!(
+        go_in(&freight_root(), &index, SHIPPING, "state.amo§unt else"),
+        "Choose [Shipping.kt:3 Money.amount SameFile]",
+        "`Any` has no `amount`, so `state` was smart cast to something"
+    );
+}
