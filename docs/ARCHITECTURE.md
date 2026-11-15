@@ -10,7 +10,7 @@ All crates live in `crates/`. Only `dumbj-ui` depends on GPUI; everything else i
 |---|---|---|
 | `dumbj-text` | Rope `Buffer`, typed positions (`ByteOffset`, `LineIndex`, `Point`), edits, literal search | none |
 | `dumbj-syntax` | tree-sitter: language detection, cancellable parsing, range-limited highlighting; query files in `queries/`. Also declaration extraction (`FileFacts`, `Symbol`: kind, supertypes, extension receiver, declared type, parameters, expect/actual), reference classification, local scope resolution and a small expression model (`Qualifier`: calls with arguments, member reads, casts, literals, lambdas) for Java and Kotlin | text |
-| `dumbj-index` | Dumb navigation, headless: immutable `Index` snapshot (files, symbols, lookup by name, FQN and package), parallel cancellable indexer, SQLite cache of per-file facts, project model (modules and source roots), Go to Declaration (`resolve`), Find Usages (`usages`), fuzzy search for Search Everywhere, Go to Class/File/Symbol and File Structure (`search`, `fuzzy`). Examples: `accuracy` (benchmark runner), `index_stats` | syntax, text; `ignore`, `rusqlite` |
+| `dumbj-index` | Dumb navigation, headless: immutable `Index` snapshot (files, symbols, lookup by name, FQN and package), parallel cancellable indexer, SQLite cache of per-file facts, project model (modules and source roots), Go to Declaration (`resolve`), Find Usages (`usages`), fuzzy search for Search Everywhere, Go to Class/File/Symbol and File Structure (`search`, `fuzzy`). Example: `accuracy` (benchmark runner) | syntax, text; `ignore`, `rusqlite` |
 | `dumbj-actions` | Action registry, IntelliJ keymap XML loader, action ID map, key dispatcher, `KEYMAP.md` generator | none |
 | `dumbj-settings` | Themes as data (palette + role mapping); user settings later | syntax |
 | `dumbj-ui` | GPUI front end: workspace window, file tree, tabs, editor view, text input, popups, chooser, Find tool window | all of the above |
@@ -130,7 +130,7 @@ Arrow keys, Home/End, selection, clipboard, Enter and Escape are registered acti
 The editor has a caret, selection, search and navigation but does not accept typing. Why: BRIEF §2.5 requires edits to come with undo and atomic autosave, and half of that would be worse than none. IME is proven in the Find and Go to Line fields.
 
 ### 2026-11-14: Kotlin grammar is tree-sitter-kotlin-sg
-Evaluated in M1a on 1,531 Kotlin files (5.9 MB) from kotlinx.coroutines, Now in Android and Moshi with `examples/kotlin_grammar_eval.rs`:
+Evaluated in M1a on 1,531 Kotlin files (5.9 MB) from kotlinx.coroutines, Now in Android and Moshi with a since-removed evaluation example:
 
 | Grammar | Files with errors | Bytes inside ERROR nodes | Speed |
 |---|---|---|---|

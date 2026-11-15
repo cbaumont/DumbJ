@@ -63,10 +63,7 @@ impl Language {
     pub(crate) fn grammar(self) -> tree_sitter::Language {
         match self {
             Self::Java => tree_sitter_java::LANGUAGE.into(),
-            #[cfg(feature = "kotlin-sg")]
             Self::Kotlin => tree_sitter_kotlin_sg::LANGUAGE.into(),
-            #[cfg(not(feature = "kotlin-sg"))]
-            Self::Kotlin => tree_sitter_kotlin_ng::LANGUAGE.into(),
             Self::Yaml => tree_sitter_yaml::LANGUAGE.into(),
         }
     }

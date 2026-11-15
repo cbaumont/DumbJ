@@ -13,18 +13,8 @@ dumbj-text.workspace = true
 thiserror.workspace = true
 tree-sitter.workspace = true
 tree-sitter-java.workspace = true
-tree-sitter-kotlin-sg = { workspace = true, optional = true }
-# The alternative Kotlin grammar, only for examples/kotlin_grammar_eval.rs. Both grammars
-# export the C symbol `tree_sitter_kotlin`, so only one can be linked at a time.
-tree-sitter-kotlin-ng = { workspace = true, optional = true }
+tree-sitter-kotlin-sg.workspace = true
 tree-sitter-yaml.workspace = true
-
-[features]
-default = ["kotlin-sg"]
-# The Kotlin grammar DumbJ ships.
-kotlin-sg = ["dep:tree-sitter-kotlin-sg"]
-# Evaluation only: swaps in tree-sitter-kotlin-ng. Kotlin highlighting does not work with it.
-kotlin-ng-eval = ["dep:tree-sitter-kotlin-ng"]
 
 [dev-dependencies]
 insta.workspace = true

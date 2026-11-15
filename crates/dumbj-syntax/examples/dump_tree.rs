@@ -46,7 +46,6 @@ fn main() {
     let path = Path::new(&path);
     let language = match path.extension().and_then(|ext| ext.to_str()) {
         Some("java") => tree_sitter_java::LANGUAGE.into(),
-        #[cfg(feature = "kotlin-sg")]
         Some("kt" | "kts") => tree_sitter_kotlin_sg::LANGUAGE.into(),
         Some("yaml" | "yml") => tree_sitter_yaml::LANGUAGE.into(),
         _ => {
