@@ -1298,6 +1298,7 @@ dependencies = [
  "dumbj-actions",
  "dumbj-index",
  "dumbj-jars",
+ "dumbj-search",
  "dumbj-settings",
  "dumbj-syntax",
  "dumbj-text",
