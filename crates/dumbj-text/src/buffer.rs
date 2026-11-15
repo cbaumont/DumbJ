@@ -1,5 +1,3 @@
-//! The rope-backed text buffer.
-
 use std::borrow::Cow;
 
 use ropey::{Rope, RopeSlice};
@@ -7,7 +5,6 @@ use thiserror::Error;
 
 use crate::position::{ByteOffset, ByteRange, LineIndex, Point};
 
-/// Why a buffer operation was rejected.
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum TextError {
     #[error("range {start}..{end} is outside the buffer (length {len}) or reversed")]
@@ -20,7 +17,6 @@ pub enum TextError {
     NotCharBoundary(usize),
 }
 
-/// What an edit changed, in the terms incremental parsers need.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Edit {
     pub start: ByteOffset,
@@ -48,13 +44,11 @@ impl Buffer {
         }
     }
 
-    /// A counter that increases with every edit.
     #[must_use]
     pub fn version(&self) -> u64 {
         self.version
     }
 
-    /// The length of the text in bytes.
     #[must_use]
     pub fn len(&self) -> ByteOffset {
         ByteOffset(self.rope.len_bytes())
@@ -94,7 +88,6 @@ impl Buffer {
         self.line_slice(line).into()
     }
 
-    /// The length of a line in bytes, without its line break.
     #[must_use]
     pub fn line_len(&self, line: LineIndex) -> usize {
         self.line_slice(line).len_bytes()
@@ -106,7 +99,6 @@ impl Buffer {
         ByteOffset(self.rope.line_to_byte(line.0.min(self.line_count() - 1)))
     }
 
-    /// The offset just after the last content byte of a line, before its line break.
     #[must_use]
     pub fn line_end(&self, line: LineIndex) -> ByteOffset {
         ByteOffset(self.line_start(line).0 + self.line_len(line))
@@ -174,7 +166,6 @@ impl Buffer {
         Ok(())
     }
 
-    /// Copies the text in `range`.
     pub fn text(&self, range: ByteRange) -> Result<String, TextError> {
         self.check_range(&range)?;
         Ok(self.rope.byte_slice(range.start.0..range.end.0).to_string())
@@ -191,7 +182,6 @@ impl Buffer {
         chunk.get(offset.0 - chunk_start..).unwrap_or("")
     }
 
-    /// Replaces `range` with `text` and describes the change.
     pub fn replace(&mut self, range: ByteRange, text: &str) -> Result<Edit, TextError> {
         self.check_range(&range)?;
         let start_point = self.point_at(range.start);
@@ -387,7 +377,6 @@ mod tests {
         assert_eq!(buffer.chunk_at(ByteOffset(5)).as_bytes()[0], b'o');
     }
 
-    /// Snaps `index` down to a char boundary of `text`.
     fn boundary(text: &str, index: usize) -> usize {
         let mut index = index.min(text.len());
         while !text.is_char_boundary(index) {
@@ -397,7 +386,6 @@ mod tests {
     }
 
     proptest! {
-        /// A buffer behaves like a `String` under arbitrary replacements.
         #[test]
         fn replace_matches_string_model(
             initial in "(?s)\\PC{0,40}|[a\\n\\r é𝄞]{0,40}",
@@ -418,7 +406,6 @@ mod tests {
             prop_assert_eq!(buffer.line_count(), model.matches('\n').count() + 1);
         }
 
-        /// Offsets and points convert back and forth for every character boundary.
         #[test]
         fn offsets_round_trip_through_points(text in "[a\\n\\r é𝄞]{0,60}") {
             let buffer = Buffer::new(&text);

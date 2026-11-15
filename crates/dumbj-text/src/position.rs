@@ -1,5 +1,3 @@
-//! Typed positions, so byte, line and UTF-16 offsets cannot be mixed up.
-
 use std::ops::Range;
 
 /// A byte offset into a buffer's UTF-8 text. Always on a `char` boundary when produced by
@@ -16,10 +14,8 @@ impl ByteOffset {
     }
 }
 
-/// A half-open range of byte offsets.
 pub type ByteRange = Range<ByteOffset>;
 
-/// A zero-based line number.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]
 pub struct LineIndex(pub usize);
 
@@ -36,11 +32,9 @@ impl LineIndex {
     }
 }
 
-/// A line and a byte column within that line.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]
 pub struct Point {
     pub line: LineIndex,
-    /// Bytes from the start of the line.
     pub column: usize,
 }
 

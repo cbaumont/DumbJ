@@ -1,9 +1,6 @@
-//! Plain-text search within a buffer.
-
 use crate::buffer::Buffer;
 use crate::position::{ByteOffset, ByteRange, LineIndex};
 
-/// How a search compares text.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct SearchOptions {
     /// When `false`, ASCII letters match regardless of case.
