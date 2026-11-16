@@ -14,6 +14,7 @@ publish = false
 dumbj-actions = { path = "crates/dumbj-actions" }
 dumbj-index = { path = "crates/dumbj-index" }
 dumbj-jars = { path = "crates/dumbj-jars" }
+dumbj-lsp = { path = "crates/dumbj-lsp" }
 dumbj-review = { path = "crates/dumbj-review" }
 dumbj-search = { path = "crates/dumbj-search" }
 dumbj-settings = { path = "crates/dumbj-settings" }
@@ -27,6 +28,8 @@ anyhow = "1"
 gix = { version = "0.90", default-features = false, features = ["sha1"] }
 imara-diff = "0.2"
 
+# The LSP protocol types (requests, notifications, capabilities) so we do not hand-write them. MIT.
+lsp-types = "0.97"
 globset = "0.4"
 ignore = "0.4"
 insta = "1.49"
