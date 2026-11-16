@@ -86,9 +86,9 @@
 - [x] Checkout / fetch — checkout saves every file first and refuses when git would overwrite local changes; fetch prunes and never prompts for credentials
 
 ## 4.5 Remote code review
-- [ ] Sign in
-- [ ] PR list
-- [ ] Open PR into private refs
+- [~] Sign in — the `gh` CLI's token; no own sign-in
+- [~] PR list — popup (review requested, assigned, mine, all; search), open PRs only
+- [~] Open PR into private refs — navigation across the head; no Prune action yet
 - [ ] Inline threads
 - [ ] Comments, pending review, suggestions
 - [ ] Submit review

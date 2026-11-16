@@ -27,6 +27,7 @@ mod head_index;
 mod hierarchy;
 mod library;
 mod navigation;
+mod pulls;
 mod review;
 mod review_notes;
 mod search_popup;
@@ -37,7 +38,6 @@ mod vcs;
 use bookmarks::MnemonicPrompt;
 use branches::BranchPopup;
 use diff::{DiffSides, DiffTab};
-use dumbj_index::SearchScope;
 use dumbj_settings::ProjectState;
 use find_in_files::FindInFiles;
 use git_log::GitWindow;
@@ -111,6 +111,7 @@ enum FocusArea {
     ReviewPrompt,
     NotePrompt,
     BranchPopup,
+    PullPopup,
     GotoLine,
     Find,
     Review,
@@ -137,6 +138,9 @@ pub(crate) struct Workspace {
     note_prompt: Option<NotePrompt>,
     branch_popup: Option<BranchPopup>,
     branch_input: Entity<TextInput>,
+    pull_popup: Option<pulls::PullPopup>,
+    pull_input: Entity<TextInput>,
+    github: Option<std::sync::Arc<pulls::GitHub>>,
     note_input: Entity<TextInput>,
     find: Entity<TextInput>,
     find_open: bool,
@@ -253,6 +257,10 @@ impl Workspace {
         let on_branch_changed = cx.subscribe(&branch_input, |this, _, _: &TextChanged, cx| {
             this.branch_query_changed(cx);
         });
+        let pull_input = cx.new(|cx| TextInput::new("Search pull requests", cx));
+        let on_pull_changed = cx.subscribe(&pull_input, |this, _, _: &TextChanged, cx| {
+            this.load_pulls(true, cx);
+        });
         let find_query = cx.new(|cx| TextInput::new("Text to find", cx));
         let find_mask = cx.new(|cx| TextInput::new("*.java, *.kt, !*.test.kt", cx));
         let on_find_in_files_changed = [&find_query, &find_mask].map(|input| {
@@ -283,6 +291,9 @@ impl Workspace {
             note_prompt: None,
             branch_popup: None,
             branch_input,
+            pull_popup: None,
+            pull_input,
+            github: None,
             note_input: cx.new(|cx| TextInput::new("Note", cx)),
             find,
             find_open: false,
@@ -324,6 +335,7 @@ impl Workspace {
                 on_search_changed,
                 on_review_changed,
                 on_branch_changed,
+                on_pull_changed,
             ]
             .into_iter()
             .chain(on_find_in_files_changed)
@@ -368,6 +380,8 @@ impl Workspace {
             FocusArea::NotePrompt
         } else if self.branch_popup.is_some() {
             FocusArea::BranchPopup
+        } else if self.pull_popup.is_some() {
+            FocusArea::PullPopup
         } else if self.goto_line_open && self.goto_line.read(cx).focus_handle().is_focused(window) {
             FocusArea::GotoLine
         } else if self.find_open && self.find.read(cx).focus_handle().is_focused(window) {
@@ -419,6 +433,7 @@ impl Workspace {
         window.focus(&handle, cx);
         self.index = None;
         self.head_index = None;
+        self.github = None;
         self.start_indexing(root.clone(), cx);
         self.load_project_state(root.clone(), cx);
         self.start_jar_indexing(cx);
@@ -633,7 +648,10 @@ impl Workspace {
     /// shortcut falls through to text input.
     /// Whether one of the git popups (review range, note, branches) is open.
     fn vcs_popup_open(&self) -> bool {
-        self.review_prompt.is_some() || self.note_prompt.is_some() || self.branch_popup.is_some()
+        self.review_prompt.is_some()
+            || self.note_prompt.is_some()
+            || self.branch_popup.is_some()
+            || self.pull_popup.is_some()
     }
 
     fn is_enabled(&self, action: Action, window: &Window, cx: &App) -> bool {
@@ -706,9 +724,11 @@ impl Workspace {
             Action::NextDiff | Action::PreviousDiff | Action::FocusOppositeDiffPane => {
                 self.active_diff().is_some() && !popup_open
             }
-            Action::StartReview | Action::ActivateGitToolWindow | Action::GitBranches => {
-                self.repository.is_some() && !popup_open
-            }
+            Action::StartReview
+            | Action::ActivateGitToolWindow
+            | Action::GitBranches
+            | Action::PullRequests => self.repository.is_some() && !popup_open,
+            Action::OpenPullRequestInBrowser => self.review_pull().is_some() && !popup_open,
             Action::ActivateReviewToolWindow | Action::NextUnviewedFile => {
                 self.review.is_some() && !popup_open
             }
@@ -750,18 +770,10 @@ impl Workspace {
         tracing::debug!(%action, "perform");
         self.status_message = None;
         match action {
-            Action::SearchEverywhere => {
-                self.open_search(SearchMode::Project(SearchScope::All), window, cx);
-            }
-            Action::GotoClass => {
-                self.open_search(SearchMode::Project(SearchScope::Classes), window, cx);
-            }
-            Action::GotoFile => {
-                self.open_search(SearchMode::Project(SearchScope::Files), window, cx);
-            }
-            Action::GotoSymbol => {
-                self.open_search(SearchMode::Project(SearchScope::Symbols), window, cx);
-            }
+            Action::SearchEverywhere
+            | Action::GotoClass
+            | Action::GotoFile
+            | Action::GotoSymbol => self.open_project_search(action, window, cx),
             Action::FileStructure => self.open_file_structure(window, cx),
             Action::FindInPath => self.open_find_in_files(window, cx),
             Action::ToggleBookmark => self.toggle_bookmark(cx),
@@ -793,6 +805,9 @@ impl Workspace {
             Action::ActivateHierarchyToolWindow => self.toggle_hierarchy_window(window, cx),
             Action::ActivateGitToolWindow => self.toggle_git_window(window, cx),
             Action::GitBranches => self.open_branch_popup(window, cx),
+            Action::PullRequests | Action::OpenPullRequestInBrowser => {
+                self.pull_action(action, window, cx);
+            }
             Action::Annotate => self.toggle_annotate(cx),
             Action::ShowFileHistory | Action::ShowHistoryForSelection => {
                 self.show_file_history(action == Action::ShowHistoryForSelection, window, cx);
@@ -945,6 +960,7 @@ impl Workspace {
             FocusArea::ReviewPrompt => self.review_prompt_action(action, window, cx),
             FocusArea::NotePrompt => self.note_prompt_action(action, window, cx),
             FocusArea::BranchPopup => self.branch_popup_action(action, window, cx),
+            FocusArea::PullPopup => self.pull_popup_action(action, window, cx),
             FocusArea::Review => self.review_window_action(action, window, cx),
             FocusArea::GotoLine => match action {
                 Action::Enter => self.submit_goto_line(window, cx),
@@ -1574,6 +1590,8 @@ impl Workspace {
             Some(self.render_note_prompt(prompt, cx).into_any_element())
         } else if let Some(popup) = &self.branch_popup {
             Some(self.render_branch_popup(popup, cx).into_any_element())
+        } else if let Some(popup) = &self.pull_popup {
+            Some(self.render_pull_popup(popup, cx).into_any_element())
         } else {
             self.goto_line_open
                 .then(|| self.render_goto_line_popup(cx).into_any_element())

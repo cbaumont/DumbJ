@@ -211,6 +211,18 @@ fn neighbour(hunks: &[Hunk], line: usize, old_side: bool, forward: bool) -> Opti
     }
 }
 
+/// How a revision is shown: the private refs of a pull request read as `#7`.
+fn revision_label(revision: &str) -> String {
+    let pull = revision
+        .strip_prefix("refs/dumbj/pr/")
+        .and_then(|rest| rest.split_once('/'));
+    match pull {
+        Some((number, "head")) => format!("#{number}"),
+        Some((number, side)) => format!("#{number} {side}"),
+        None => revision.to_owned(),
+    }
+}
+
 fn file_name(path: &Path) -> String {
     path.file_name().map_or_else(
         || path.display().to_string(),
@@ -304,8 +316,13 @@ impl Workspace {
             }),
         ];
         let title = match &head {
-            Some(head) => format!("{} ({base} → {head})", file_name(&path)),
-            None => format!("{} ({base})", file_name(&path)),
+            Some(head) => format!(
+                "{} ({} → {})",
+                file_name(&path),
+                revision_label(&base),
+                revision_label(head)
+            ),
+            None => format!("{} ({})", file_name(&path), revision_label(&base)),
         };
         self.tabs.push(Tab {
             title,
@@ -581,14 +598,14 @@ impl Workspace {
         let left = pane()
             .border_r_1()
             .border_color(theme::ui(cx, UiRole::Border))
-            .child(header(diff.base.clone(), diff.left_active))
+            .child(header(revision_label(&diff.base), diff.left_active))
             .child(div().flex_1().min_h_0().child(diff.left.clone()));
         let right = pane()
             .child(
                 header(
                     diff.head
-                        .clone()
-                        .unwrap_or_else(|| "Working tree".to_owned()),
+                        .as_deref()
+                        .map_or_else(|| "Working tree".to_owned(), revision_label),
                     !diff.left_active,
                 )
                 .child(div().flex_1())
@@ -618,6 +635,14 @@ mod tests {
             hunk(HunkKind::Modified, 6..8, 9..13),
             hunk(HunkKind::Deleted, 10..14, 15..15),
         ]
+    }
+
+    #[test]
+    fn pull_request_refs_read_as_numbers() {
+        assert_eq!(revision_label("refs/dumbj/pr/12/head"), "#12");
+        assert_eq!(revision_label("refs/dumbj/pr/12/base"), "#12 base");
+        assert_eq!(revision_label("main"), "main");
+        assert_eq!(revision_label("refs/dumbj/pr/"), "refs/dumbj/pr/");
     }
 
     #[test]

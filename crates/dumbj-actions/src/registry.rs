@@ -121,6 +121,8 @@ pub enum Action {
     NextUnviewedFile,
     AddReviewNote,
     ExportReviewNotes,
+    PullRequests,
+    OpenPullRequestInBrowser,
     ActivateGitToolWindow,
     ShowFileHistory,
     ShowHistoryForSelection,
@@ -746,6 +748,18 @@ const REGISTRY: &[ActionInfo] = &[
         Action::ExportReviewNotes,
         "review.export-notes",
         "Copy Review Notes as Markdown",
+        Scope::Window,
+    ),
+    info(
+        Action::PullRequests,
+        "review.pull-requests",
+        "Pull Requests",
+        Scope::Window,
+    ),
+    info(
+        Action::OpenPullRequestInBrowser,
+        "review.open-in-browser",
+        "Open Pull Request in Browser",
         Scope::Window,
     ),
     info(

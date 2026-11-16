@@ -3,7 +3,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use dumbj_actions::Action;
-use dumbj_settings::{Review, UiRole};
+use dumbj_settings::{PullRequestRef, Review, UiRole};
 use dumbj_vcs::{Change, FileStatus, Repository};
 use gpui::{
     AppContext, Context, IntoElement, MouseButton, ScrollStrategy, Task, UniformListScrollHandle,
@@ -292,13 +292,28 @@ impl Workspace {
     }
 
     fn start_review(&mut self, text: &str, window: &mut Window, cx: &mut Context<Self>) {
+        self.begin_review(text, None, window, cx);
+    }
+
+    /// Starts the review of the range `text`; `pull` is the pull request it belongs to.
+    pub(super) fn begin_review(
+        &mut self,
+        text: &str,
+        pull: Option<PullRequestRef>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let Some(spec) = parse_spec(text) else {
             self.status_message = Some("Not a revision or range".to_owned());
             self.focus_fallback(window, cx);
             return;
         };
+        let title = pull.as_ref().map_or_else(
+            || text.trim().to_owned(),
+            |pull| format!("#{} {}", pull.number, pull.title),
+        );
         self.review = Some(ReviewWindow {
-            title: text.trim().to_owned(),
+            title,
             base: spec.base.clone(),
             spec,
             changes: Vec::new(),
@@ -319,6 +334,11 @@ impl Workspace {
         if !same {
             let spec = self.review.as_ref().map(|review| &review.spec);
             self.state.review = spec.map(|spec| Review::new(&spec.base, spec.head.as_deref()));
+        }
+        if let Some(saved) = self.state.review.as_mut()
+            && (!same || saved.pull != pull)
+        {
+            saved.pull = pull;
             self.save_project_state(cx);
         }
         self.left_tool = LeftTool::Review;

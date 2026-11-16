@@ -39,12 +39,25 @@ impl ReviewNote {
     }
 }
 
+/// The pull request a review is of.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PullRequestRef {
+    pub host: String,
+    pub owner: String,
+    pub name: String,
+    pub number: u64,
+    pub title: String,
+    pub url: String,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Review {
     pub base: String,
     /// `None` reviews the working tree.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub head: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pull: Option<PullRequestRef>,
     #[serde(default)]
     viewed: Vec<ViewedFile>,
     #[serde(default)]
@@ -57,6 +70,7 @@ impl Review {
         Self {
             base: base.to_owned(),
             head: head.map(str::to_owned),
+            pull: None,
             viewed: Vec::new(),
             notes: Vec::new(),
         }

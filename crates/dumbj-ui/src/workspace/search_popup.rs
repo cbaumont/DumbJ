@@ -294,6 +294,21 @@ impl Workspace {
         cx.notify();
     }
 
+    pub(super) fn open_project_search(
+        &mut self,
+        action: Action,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let scope = match action {
+            Action::GotoClass => SearchScope::Classes,
+            Action::GotoFile => SearchScope::Files,
+            Action::GotoSymbol => SearchScope::Symbols,
+            _ => SearchScope::All,
+        };
+        self.open_search(SearchMode::Project(scope), window, cx);
+    }
+
     pub(super) fn open_file_structure(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let file = self
             .active_index(cx)

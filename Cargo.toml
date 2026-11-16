@@ -14,6 +14,7 @@ publish = false
 dumbj-actions = { path = "crates/dumbj-actions" }
 dumbj-index = { path = "crates/dumbj-index" }
 dumbj-jars = { path = "crates/dumbj-jars" }
+dumbj-review = { path = "crates/dumbj-review" }
 dumbj-search = { path = "crates/dumbj-search" }
 dumbj-settings = { path = "crates/dumbj-settings" }
 dumbj-syntax = { path = "crates/dumbj-syntax" }
