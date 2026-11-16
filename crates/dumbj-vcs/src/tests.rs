@@ -546,3 +546,100 @@ fn changed_files_against_the_working_tree() {
         ]
     );
 }
+
+fn rev_parse(t: &TempRepo, spec: &str) -> String {
+    let out = Command::new("git")
+        .args(["rev-parse", spec])
+        .current_dir(&t.0)
+        .output()
+        .unwrap();
+    String::from_utf8(out.stdout).unwrap().trim().to_owned()
+}
+
+#[test]
+fn content_ids_at_a_revision() {
+    let t = TempRepo::new();
+    t.file("a.txt", "one\n");
+    t.file("dir/b.txt", "two\n");
+    t.commit_all();
+    t.file("a.txt", "changed\n");
+    let ids = t
+        .repo()
+        .content_ids(
+            Some("HEAD"),
+            &[
+                PathBuf::from("a.txt"),
+                PathBuf::from("missing.txt"),
+                PathBuf::from("dir/b.txt"),
+                PathBuf::from("dir"),
+            ],
+            &git::never(),
+        )
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        ids,
+        [
+            Some(rev_parse(&t, "HEAD:a.txt")),
+            None,
+            Some(rev_parse(&t, "HEAD:dir/b.txt")),
+            None,
+        ]
+    );
+    assert!(
+        t.repo()
+            .content_ids(Some("-x"), &[PathBuf::from("a.txt")], &git::never())
+            .is_err()
+    );
+}
+
+#[test]
+fn content_ids_of_the_working_tree() {
+    let t = TempRepo::new();
+    t.file("a.txt", "one\n");
+    t.file("b.txt", "two\n");
+    t.commit_all();
+    let paths = [
+        PathBuf::from("a.txt"),
+        PathBuf::from("b.txt"),
+        PathBuf::from("none.txt"),
+    ];
+    let repo = t.repo();
+    let before = repo
+        .content_ids(None, &paths, &git::never())
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        before,
+        [
+            Some(rev_parse(&t, "HEAD:a.txt")),
+            Some(rev_parse(&t, "HEAD:b.txt")),
+            None
+        ]
+    );
+    t.file("a.txt", "edited\n");
+    fs::remove_file(t.0.join("b.txt")).unwrap();
+    let after = repo
+        .content_ids(None, &paths, &git::never())
+        .unwrap()
+        .unwrap();
+    assert!(after[0].is_some());
+    assert_ne!(after[0], before[0]);
+    assert_eq!(after[1], None);
+    assert_eq!(after[2], None);
+}
+
+#[test]
+fn content_ids_of_nothing_runs_no_git() {
+    let t = TempRepo::new();
+    let repo = t.repo();
+    assert_eq!(
+        repo.content_ids(None, &[], &git::never()).unwrap(),
+        Some(vec![])
+    );
+    assert_eq!(
+        repo.content_ids(Some("no-such-revision"), &[], &git::never())
+            .unwrap(),
+        Some(vec![])
+    );
+}

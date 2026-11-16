@@ -1,6 +1,7 @@
+use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::os::unix::ffi::OsStrExt;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
 
 use crate::git;
@@ -58,6 +59,113 @@ impl Repository {
         changes.sort_by(|a, b| a.path.cmp(&b.path));
         Ok(Some(changes))
     }
+}
+
+const PATHS_PER_CALL: usize = 500;
+
+impl Repository {
+    /// The git blob id of each of `paths` (relative to the workdir), in order: in `revision`,
+    /// or of the working-tree file when `revision` is `None`. `None` for a path that does
+    /// not exist there, is not a regular file, or is not valid UTF-8. Nothing is written to
+    /// the repository. Polls `cancelled`; `Ok(None)` when cancelled.
+    pub fn content_ids(
+        &self,
+        revision: Option<&str>,
+        paths: &[PathBuf],
+        cancelled: &AtomicBool,
+    ) -> Result<Option<Vec<Option<String>>>, VcsError> {
+        if let Some(revision) = revision {
+            check_revision(revision)?;
+        }
+        let names: Vec<&str> = paths
+            .iter()
+            .filter_map(|path| path.to_str())
+            .filter(|name| revision.is_some() || self.is_regular_file(Path::new(name)))
+            .collect();
+        let mut ids: HashMap<&str, String> = HashMap::new();
+        for chunk in names.chunks(PATHS_PER_CALL) {
+            let found = match revision {
+                Some(revision) => self.tree_blobs(revision, chunk, cancelled)?,
+                None => self.hash_files(chunk, cancelled)?,
+            };
+            let Some(found) = found else {
+                return Ok(None);
+            };
+            ids.extend(found);
+        }
+        Ok(Some(
+            paths
+                .iter()
+                .map(|path| path.to_str().and_then(|name| ids.get(name).cloned()))
+                .collect(),
+        ))
+    }
+
+    fn is_regular_file(&self, relative: &Path) -> bool {
+        std::fs::symlink_metadata(self.workdir.join(relative))
+            .is_ok_and(|metadata| metadata.is_file())
+    }
+
+    fn tree_blobs<'a>(
+        &self,
+        revision: &str,
+        names: &[&'a str],
+        cancelled: &AtomicBool,
+    ) -> Result<Option<Vec<(&'a str, String)>>, VcsError> {
+        let mut args = vec!["ls-tree", "-z", revision, "--"];
+        args.extend_from_slice(names);
+        let Some(raw) = git::run(&self.workdir, &args, cancelled)? else {
+            return Ok(None);
+        };
+        let listed = parse_ls_tree(&raw);
+        Ok(Some(
+            names
+                .iter()
+                .filter_map(|&name| {
+                    listed
+                        .iter()
+                        .find(|(path, _)| *path == name)
+                        .map(|(_, id)| (name, id.clone()))
+                })
+                .collect(),
+        ))
+    }
+
+    fn hash_files<'a>(
+        &self,
+        names: &[&'a str],
+        cancelled: &AtomicBool,
+    ) -> Result<Option<Vec<(&'a str, String)>>, VcsError> {
+        let mut args = vec!["hash-object", "--"];
+        args.extend_from_slice(names);
+        let Some(raw) = git::run(&self.workdir, &args, cancelled)? else {
+            return Ok(None);
+        };
+        let text = String::from_utf8_lossy(&raw);
+        Ok(Some(
+            names
+                .iter()
+                .copied()
+                .zip(text.lines().map(|line| line.trim().to_owned()))
+                .collect(),
+        ))
+    }
+}
+
+/// Parses `git ls-tree -z` output (`<mode> <type> <id>\t<path>\0`), keeping blobs.
+fn parse_ls_tree(raw: &[u8]) -> Vec<(&str, String)> {
+    raw.split(|&b| b == 0)
+        .filter_map(|record| {
+            let tab = record.iter().position(|&b| b == b'\t')?;
+            let (meta, path) = record.split_at(tab);
+            let mut fields = std::str::from_utf8(meta).ok()?.split(' ');
+            let (_mode, kind, id) = (fields.next()?, fields.next()?, fields.next()?);
+            if kind != "blob" {
+                return None;
+            }
+            Some((std::str::from_utf8(path.get(1..)?).ok()?, id.to_owned()))
+        })
+        .collect()
 }
 
 /// Parses `git diff --name-status -z` output: a status letter record (with a similarity
@@ -132,6 +240,13 @@ mod tests {
                 c("clash", None, Modified),
             ]
         );
+    }
+
+    #[test]
+    fn ls_tree_keeps_blobs_only() {
+        let raw = b"100644 blob aaa\ta b.rs\x00040000 tree bbb\tdir\x00160000 commit ccc\tsub\0";
+        assert_eq!(parse_ls_tree(raw), [("a b.rs", "aaa".to_owned())]);
+        assert_eq!(parse_ls_tree(b""), []);
     }
 
     #[test]
