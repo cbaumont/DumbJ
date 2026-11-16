@@ -19,7 +19,7 @@ const INDENT: f32 = 16.;
 pub(crate) struct OpenFile(pub(crate) PathBuf);
 
 /// IDEA's file status colours: blue for modified, green for added, red for unversioned.
-fn status_role(status: FileStatus) -> UiRole {
+pub(crate) fn status_role(status: FileStatus) -> UiRole {
     match status {
         FileStatus::Modified | FileStatus::Renamed => UiRole::Info,
         FileStatus::Added => UiRole::Success,

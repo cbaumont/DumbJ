@@ -56,6 +56,10 @@ impl DiffTab {
         self.head.is_none()
     }
 
+    pub(super) fn compares(&self, base: &str, head: Option<&str>) -> bool {
+        self.base == base && self.head.as_deref() == head
+    }
+
     fn revision_editors(
         &self,
         right: &Entity<EditorView>,
@@ -470,14 +474,19 @@ impl Workspace {
         cx.notify();
     }
 
-    pub(super) fn go_to_difference(&mut self, forward: bool, cx: &mut Context<Self>) {
+    pub(super) fn go_to_difference(
+        &mut self,
+        forward: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let (Some(diff), Some(editor)) = (self.active_diff(), self.active_editor()) else {
             return;
         };
         let line = editor.read(cx).caret_line_column().0.saturating_sub(1);
         if let Some(target) = neighbour(&diff.hunks, line, diff.left_active, forward) {
             editor.update(cx, |editor, cx| editor.go_to(target + 1, None, cx));
-        } else {
+        } else if !self.step_review_file(forward, window, cx) {
             let edge = if forward { "last" } else { "first" };
             self.status_message = Some(format!("This is the {edge} difference"));
             cx.notify();

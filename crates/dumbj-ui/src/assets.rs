@@ -19,6 +19,7 @@ const ICONS: &[(&str, &[u8])] = icons![
     "folder",
     "folder-open",
     "folder-tree",
+    "git-compare",
     "minus",
     "search",
     "square",

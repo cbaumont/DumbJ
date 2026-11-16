@@ -58,6 +58,7 @@ impl Workspace {
                 for (editor, path) in open {
                     this.refresh_base_text(&editor, &path, cx);
                 }
+                this.refresh_review(cx);
                 cx.notify();
             });
         })

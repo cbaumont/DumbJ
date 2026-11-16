@@ -24,6 +24,7 @@ mod find_in_files;
 mod hierarchy;
 mod library;
 mod navigation;
+mod review;
 mod search_popup;
 mod state;
 mod usages;
@@ -36,6 +37,7 @@ use dumbj_settings::ProjectState;
 use find_in_files::FindInFiles;
 use hierarchy::HierarchyWindow;
 use navigation::{Chooser, Indexing, NavigationHistory};
+use review::{ReviewPrompt, ReviewWindow};
 use search_popup::{RecentKind, SearchMode, SearchPopup};
 use state::StateSave;
 use usages::FindWindow;
@@ -77,6 +79,13 @@ enum ToolWindowState {
     HiddenByHideAll,
 }
 
+/// Which tool window the left side shows.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum LeftTool {
+    Project,
+    Review,
+}
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum PendingFocus {
     Results,
@@ -90,8 +99,10 @@ enum FocusArea {
     Chooser,
     Search,
     FindInFiles,
+    ReviewPrompt,
     GotoLine,
     Find,
+    Review,
     Tree,
     Editor,
     None,
@@ -105,7 +116,13 @@ pub(crate) struct Workspace {
     project: Option<Project>,
     tabs: Vec<Tab>,
     active: Option<usize>,
+    /// Whether the left tool window is shown; `left_tool` says which one it is.
     project_window: ToolWindowState,
+    left_tool: LeftTool,
+    review: Option<ReviewWindow>,
+    review_focus: FocusHandle,
+    review_prompt: Option<ReviewPrompt>,
+    review_input: Entity<TextInput>,
     find: Entity<TextInput>,
     find_open: bool,
     goto_line: Entity<TextInput>,
@@ -209,6 +226,10 @@ impl Workspace {
         let on_search_changed = cx.subscribe(&search_input, |this, _, _: &TextChanged, cx| {
             this.run_search(cx);
         });
+        let review_input = cx.new(|cx| TextInput::new("Base revision or range", cx));
+        let on_review_changed = cx.subscribe(&review_input, |this, _, _: &TextChanged, cx| {
+            this.review_query_changed(cx);
+        });
         let find_query = cx.new(|cx| TextInput::new("Text to find", cx));
         let find_mask = cx.new(|cx| TextInput::new("*.java, *.kt, !*.test.kt", cx));
         let on_find_in_files_changed = [&find_query, &find_mask].map(|input| {
@@ -231,6 +252,11 @@ impl Workspace {
             tabs: Vec::new(),
             active: None,
             project_window: ToolWindowState::Visible,
+            left_tool: LeftTool::Project,
+            review: None,
+            review_focus: cx.focus_handle(),
+            review_prompt: None,
+            review_input,
             find,
             find_open: false,
             goto_line,
@@ -260,7 +286,7 @@ impl Workspace {
             usages_cancel: std::sync::Arc::default(),
             pending_focus: None,
             status_message: None,
-            subscriptions: [on_find_changed, on_search_changed]
+            subscriptions: [on_find_changed, on_search_changed, on_review_changed]
                 .into_iter()
                 .chain(on_find_in_files_changed)
                 .collect(),
@@ -268,7 +294,7 @@ impl Workspace {
     }
 
     fn project_window_shown(&self) -> bool {
-        self.project_window == ToolWindowState::Visible
+        self.project_window == ToolWindowState::Visible && !self.review_shown()
     }
 
     fn active_tab(&self) -> Option<&Tab> {
@@ -298,6 +324,8 @@ impl Workspace {
             FocusArea::Search
         } else if self.find_in_files.is_some() {
             FocusArea::FindInFiles
+        } else if self.review_prompt.is_some() {
+            FocusArea::ReviewPrompt
         } else if self.goto_line_open && self.goto_line.read(cx).focus_handle().is_focused(window) {
             FocusArea::GotoLine
         } else if self.find_open && self.find.read(cx).focus_handle().is_focused(window) {
@@ -308,6 +336,8 @@ impl Workspace {
             && self.hierarchy_window_focus.is_focused(window)
         {
             FocusArea::HierarchyWindow
+        } else if self.review_shown() && self.review_focus.is_focused(window) {
+            FocusArea::Review
         } else if tree_focused {
             FocusArea::Tree
         } else if editor_focused {
@@ -557,7 +587,8 @@ impl Workspace {
         let other_popup = self.goto_line_open
             || self.chooser.is_some()
             || self.find_in_files.is_some()
-            || self.mnemonic_prompt.is_some();
+            || self.mnemonic_prompt.is_some()
+            || self.review_prompt.is_some();
         let popup_open = other_popup || self.search.is_some();
         match action {
             Action::OpenFolder => !popup_open,
@@ -575,14 +606,16 @@ impl Workspace {
                 self.project.is_some()
                     && !(self.goto_line_open
                         || self.chooser.is_some()
-                        || self.find_in_files.is_some())
+                        || self.find_in_files.is_some()
+                        || self.review_prompt.is_some())
             }
             Action::FindInPath => {
                 self.project.is_some()
                     && !(self.goto_line_open
                         || self.chooser.is_some()
                         || self.search.is_some()
-                        || self.mnemonic_prompt.is_some())
+                        || self.mnemonic_prompt.is_some()
+                        || self.review_prompt.is_some())
             }
             Action::ToggleBookmark | Action::ToggleBookmarkWithMnemonic => {
                 has_editor && self.project.is_some() && !popup_open
@@ -617,6 +650,12 @@ impl Workspace {
             Action::NextDiff | Action::PreviousDiff | Action::FocusOppositeDiffPane => {
                 self.active_diff().is_some() && !popup_open
             }
+            Action::StartReview => self.repository.is_some() && !popup_open,
+            Action::ActivateReviewToolWindow => self.review.is_some() && !popup_open,
+            Action::ToggleFileViewed
+            | Action::NextUnviewedFile
+            | Action::AddReviewNote
+            | Action::ExportReviewNotes => false,
             Action::ActivateFindToolWindow => self.find_window.is_some() && !popup_open,
             Action::ActivateHierarchyToolWindow => self.hierarchy_window.is_some() && !popup_open,
             Action::Back => self.history.can_go_back() && !popup_open,
@@ -694,8 +733,10 @@ impl Workspace {
                 }
             }
             Action::NextDiff | Action::PreviousDiff => {
-                self.go_to_difference(action == Action::NextDiff, cx);
+                self.go_to_difference(action == Action::NextDiff, window, cx);
             }
+            Action::StartReview => self.open_review_prompt(window, cx),
+            Action::ActivateReviewToolWindow => self.toggle_review_window(window, cx),
             Action::FocusOppositeDiffPane => self.focus_opposite_diff_pane(window, cx),
             Action::Back => self.go_back(window, cx),
             Action::Forward => self.go_forward(window, cx),
@@ -738,6 +779,7 @@ impl Workspace {
             self.project_window = ToolWindowState::Hidden;
             self.focus_fallback(window, cx);
         } else {
+            self.left_tool = LeftTool::Project;
             self.project_window = ToolWindowState::Visible;
             window.focus(&tree_focus, cx);
         }
@@ -816,6 +858,8 @@ impl Workspace {
             FocusArea::Chooser => self.chooser_action(action, window, cx),
             FocusArea::Search => self.search_action(action, window, cx),
             FocusArea::FindInFiles => self.find_in_files_action(action, window, cx),
+            FocusArea::ReviewPrompt => self.review_prompt_action(action, window, cx),
+            FocusArea::Review => self.review_window_action(action, window, cx),
             FocusArea::GotoLine => match action {
                 Action::Enter => self.submit_goto_line(window, cx),
                 Action::Escape => {
@@ -990,48 +1034,66 @@ impl Workspace {
     }
 
     fn render_stripe(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        let active = self.project_window_shown();
-        let icon_role = if active {
-            UiRole::Text
-        } else {
-            UiRole::TextMuted
+        let button = |id: &'static str, icon: &'static str, tool: LeftTool| {
+            let active = self.project_window == ToolWindowState::Visible && self.left_tool == tool;
+            let icon_role = if active {
+                UiRole::Text
+            } else {
+                UiRole::TextMuted
+            };
+            div()
+                .id(id)
+                .size(px(30.))
+                .flex()
+                .items_center()
+                .justify_center()
+                .rounded(px(6.))
+                .when(active, |button| button.bg(theme::ui(cx, UiRole::Selected)))
+                .hover(|style| style.bg(theme::ui(cx, UiRole::Hover)))
+                .on_click(cx.listener(move |this, _, window, cx| {
+                    // A click toggles visibility regardless of focus.
+                    let shown =
+                        this.project_window == ToolWindowState::Visible && this.left_tool == tool;
+                    if shown {
+                        this.project_window = ToolWindowState::Hidden;
+                        this.focus_fallback(window, cx);
+                        cx.notify();
+                    } else {
+                        let action = match tool {
+                            LeftTool::Project => Action::ActivateProjectToolWindow,
+                            LeftTool::Review => Action::ActivateReviewToolWindow,
+                        };
+                        this.perform(action, window, cx);
+                    }
+                }))
+                .child(
+                    svg()
+                        .path(icon)
+                        .size(px(16.))
+                        .text_color(theme::ui(cx, icon_role)),
+                )
         };
-        let button = div()
-            .id("stripe-project")
-            .size(px(30.))
-            .flex()
-            .items_center()
-            .justify_center()
-            .rounded(px(6.))
-            .when(active, |button| button.bg(theme::ui(cx, UiRole::Selected)))
-            .hover(|style| style.bg(theme::ui(cx, UiRole::Hover)))
-            .on_click(cx.listener(|this, _, window, cx| {
-                // A click toggles visibility regardless of focus.
-                if this.project_window_shown() {
-                    this.project_window = ToolWindowState::Hidden;
-                    this.focus_fallback(window, cx);
-                    cx.notify();
-                } else {
-                    this.perform(Action::ActivateProjectToolWindow, window, cx);
-                }
-            }))
-            .child(
-                svg()
-                    .path("icons/folder-tree.svg")
-                    .size(px(16.))
-                    .text_color(theme::ui(cx, icon_role)),
-            );
+        let review = self
+            .review
+            .is_some()
+            .then(|| button("stripe-review", "icons/git-compare.svg", LeftTool::Review));
         div()
             .w(STRIPE_WIDTH)
             .flex_none()
             .flex()
             .flex_col()
             .items_center()
+            .gap(px(4.))
             .pt(px(6.))
             .bg(theme::ui(cx, UiRole::ChromeBackground))
             .border_r_1()
             .border_color(theme::ui(cx, UiRole::Border))
-            .child(button)
+            .child(button(
+                "stripe-project",
+                "icons/folder-tree.svg",
+                LeftTool::Project,
+            ))
+            .children(review)
     }
 
     fn render_project_window(project: &Project, cx: &mut Context<Self>) -> impl IntoElement {
@@ -1398,7 +1460,14 @@ impl Render for Workspace {
             .project
             .as_ref()
             .filter(|_| self.project_window_shown())
-            .map(|project| Self::render_project_window(project, cx).into_any_element());
+            .map(|project| Self::render_project_window(project, cx).into_any_element())
+            .or_else(|| {
+                let review = self.review.as_ref().filter(|_| self.review_shown())?;
+                Some(
+                    self.render_review_window(review, window, cx)
+                        .into_any_element(),
+                )
+            });
         let stripe = self
             .project
             .is_some()
@@ -1449,9 +1518,12 @@ impl Render for Workspace {
             ),
             (None, None, None) => match &self.mnemonic_prompt {
                 Some(prompt) => Some(self.render_mnemonic_prompt(prompt, cx).into_any_element()),
-                None => self
-                    .goto_line_open
-                    .then(|| self.render_goto_line_popup(cx).into_any_element()),
+                None => match &self.review_prompt {
+                    Some(prompt) => Some(self.render_review_prompt(prompt, cx).into_any_element()),
+                    None => self
+                        .goto_line_open
+                        .then(|| self.render_goto_line_popup(cx).into_any_element()),
+                },
             },
         };
         div()

@@ -12,7 +12,7 @@
 - [ ] Structure tool window
 - [x] Find tool window — Find Usages and Find in Files results, grouped by file
 - [ ] Git tool window
-- [ ] Review tool window
+- [~] Review tool window — local review only: the changed files of a base/head range, flat list
 - [ ] Bookmarks tool window
 - [ ] Problems tool window
 - [~] Hierarchy tool window — below the editor; no docking choice
@@ -80,8 +80,8 @@
 - [~] Change markers — added/modified/deleted against HEAD, Next/Previous Change, Rollback Lines; no marker popup with the old text
 - [ ] Git log tool window
 - [ ] Branch popup
-- [~] Diff viewer — side by side against HEAD from the Project tree, word-level highlighting, next/previous difference, ignore whitespace (mouse-only), synchronised scrolling, editable right side; no unified view, collapse unchanged or next/previous file
-- [ ] Local review mode
+- [~] Diff viewer — side by side against HEAD from the Project tree, word-level highlighting, next/previous difference, ignore whitespace (mouse-only), synchronised scrolling, editable right side, any two revisions through a review, next/previous file within a review; no unified view or collapse unchanged
+- [~] Local review mode — Start Review takes `base`, `base..head` or `base...head` (merge base) with branch suggestions; changed-file list on the left, diff on the right; F7/Shift+F7 continue into the next/previous file; no viewed tracking or notes yet
 - [ ] File history
 - [ ] Checkout / fetch
 
