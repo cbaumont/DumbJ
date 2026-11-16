@@ -30,7 +30,7 @@
 - [ ] Semantic tokens (LSP)
 - [~] Gutter — line numbers, fold markers, implements/overrides icons, bookmarks, change markers against HEAD
 - [ ] Inlay hints
-- [ ] Inline blame / Annotate
+- [~] Inline blame / Annotate — gutter column with date and author at HEAD, edited lines blank; no age colouring, no popup with the commit, no inline (end-of-line) blame
 - [x] Sticky lines
 - [ ] Indent guides, bracket matching, whitespace, right margin, soft wrap
 - [~] Code folding — no "fold all comments" action
@@ -79,11 +79,11 @@
 ## 4.4 Version control and local review
 - [~] Change markers — added/modified/deleted against HEAD, Next/Previous Change, Rollback Lines; no marker popup with the old text
 - [~] Git log tool window — graph (lanes, no compaction), ref labels, filter field (`text`, `author:`, `path:`, `branch:`, `since:`, `until:`, `lines:`), commit message and changed files, Enter opens a file's diff against the first parent; first 2000 commits; dates in UTC
-- [ ] Branch popup
+- [~] Branch popup — local and remote-tracking branches with a filter, checkout, fetch; no compare with current branch or merge base (use Start Review with `branch...`)
 - [~] Diff viewer — side by side against HEAD from the Project tree, word-level highlighting, next/previous difference, ignore whitespace (mouse-only), synchronised scrolling, editable right side, any two revisions through a review, next/previous file within a review; no unified view or collapse unchanged
 - [~] Local review mode — Start Review takes `base`, `base..head` or `base...head` (merge base) with branch suggestions; changed-file list on the left, diff on the right; F7/Shift+F7 continue into the next/previous file; viewed tracking that resets when a file's head content changes; single-line notes on a line or selection of either side, marked in the gutter, shown in the status bar and copied as Markdown; the file list is flat, not a tree, and one review is remembered per project
 - [x] File history — Show History and Show History for Selection, in the Git tool window
-- [ ] Checkout / fetch
+- [x] Checkout / fetch — checkout saves every file first and refuses when git would overwrite local changes; fetch prunes and never prompts for credentials
 
 ## 4.5 Remote code review
 - [ ] Sign in
@@ -197,7 +197,7 @@ VCS & diff
 - [x] Diff.FocusOppositePane
 - [ ] Vcs.QuickListPopupAction
 - [ ] RecentChanges
-- [ ] Annotate
+- [x] Annotate
 - [ ] CopyReference
 
 Review (DumbJ only)

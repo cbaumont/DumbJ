@@ -201,3 +201,9 @@ A diff tab shows two `EditorView`s side by side, the revision on the left (read-
 ### 2026-11-16: Local review state
 A review is a range in git's syntax (`base`, `base..head`, `base...head`); the working tree is the head when none is given. Viewed marks and notes are kept in the project state (`dumbj_settings::Review`), outside the repository, one review per project: starting a review of another range replaces it. A viewed mark stores the blob id of the file's head side (`Repository::content_ids`, which hashes working files without writing objects), so the file is unviewed again once that content changes. Notes are exported by copying Markdown to the clipboard. Why: DumbJ never writes inside the repository (BRIEF §2.5).
 
+### 2026-11-16: Checkout and fetch are the only git writes, done through the CLI
+`Repository::checkout` runs `git switch` (with `--track` for a remote-tracking branch that has no local branch yet) and `fetch` runs `git fetch --all --prune` with `GIT_TERMINAL_PROMPT=0`, so it fails rather than waits for a password. Every open file is saved, on the UI thread, before checkout starts, so git sees the user's last edit and refuses rather than overwrites; DumbJ never passes `--force` or stashes. After either, the workspace refreshes the repository, the Project tree, the open editors (from disk), the log and the index.
+
+### 2026-11-16: Annotate is read at HEAD and mapped through the change markers
+Blame runs on HEAD's version of the file (`git blame --porcelain HEAD`), not on the buffer, and each buffer line takes the annotation of the HEAD line the change hunks map it to; added and modified lines stay blank. Why: blaming the working file would need the buffer written to disk or fed through `--contents`, and the hunks are already computed for the gutter markers.
+
