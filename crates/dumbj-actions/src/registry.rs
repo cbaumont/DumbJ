@@ -111,6 +111,10 @@ pub enum Action {
     NextChange,
     PreviousChange,
     RollbackChangedLines,
+    ShowDiff,
+    NextDiff,
+    PreviousDiff,
+    FocusOppositeDiffPane,
     Escape,
 }
 
@@ -672,6 +676,30 @@ const REGISTRY: &[ActionInfo] = &[
         "vcs.rollback-lines",
         "Rollback Lines",
         Scope::Editor,
+    ),
+    info(
+        Action::ShowDiff,
+        "vcs.show-diff",
+        "Compare with the Same Repository Version",
+        Scope::Window,
+    ),
+    info(
+        Action::NextDiff,
+        "diff.next-difference",
+        "Next Difference",
+        Scope::Window,
+    ),
+    info(
+        Action::PreviousDiff,
+        "diff.previous-difference",
+        "Previous Difference",
+        Scope::Window,
+    ),
+    info(
+        Action::FocusOppositeDiffPane,
+        "diff.focus-opposite-pane",
+        "Go to Opposite Diff Pane",
+        Scope::Window,
     ),
     info(Action::Escape, "text.escape", "Escape", Scope::Text),
 ];

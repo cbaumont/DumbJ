@@ -107,4 +107,8 @@ Linux uses the `macOS For All` keymap and macOS uses IntelliJ's `Mac OS X 10.5+`
 | Next Change | `vcs.next-change` | `VcsShowNextChangeMarker` | `Ctrl+Alt+Shift+Down` | `⌃⌥⇧Down` |
 | Previous Change | `vcs.previous-change` | `VcsShowPrevChangeMarker` | `Ctrl+Alt+Shift+Up` | `⌃⌥⇧Up` |
 | Rollback Lines | `vcs.rollback-lines` | `Vcs.RollbackChangedLines` | `Ctrl+Alt+Z` | `⌥⌘Z` |
+| Compare with the Same Repository Version | `vcs.show-diff` | `Compare.SameVersion` | `Ctrl+D` | `⌘D` |
+| Next Difference | `diff.next-difference` | `NextDiff` | `F7` | `F7` |
+| Previous Difference | `diff.previous-difference` | `PreviousDiff` | `Shift+F7` | `⇧F7` |
+| Go to Opposite Diff Pane | `diff.focus-opposite-pane` | `Diff.FocusOppositePane` | `Ctrl+Tab` | `⌃⇧Tab` |
 | Escape | `text.escape` | `EditorEscape` | `Esc` | `Esc` |
