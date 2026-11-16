@@ -94,6 +94,7 @@ enum ToolWindowState {
 enum LeftTool {
     Project,
     Review,
+    Pulls,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -114,7 +115,7 @@ enum FocusArea {
     ReviewPrompt,
     NotePrompt,
     BranchPopup,
-    PullPopup,
+    PullList,
     Compose,
     GotoLine,
     Find,
@@ -142,7 +143,7 @@ pub(crate) struct Workspace {
     note_prompt: Option<NotePrompt>,
     branch_popup: Option<BranchPopup>,
     branch_input: Entity<TextInput>,
-    pull_popup: Option<pulls::PullPopup>,
+    pull_list: pulls::PullList,
     pull_input: Entity<TextInput>,
     session: pulls::Session,
     compose: Option<compose::Compose>,
@@ -297,7 +298,7 @@ impl Workspace {
             note_prompt: None,
             branch_popup: None,
             branch_input,
-            pull_popup: None,
+            pull_list: pulls::PullList::new(),
             pull_input,
             session: pulls::Session::default(),
             compose: None,
@@ -352,7 +353,7 @@ impl Workspace {
     }
 
     fn project_window_shown(&self) -> bool {
-        self.project_window == ToolWindowState::Visible && !self.review_shown()
+        self.project_window == ToolWindowState::Visible && self.left_tool == LeftTool::Project
     }
 
     fn active_tab(&self) -> Option<&Tab> {
@@ -388,10 +389,10 @@ impl Workspace {
             FocusArea::NotePrompt
         } else if self.branch_popup.is_some() {
             FocusArea::BranchPopup
-        } else if self.pull_popup.is_some() {
-            FocusArea::PullPopup
         } else if self.compose_open() {
             FocusArea::Compose
+        } else if self.pull_input.read(cx).focus_handle().is_focused(window) {
+            FocusArea::PullList
         } else if self.goto_line_open && self.goto_line.read(cx).focus_handle().is_focused(window) {
             FocusArea::GotoLine
         } else if self.find_open && self.find.read(cx).focus_handle().is_focused(window) {
@@ -661,7 +662,6 @@ impl Workspace {
         self.review_prompt.is_some()
             || self.note_prompt.is_some()
             || self.branch_popup.is_some()
-            || self.pull_popup.is_some()
             || self.compose_open()
     }
 
@@ -739,9 +739,8 @@ impl Workspace {
                 self.repository.is_some() && !popup_open
             }
             _ if action.is_pull_request_action() => self.pull_action_enabled(action, popup_open),
-            Action::ActivateReviewToolWindow | Action::NextUnviewedFile => {
-                self.review.is_some() && !popup_open
-            }
+            Action::ActivateReviewToolWindow => self.repository.is_some() && !popup_open,
+            Action::NextUnviewedFile => self.review.is_some() && !popup_open,
             Action::ToggleFileViewed => self.can_mark_viewed(window) && !popup_open,
             Action::AddReviewNote => self.can_add_note() && !popup_open,
             Action::ExportReviewNotes => self.has_review_notes() && !popup_open,
@@ -968,7 +967,7 @@ impl Workspace {
             FocusArea::ReviewPrompt => self.review_prompt_action(action, window, cx),
             FocusArea::NotePrompt => self.note_prompt_action(action, window, cx),
             FocusArea::BranchPopup => self.branch_popup_action(action, window, cx),
-            FocusArea::PullPopup => self.pull_popup_action(action, window, cx),
+            FocusArea::PullList => self.pull_list_action(action, window, cx),
             FocusArea::Compose => self.compose_action(action, window, cx),
             FocusArea::Review => self.review_window_action(action, window, cx),
             FocusArea::GotoLine => match action {
@@ -1173,6 +1172,7 @@ impl Workspace {
                         let action = match tool {
                             LeftTool::Project => Action::ActivateProjectToolWindow,
                             LeftTool::Review => Action::ActivateReviewToolWindow,
+                            LeftTool::Pulls => Action::PullRequests,
                         };
                         this.perform(action, window, cx);
                     }
@@ -1184,10 +1184,16 @@ impl Workspace {
                         .text_color(theme::ui(cx, icon_role)),
                 )
         };
-        let review = self
-            .review
-            .is_some()
-            .then(|| button("stripe-review", "icons/git-compare.svg", LeftTool::Review));
+        let review = self.repository.is_some().then(|| {
+            [
+                button("stripe-review", "icons/git-compare.svg", LeftTool::Review),
+                button(
+                    "stripe-pulls",
+                    "icons/git-pull-request.svg",
+                    LeftTool::Pulls,
+                ),
+            ]
+        });
         div()
             .w(STRIPE_WIDTH)
             .flex_none()
@@ -1204,7 +1210,20 @@ impl Workspace {
                 "icons/folder-tree.svg",
                 LeftTool::Project,
             ))
-            .children(review)
+            .children(review.into_iter().flatten())
+    }
+
+    fn render_left_window(&self, window: &Window, cx: &mut Context<Self>) -> Option<AnyElement> {
+        Some(match self.left_content() {
+            review::LeftContent::Project => {
+                Self::render_project_window(self.project.as_ref()?, cx).into_any_element()
+            }
+            review::LeftContent::Files => self
+                .render_review_window(self.review.as_ref()?, window, cx)
+                .into_any_element(),
+            review::LeftContent::NoReview => self.render_no_review(cx).into_any_element(),
+            review::LeftContent::PullList => self.render_pull_window(cx).into_any_element(),
+        })
     }
 
     fn render_project_window(project: &Project, cx: &mut Context<Self>) -> impl IntoElement {
@@ -1599,8 +1618,6 @@ impl Workspace {
             Some(self.render_note_prompt(prompt, cx).into_any_element())
         } else if let Some(popup) = &self.branch_popup {
             Some(self.render_branch_popup(popup, cx).into_any_element())
-        } else if let Some(popup) = &self.pull_popup {
-            Some(self.render_pull_popup(popup, cx).into_any_element())
         } else if let Some(compose) = &self.compose {
             Some(self.render_compose(compose, cx).into_any_element())
         } else {
@@ -1630,18 +1647,9 @@ fn resize_edge(position: Point<Pixels>, window_size: Size<Pixels>) -> Option<Res
 impl Render for Workspace {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let client_decorated = matches!(window.window_decorations(), Decorations::Client { .. });
-        let project_window = self
-            .project
-            .as_ref()
-            .filter(|_| self.project_window_shown())
-            .map(|project| Self::render_project_window(project, cx).into_any_element())
-            .or_else(|| {
-                let review = self.review.as_ref().filter(|_| self.review_shown())?;
-                Some(
-                    self.render_review_window(review, window, cx)
-                        .into_any_element(),
-                )
-            });
+        let project_window = (self.project_window == ToolWindowState::Visible)
+            .then(|| self.render_left_window(window, cx))
+            .flatten();
         let stripe = self
             .project
             .is_some()

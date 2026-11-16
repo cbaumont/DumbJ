@@ -13,10 +13,11 @@ use gpui::{
     Window, div, prelude::*, px, uniform_list,
 };
 
-use super::Workspace;
+use super::review::LeftContent;
+use super::{LeftTool, ToolWindowState, Workspace};
 use crate::theme;
 
-const ROW_HEIGHT: f32 = 26.;
+const ROW_HEIGHT: f32 = 44.;
 const DEBOUNCE: Duration = Duration::from_millis(300);
 const FILTERS: [PrFilter; 4] = [
     PrFilter::ReviewRequested,
@@ -99,45 +100,89 @@ enum Listing {
     Failed(String),
 }
 
-pub(super) struct PullPopup {
+pub(super) struct PullList {
     filter: PrFilter,
     pulls: Vec<PullRequestSummary>,
     listing: Listing,
     selected: usize,
     scroll: UniformListScrollHandle,
     task: Option<Task<()>>,
+    asked: bool,
+    /// The list is shown although a pull request is under review.
+    pub(super) browsing: bool,
 }
 
-impl Workspace {
-    fn open_pull_popup(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.repository.is_none() {
-            return;
-        }
-        self.pull_popup = Some(PullPopup {
+impl PullList {
+    pub(super) fn new() -> Self {
+        Self {
             filter: PrFilter::ReviewRequested,
             pulls: Vec::new(),
             listing: Listing::Loading,
             selected: 0,
             scroll: UniformListScrollHandle::new(),
             task: None,
-        });
-        self.pull_input
-            .update(cx, |input, cx| input.set_text("", false, cx));
-        let handle = self.pull_input.read(cx).focus_handle().clone();
-        window.focus(&handle, cx);
-        self.load_pulls(false, cx);
+            asked: false,
+            browsing: false,
+        }
+    }
+}
+
+impl Workspace {
+    fn pull_window_focused(&self, window: &Window, cx: &gpui::App) -> bool {
+        self.review_focus.is_focused(window)
+            || self.pull_input.read(cx).focus_handle().is_focused(window)
+    }
+
+    fn toggle_pull_window(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let shown =
+            self.project_window == ToolWindowState::Visible && self.left_tool == LeftTool::Pulls;
+        if shown && self.pull_window_focused(window, cx) {
+            self.project_window = ToolWindowState::Hidden;
+            self.focus_fallback(window, cx);
+        } else {
+            self.left_tool = LeftTool::Pulls;
+            self.project_window = ToolWindowState::Visible;
+            self.focus_pull_window(window, cx);
+        }
+        cx.notify();
+    }
+
+    fn focus_pull_window(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.left_content() == LeftContent::PullList {
+            let handle = self.pull_input.read(cx).focus_handle().clone();
+            window.focus(&handle, cx);
+            if !self.pull_list.asked {
+                self.load_pulls(false, cx);
+            }
+        } else {
+            let focus = self.review_focus.clone();
+            window.focus(&focus, cx);
+        }
+    }
+
+    /// Shows the list in place of the files of the pull request under review, or back.
+    pub(super) fn browse_pulls(
+        &mut self,
+        browsing: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.pull_list.browsing = browsing;
+        self.focus_pull_window(window, cx);
+        cx.notify();
     }
 
     /// Asks GitHub for the list again, after a pause when the user is typing.
     pub(super) fn load_pulls(&mut self, debounce: bool, cx: &mut Context<Self>) {
         let text = self.pull_input.read(cx).text().to_owned();
-        let (Some(repository), Some(popup)) = (self.repository.clone(), self.pull_popup.as_mut())
-        else {
+        let Some(repository) = self.repository.clone() else {
             return;
         };
-        let (filter, known) = (popup.filter, self.session.github.clone());
-        popup.listing = Listing::Loading;
-        popup.task = Some(cx.spawn(async move |this, cx| {
+        let list = &mut self.pull_list;
+        let (filter, known) = (list.filter, self.session.github.clone());
+        list.listing = Listing::Loading;
+        list.asked = true;
+        list.task = Some(cx.spawn(async move |this, cx| {
             if debounce {
                 cx.background_executor().timer(DEBOUNCE).await;
             }
@@ -155,60 +200,54 @@ impl Workspace {
                 })
                 .await;
             let _ = this.update(cx, |this, cx| {
-                let Some(popup) = this.pull_popup.as_mut() else {
-                    return;
-                };
+                let list = &mut this.pull_list;
                 match listed {
                     Ok((github, pulls)) => {
                         this.session.github = Some(github);
-                        popup.pulls = pulls;
-                        popup.listing = Listing::Loaded;
+                        list.pulls = pulls;
+                        list.listing = Listing::Loaded;
                     }
                     Err(message) => {
-                        popup.pulls.clear();
-                        popup.listing = Listing::Failed(message);
+                        list.pulls.clear();
+                        list.listing = Listing::Failed(message);
                     }
                 }
-                popup.selected = 0;
+                list.selected = 0;
                 cx.notify();
             });
         }));
         cx.notify();
     }
 
-    fn close_pull_popup(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.pull_popup = None;
-        self.focus_fallback(window, cx);
-        cx.notify();
-    }
-
-    pub(super) fn pull_popup_action(
+    pub(super) fn pull_list_action(
         &mut self,
         action: Action,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(popup) = self.pull_popup.as_mut() else {
-            return;
-        };
-        let last = popup.pulls.len().saturating_sub(1);
+        let list = &mut self.pull_list;
+        let end = list.pulls.len().saturating_sub(1);
         match action {
-            Action::MoveUp => popup.selected = popup.selected.saturating_sub(1),
-            Action::MoveDown => popup.selected = (popup.selected + 1).min(last),
-            Action::MovePageUp => popup.selected = popup.selected.saturating_sub(10),
-            Action::MovePageDown => popup.selected = (popup.selected + 10).min(last),
+            Action::MoveUp => list.selected = list.selected.saturating_sub(1),
+            Action::MoveDown => list.selected = (list.selected + 1).min(end),
+            Action::MovePageUp => list.selected = list.selected.saturating_sub(10),
+            Action::MovePageDown => list.selected = (list.selected + 10).min(end),
             Action::Tab | Action::Unindent => {
-                popup.filter = next_filter(popup.filter, action == Action::Tab);
+                list.filter = next_filter(list.filter, action == Action::Tab);
                 self.load_pulls(false, cx);
                 return;
             }
             Action::Enter => {
-                let selected = popup.selected;
+                let selected = list.selected;
                 self.accept_pull(selected, window, cx);
                 return;
             }
             Action::Escape => {
-                self.close_pull_popup(window, cx);
+                if self.review_pull().is_some() {
+                    self.browse_pulls(false, window, cx);
+                } else {
+                    self.focus_fallback(window, cx);
+                }
                 return;
             }
             _ => {
@@ -217,18 +256,14 @@ impl Workspace {
                 return;
             }
         }
-        popup
-            .scroll
-            .scroll_to_item(popup.selected, ScrollStrategy::Nearest);
+        list.scroll
+            .scroll_to_item(list.selected, ScrollStrategy::Nearest);
         cx.notify();
     }
 
     fn accept_pull(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(popup) = self.pull_popup.take() else {
-            return;
-        };
-        self.focus_fallback(window, cx);
-        if let Some(pull) = popup.pulls.into_iter().nth(index) {
+        if let Some(pull) = self.pull_list.pulls.get(index).cloned() {
+            self.pull_list.selected = index;
             self.open_pull(pull, window, cx);
         }
         cx.notify();
@@ -309,7 +344,7 @@ impl Workspace {
         cx: &mut Context<Self>,
     ) {
         match action {
-            Action::PullRequests => self.open_pull_popup(window, cx),
+            Action::PullRequests => self.toggle_pull_window(window, cx),
             Action::OpenPullRequestInBrowser => {
                 if let Some(pull) = self.review_pull() {
                     cx.open_url(&pull.url);
@@ -333,9 +368,10 @@ impl Workspace {
         let filters = FILTERS.map(|filter| {
             let active = filter == current;
             div()
-                .px(px(8.))
+                .px(px(6.))
                 .py(px(2.))
                 .rounded(px(4.))
+                .text_size(px(12.))
                 .when(active, |tab| tab.bg(theme::ui(cx, UiRole::Selected)))
                 .when(!active, |tab| {
                     tab.text_color(theme::ui(cx, UiRole::TextMuted))
@@ -344,37 +380,27 @@ impl Workspace {
                     MouseButton::Left,
                     cx.listener(move |this, _, _, cx| {
                         cx.stop_propagation();
-                        if let Some(popup) = this.pull_popup.as_mut() {
-                            popup.filter = filter;
-                        }
+                        this.pull_list.filter = filter;
                         this.load_pulls(false, cx);
                     }),
                 )
                 .child(filter_label(filter))
         });
-        div().flex().gap(px(4.)).children(filters)
+        div().flex_none().flex().gap(px(2.)).children(filters)
     }
 
-    pub(super) fn render_pull_popup(
-        &self,
-        popup: &PullPopup,
-        cx: &mut Context<Self>,
-    ) -> impl IntoElement {
-        let pulls = popup.pulls.clone();
-        #[expect(
-            clippy::cast_precision_loss,
-            reason = "a popup shows at most a dozen rows"
-        )]
-        let list_height = px(ROW_HEIGHT * pulls.len().min(14) as f32);
-        let selected = popup.selected;
-        let message = match &popup.listing {
+    pub(super) fn render_pull_window(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let list = &self.pull_list;
+        let pulls = list.pulls.clone();
+        let selected = list.selected;
+        let message = match &list.listing {
             Listing::Loading => Some("Loading…".to_owned()),
             Listing::Failed(message) => Some(message.clone()),
             Listing::Loaded if pulls.is_empty() => Some("No open pull requests".to_owned()),
             Listing::Loaded => None,
         };
-        let failed = matches!(popup.listing, Listing::Failed(_));
-        let list = uniform_list(
+        let failed = matches!(list.listing, Listing::Failed(_));
+        let rows = uniform_list(
             "pull-rows",
             pulls.len(),
             cx.processor(move |_, range: std::ops::Range<usize>, _window, cx| {
@@ -386,43 +412,53 @@ impl Workspace {
                     .collect::<Vec<_>>()
             }),
         )
-        .track_scroll(&popup.scroll)
-        .h(list_height);
-        let filters = Self::render_pull_filters(popup.filter, cx);
-        let body = div()
-            .w(px(760.))
+        .track_scroll(&list.scroll)
+        .size_full();
+        let reviewing = self.review_pull().map(|pull| {
+            div()
+                .id("pull-reviewing")
+                .flex_none()
+                .mx(px(8.))
+                .px(px(6.))
+                .py(px(2.))
+                .rounded(px(4.))
+                .truncate()
+                .text_color(theme::ui(cx, UiRole::TextMuted))
+                .hover(|style| style.bg(theme::ui(cx, UiRole::Hover)))
+                .on_click(cx.listener(|this, _, window, cx| this.browse_pulls(false, window, cx)))
+                .child(format!("‹ Back to #{} {}", pull.number, pull.title))
+        });
+        let title = div()
+            .h(px(34.))
+            .flex_none()
+            .flex()
+            .items_center()
+            .px(px(12.))
+            .text_color(theme::ui(cx, UiRole::TextMuted))
+            .child(Action::PullRequests.title());
+        div()
+            .w(super::TOOL_WINDOW_WIDTH)
+            .flex_none()
             .flex()
             .flex_col()
-            .gap(px(8.))
-            .p(px(10.))
-            .rounded(px(8.))
-            .bg(theme::ui(cx, UiRole::PopupBackground))
-            .border_1()
-            .border_color(theme::ui(cx, UiRole::PopupBorder))
-            .shadow_lg()
-            .text_color(theme::ui(cx, UiRole::Text))
+            .gap(px(6.))
+            .bg(theme::ui(cx, UiRole::PanelBackground))
+            .border_r_1()
+            .border_color(theme::ui(cx, UiRole::Border))
+            .child(title)
+            .children(reviewing)
+            .child(Self::render_pull_filters(list.filter, cx).px(px(8.)))
             .child(
                 div()
+                    .flex_none()
                     .flex()
-                    .items_center()
-                    .justify_between()
-                    .child(
-                        div()
-                            .text_color(theme::ui(cx, UiRole::TextMuted))
-                            .child(Action::PullRequests.title()),
-                    )
-                    .child(filters),
-            )
-            .child(
-                div()
-                    .flex()
+                    .mx(px(8.))
                     .px(px(8.))
                     .py(px(4.))
                     .rounded(px(4.))
                     .bg(theme::ui(cx, UiRole::InputBackground))
                     .child(self.pull_input.clone()),
             )
-            .child(list)
             .children(message.map(|message| {
                 let role = if failed {
                     UiRole::Error
@@ -430,27 +466,12 @@ impl Workspace {
                     UiRole::TextFaint
                 };
                 div()
-                    .px(px(10.))
+                    .flex_none()
+                    .px(px(12.))
                     .text_color(theme::ui(cx, role))
                     .child(message)
-            }));
-        div()
-            .id("pull-popup-layer")
-            .absolute()
-            .inset_0()
-            .flex()
-            .justify_center()
-            .pt(px(140.))
-            .occlude()
-            .on_mouse_down(
-                MouseButton::Left,
-                cx.listener(|this, _, window, cx| this.close_pull_popup(window, cx)),
-            )
-            .child(
-                div()
-                    .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                    .child(body),
-            )
+            }))
+            .child(div().flex_1().min_h_0().child(rows))
     }
 
     fn render_pull_row(
@@ -464,10 +485,9 @@ impl Workspace {
             .w_full()
             .h(px(ROW_HEIGHT))
             .flex()
-            .items_center()
-            .gap(px(10.))
-            .px(px(10.))
-            .rounded(px(4.))
+            .flex_col()
+            .justify_center()
+            .px(px(12.))
             .when(selected, |row| row.bg(theme::ui(cx, UiRole::Selected)))
             .when(!selected, |row| {
                 row.hover(|style| style.bg(theme::ui(cx, UiRole::Hover)))
@@ -481,21 +501,20 @@ impl Workspace {
             )
             .child(
                 div()
-                    .flex_none()
-                    .text_color(theme::ui(cx, UiRole::TextMuted))
-                    .child(format!("#{}", pull.number)),
+                    .flex()
+                    .gap(px(6.))
+                    .child(
+                        div()
+                            .flex_none()
+                            .text_color(theme::ui(cx, UiRole::TextMuted))
+                            .child(format!("#{}", pull.number)),
+                    )
+                    .child(div().truncate().child(pull.title.clone())),
             )
             .child(
                 div()
-                    .flex_none()
-                    .max_w(px(380.))
                     .truncate()
-                    .child(pull.title.clone()),
-            )
-            .child(
-                div()
-                    .flex_1()
-                    .truncate()
+                    .text_size(px(12.))
                     .text_color(theme::ui(cx, UiRole::TextFaint))
                     .child(detail(pull)),
             )

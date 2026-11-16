@@ -1,5 +1,8 @@
 <keymap name="DumbJ macOS" parent="Mac OS X 10.5+" version="1">
+  <action id="ActivateCommitToolWindow"/>
+  <action id="ActivateServicesToolWindow"/>
   <action id="DumbJ.ActivateReviewToolWindow">
+    <keyboard-shortcut first-keystroke="meta 0"/>
     <keyboard-shortcut first-keystroke="control alt shift Y"/>
   </action>
   <action id="DumbJ.Review.Start">
@@ -15,6 +18,7 @@
     <keyboard-shortcut first-keystroke="control alt shift M"/>
   </action>
   <action id="DumbJ.Review.PullRequests">
+    <keyboard-shortcut first-keystroke="meta 8"/>
     <keyboard-shortcut first-keystroke="control alt shift P" second-keystroke="P"/>
   </action>
   <action id="DumbJ.Review.OpenInBrowser">

@@ -192,11 +192,35 @@ fn folder(path: &Path) -> String {
         .map_or_else(String::new, |parent| parent.display().to_string())
 }
 
+/// What the left tool window shows.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum LeftContent {
+    Project,
+    /// The changed files of the review that belongs to the chosen tool window.
+    Files,
+    NoReview,
+    PullList,
+}
+
 impl Workspace {
+    pub(super) fn left_content(&self) -> LeftContent {
+        let pull = self.review_pull().is_some();
+        match self.left_tool {
+            LeftTool::Project => LeftContent::Project,
+            LeftTool::Review if self.review.is_some() && !pull => LeftContent::Files,
+            LeftTool::Review => LeftContent::NoReview,
+            LeftTool::Pulls if pull && !self.pull_list.browsing => LeftContent::Files,
+            LeftTool::Pulls => LeftContent::PullList,
+        }
+    }
+
+    /// The left side shows something that takes the review window's focus.
     pub(super) fn review_shown(&self) -> bool {
-        self.review.is_some()
-            && self.left_tool == LeftTool::Review
-            && self.project_window == ToolWindowState::Visible
+        self.project_window == ToolWindowState::Visible
+            && matches!(
+                self.left_content(),
+                LeftContent::Files | LeftContent::NoReview
+            )
     }
 
     pub(super) fn open_review_prompt(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -312,6 +336,12 @@ impl Workspace {
             || text.trim().to_owned(),
             |pull| format!("#{} {}", pull.number, pull.title),
         );
+        self.left_tool = if pull.is_some() {
+            LeftTool::Pulls
+        } else {
+            LeftTool::Review
+        };
+        self.pull_list.browsing = false;
         self.review = Some(ReviewWindow {
             title,
             base: spec.base.clone(),
@@ -343,7 +373,6 @@ impl Workspace {
         }
         self.session.pull_threads = None;
         self.load_pull_threads(cx);
-        self.left_tool = LeftTool::Review;
         self.project_window = ToolWindowState::Visible;
         let focus = self.review_focus.clone();
         window.focus(&focus, cx);
@@ -486,10 +515,9 @@ impl Workspace {
     }
 
     pub(super) fn toggle_review_window(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.review.is_none() {
-            return;
-        }
-        if self.review_shown() && self.review_focus.is_focused(window) {
+        let shown =
+            self.project_window == ToolWindowState::Visible && self.left_tool == LeftTool::Review;
+        if shown && self.review_focus.is_focused(window) {
             self.project_window = ToolWindowState::Hidden;
             self.focus_fallback(window, cx);
         } else {
@@ -578,6 +606,18 @@ impl Workspace {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if self.left_content() == LeftContent::NoReview {
+            match action {
+                Action::Enter => self.open_review_prompt(window, cx),
+                Action::Escape => self.focus_fallback(window, cx),
+                _ => {}
+            }
+            return;
+        }
+        if action == Action::Backspace && self.review_pull().is_some() {
+            self.browse_pulls(true, window, cx);
+            return;
+        }
         let Some(review) = self.review.as_mut() else {
             return;
         };
@@ -710,7 +750,21 @@ impl Workspace {
             .gap(px(8.))
             .px(px(12.))
             .text_color(theme::ui(cx, UiRole::TextMuted))
-            .child("Review")
+            .child(if self.review_pull().is_some() {
+                div()
+                    .id("review-back")
+                    .flex_none()
+                    .px(px(4.))
+                    .rounded(px(4.))
+                    .hover(|style| style.bg(theme::ui(cx, UiRole::Hover)))
+                    .on_click(
+                        cx.listener(|this, _, window, cx| this.browse_pulls(true, window, cx)),
+                    )
+                    .child("‹")
+                    .into_any_element()
+            } else {
+                "Review".into_any_element()
+            })
             .child(
                 div()
                     .truncate()
@@ -748,6 +802,57 @@ impl Workspace {
             .border_color(theme::ui(cx, UiRole::Border))
             .child(title)
             .child(div().flex_1().min_h_0().child(rows))
+    }
+
+    pub(super) fn render_no_review(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let title = Action::StartReview.title();
+        let hint = self.shortcut(Action::StartReview).map_or_else(
+            || title.to_owned(),
+            |shortcut| format!("{title} ({shortcut})"),
+        );
+        div()
+            .track_focus(&self.review_focus)
+            .w(super::TOOL_WINDOW_WIDTH)
+            .flex_none()
+            .flex()
+            .flex_col()
+            .bg(theme::ui(cx, UiRole::PanelBackground))
+            .border_r_1()
+            .border_color(theme::ui(cx, UiRole::Border))
+            .child(
+                div()
+                    .h(px(34.))
+                    .flex_none()
+                    .flex()
+                    .items_center()
+                    .px(px(12.))
+                    .text_color(theme::ui(cx, UiRole::TextMuted))
+                    .child("Review"),
+            )
+            .child(
+                div()
+                    .px(px(12.))
+                    .flex()
+                    .flex_col()
+                    .items_start()
+                    .gap(px(8.))
+                    .text_color(theme::ui(cx, UiRole::TextFaint))
+                    .child("No local review in progress.")
+                    .child(
+                        div()
+                            .id("review-start")
+                            .px(px(8.))
+                            .py(px(2.))
+                            .rounded(px(4.))
+                            .bg(theme::ui(cx, UiRole::Selected))
+                            .text_color(theme::ui(cx, UiRole::Text))
+                            .hover(|style| style.bg(theme::ui(cx, UiRole::Hover)))
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                this.open_review_prompt(window, cx);
+                            }))
+                            .child(hint),
+                    ),
+            )
     }
 
     fn render_review_prompt_row(

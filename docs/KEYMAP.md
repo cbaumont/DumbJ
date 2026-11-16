@@ -111,13 +111,13 @@ Linux uses the `DumbJ` keymap (IntelliJ's `macOS For All` plus DumbJ's own actio
 | Next Difference | `diff.next-difference` | `NextDiff` | `F7` | `F7` |
 | Previous Difference | `diff.previous-difference` | `PreviousDiff` | `Shift+F7` | `⇧F7` |
 | Go to Opposite Diff Pane | `diff.focus-opposite-pane` | `Diff.FocusOppositePane` | `Ctrl+Tab` | `⌃⇧Tab` |
-| Review | `tool-window.review` | `DumbJ.ActivateReviewToolWindow` | `Ctrl+Alt+Shift+Y` | `⌃⌥⇧Y` |
+| Review | `tool-window.review` | `DumbJ.ActivateReviewToolWindow` | `Alt+0` / `Ctrl+Alt+Shift+Y` | `⌘0` / `⌃⌥⇧Y` |
 | Start Review | `review.start` | `DumbJ.Review.Start` | `Ctrl+Alt+Shift+K` | `⌃⌥⇧K` |
 | Toggle File Viewed | `review.toggle-viewed` | `DumbJ.Review.ToggleFileViewed` | `Ctrl+Alt+Shift+U` | `⌃⌥⇧U` |
 | Next Unviewed File | `review.next-unviewed` | `DumbJ.Review.NextUnviewedFile` | `Ctrl+Alt+Shift+X` | `⌃⌥⇧X` |
 | Add Review Note | `review.add-note` | `DumbJ.Review.AddNote` | `Ctrl+Alt+Shift+M` | `⌃⌥⇧M` |
 | Copy Review Notes as Markdown | `review.export-notes` | `DumbJ.Review.ExportNotes` | — | — |
-| Pull Requests | `review.pull-requests` | `DumbJ.Review.PullRequests` | `Ctrl+Alt+Shift+P, P` | `⌃⌥⇧P, P` |
+| Pull Requests | `review.pull-requests` | `DumbJ.Review.PullRequests` | `Alt+8` / `Ctrl+Alt+Shift+P, P` | `⌘8` / `⌃⌥⇧P, P` |
 | Open Pull Request in Browser | `review.open-in-browser` | `DumbJ.Review.OpenInBrowser` | `Ctrl+Alt+Shift+P, O` | `⌃⌥⇧P, O` |
 | Next Comment Thread | `review.next-thread` | `DumbJ.Review.NextThread` | `Ctrl+Alt+Shift+P, N` | `⌃⌥⇧P, N` |
 | Previous Comment Thread | `review.previous-thread` | `DumbJ.Review.PreviousThread` | `Ctrl+Alt+Shift+P, B` | `⌃⌥⇧P, B` |

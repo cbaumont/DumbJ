@@ -87,7 +87,7 @@
 
 ## 4.5 Remote code review
 - [~] Sign in — the `gh` CLI's token; no own sign-in
-- [~] PR list — popup (review requested, assigned, mine, all; search), open PRs only, first 50
+- [~] PR list — Pull Requests tool window (review requested, assigned, mine, all; search), open PRs only, first 50
 - [x] Open PR into private refs — navigation across the whole head from git objects; Prune Review Refs
 - [~] Inline threads — folded/expanded blocks in the diff, resolved/outdated/pending state, next/previous; Markdown not rendered
 - [x] Comments, pending review, suggestions — line or range, reply, resolve/unresolve, suggestion block from the selected lines
