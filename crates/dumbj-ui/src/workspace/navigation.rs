@@ -207,6 +207,7 @@ impl Workspace {
                         this.refresh_gutter_icons(&editor, &path, cx);
                     }
                     this.index_revision_editors(cx);
+                    this.build_head_index(cx);
                 }
                 this.indexing = None;
                 cx.notify();
@@ -313,7 +314,7 @@ impl Workspace {
     }
 
     pub(super) fn goto_declaration(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let (Some(index), Some(editor)) = (self.index.clone(), self.active_editor()) else {
+        let (Some(index), Some(editor)) = (self.active_index(cx), self.active_editor()) else {
             return;
         };
         let resolution = editor.read(cx).resolve_at_caret(&index);

@@ -296,10 +296,9 @@ impl Workspace {
 
     pub(super) fn open_file_structure(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let file = self
-            .index
-            .as_ref()
-            .zip(self.active_tab())
-            .and_then(|(index, tab)| index.file_by_path(&tab.path));
+            .active_index(cx)
+            .zip(self.active_editor())
+            .and_then(|(index, editor)| index.file_by_path(editor.read(cx).path()));
         if let Some(file) = file {
             self.open_search(SearchMode::Structure(file), window, cx);
         }
@@ -326,7 +325,7 @@ impl Workspace {
             self.run_recent_search(kind, cx);
             return;
         }
-        let (Some(index), Some(popup)) = (self.index.clone(), self.search.as_mut()) else {
+        let (Some(index), Some(popup)) = (self.active_index(cx), self.search.as_mut()) else {
             return;
         };
         popup.cancel.store(true, Ordering::Relaxed);

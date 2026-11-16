@@ -57,6 +57,7 @@ struct Loaded {
     changes: Vec<Change>,
     /// What each changed file holds on the head side, to notice when it changes again.
     fingerprints: Vec<String>,
+    head_commit: Option<String>,
 }
 
 fn load(
@@ -70,9 +71,15 @@ fn load(
         Err(error) => Err(error.to_string()),
     };
     known(&spec.base)?;
-    if let Some(head) = &spec.head {
-        known(head)?;
-    }
+    let head_commit = match &spec.head {
+        Some(head) => Some(
+            repository
+                .resolve(head)
+                .map_err(|error| error.to_string())?
+                .ok_or_else(|| format!("Unknown revision: {head}"))?,
+        ),
+        None => None,
+    };
     let base = if spec.merge_base {
         let head = spec.head.as_deref().unwrap_or("HEAD");
         let id = repository
@@ -96,6 +103,7 @@ fn load(
     Ok(ids.map(|ids| Loaded {
         base,
         changes,
+        head_commit,
         fingerprints: ids
             .into_iter()
             .map(|id| id.unwrap_or_else(|| "deleted".to_owned()))
@@ -411,6 +419,10 @@ impl Workspace {
                 review.changes = loaded.changes;
                 review.fingerprints = loaded.fingerprints;
                 review.loading = false;
+                match (review.spec.head.clone(), loaded.head_commit) {
+                    (Some(head), Some(commit)) => self.index_head(&head, &commit, cx),
+                    _ => self.drop_head_index(),
+                }
             }
             Ok(None) => {}
             Err(message) => {
@@ -418,6 +430,7 @@ impl Workspace {
                 self.status_message = Some(message);
                 if review.loading {
                     self.review = None;
+                    self.head_index = None;
                     self.left_tool = LeftTool::Project;
                 } else {
                     review.changes.clear();

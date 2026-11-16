@@ -272,8 +272,12 @@ impl Workspace {
         } = sides;
         let right = match &head {
             Some(head) => {
-                let (path, repository, head) = (path.clone(), repository.clone(), head.clone());
-                let right = cx.new(|cx| EditorView::open_revision(path, repository, head, cx));
+                let right = if let Some(at_head) = self.head_path(head, &path) {
+                    cx.new(|cx| EditorView::open(at_head, cx))
+                } else {
+                    let (path, repository, head) = (path.clone(), repository.clone(), head.clone());
+                    cx.new(|cx| EditorView::open_revision(path, repository, head, cx))
+                };
                 self.subscribe_revision_editor(&right, window, cx);
                 right
             }
@@ -331,7 +335,7 @@ impl Workspace {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if let Some(index) = self.index.clone() {
+        if let Some(index) = self.index_for(editor.read(cx).path()) {
             editor.update(cx, |editor, cx| editor.set_index(index, cx));
         }
         self.subscriptions.push(cx.subscribe_in(
@@ -346,16 +350,21 @@ impl Workspace {
     }
 
     pub(super) fn index_revision_editors(&self, cx: &mut Context<Self>) {
-        let Some(index) = &self.index else { return };
-        let editors: Vec<_> = self
+        let in_diffs = self
             .tabs
             .iter()
             .filter_map(|tab| Some(tab.diff.as_ref()?.revision_editors(&tab.editor)))
-            .flatten()
-            .collect();
+            .flatten();
+        let at_revisions = self
+            .tabs
+            .iter()
+            .filter(|tab| dumbj_vcs::split_revision_path(&tab.path).is_some())
+            .map(|tab| tab.editor.clone());
+        let editors: Vec<_> = in_diffs.chain(at_revisions).collect();
         for editor in editors {
-            let index = index.clone();
-            editor.update(cx, |editor, cx| editor.set_index(index, cx));
+            if let Some(index) = self.index_for(editor.read(cx).path()) {
+                editor.update(cx, |editor, cx| editor.set_index(index, cx));
+            }
         }
     }
 

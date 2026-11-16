@@ -151,7 +151,7 @@ impl Workspace {
     /// Searches for the usages of the symbol at the caret in the background, then shows
     /// them in a popup (`in_popup`) or in the Find tool window.
     pub(super) fn find_usages(&mut self, in_popup: bool, cx: &mut Context<Self>) {
-        let (Some(index), Some(editor)) = (self.index.clone(), self.active_editor()) else {
+        let (Some(index), Some(editor)) = (self.active_index(cx), self.active_editor()) else {
             return;
         };
         let editor = editor.read(cx);

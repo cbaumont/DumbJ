@@ -23,6 +23,7 @@ mod diff;
 mod editing;
 mod find_in_files;
 mod git_log;
+mod head_index;
 mod hierarchy;
 mod library;
 mod navigation;
@@ -143,6 +144,7 @@ pub(crate) struct Workspace {
     goto_line_open: bool,
     /// The symbol index; `None` until the first indexing run has finished.
     index: Option<std::sync::Arc<dumbj_index::Index>>,
+    head_index: Option<head_index::HeadIndex>,
     jars: Option<std::sync::Arc<dumbj_jars::JarIndex>>,
     indexing: Option<Indexing>,
     index_refresh: Option<Task<()>>,
@@ -287,6 +289,7 @@ impl Workspace {
             goto_line,
             goto_line_open: false,
             index: None,
+            head_index: None,
             jars: None,
             indexing: None,
             index_refresh: None,
@@ -415,6 +418,7 @@ impl Workspace {
         let handle = tree.read(cx).focus_handle().clone();
         window.focus(&handle, cx);
         self.index = None;
+        self.head_index = None;
         self.start_indexing(root.clone(), cx);
         self.load_project_state(root.clone(), cx);
         self.start_jar_indexing(cx);
@@ -432,10 +436,14 @@ impl Workspace {
             .iter()
             .position(|tab| tab.path == path && tab.diff.is_none())
             .unwrap_or_else(|| {
-                let title = path.file_name().map_or_else(
+                let mut title = path.file_name().map_or_else(
                     || path.display().to_string(),
                     |name| name.to_string_lossy().into_owned(),
                 );
+                if let Some((_, commit, _)) = dumbj_vcs::split_revision_path(&path) {
+                    let short: String = commit.chars().take(7).collect();
+                    title = format!("{title} @{short}");
+                }
                 let editor = self.editor_for(&path, window, cx);
                 self.tabs.push(Tab {
                     path,
@@ -1431,6 +1439,7 @@ impl Workspace {
         right.extend(self.status_message.clone());
         right.extend(self.note_at_caret(cx));
         right.extend(self.index_status());
+        right.extend(self.head_index_status());
         right.extend(self.branch.clone());
         if let Some(editor) = self.active_editor() {
             let editor = editor.read(cx);

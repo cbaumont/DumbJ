@@ -51,6 +51,8 @@ struct Row {
 
 pub(super) struct HierarchyWindow {
     kind: HierarchyKind,
+    /// The index the rows' symbols belong to.
+    index: Arc<Index>,
     title: String,
     rows: Vec<Row>,
     selected: usize,
@@ -234,7 +236,7 @@ fn insert_children(rows: &mut Vec<Row>, row: usize, children: Vec<Row>) {
 
 impl Workspace {
     fn symbol_at_caret(&self, cx: &Context<Self>) -> Option<(Arc<Index>, SymbolId)> {
-        let index = self.index.clone()?;
+        let index = self.active_index(cx)?;
         let target = self
             .active_editor()?
             .read(cx)
@@ -320,7 +322,7 @@ impl Workspace {
         path: &Path,
         cx: &mut Context<Self>,
     ) {
-        let Some(index) = self.index.clone() else {
+        let Some(index) = self.index_for(path) else {
             return;
         };
         editor.update(cx, |editor, cx| editor.set_index(index.clone(), cx));
@@ -355,7 +357,7 @@ impl Workspace {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(index) = self.index.clone() else {
+        let Some(index) = self.active_index(cx) else {
             return;
         };
         let name = index.qualified_name(icon.symbol);
@@ -394,6 +396,7 @@ impl Workspace {
         let selected = rows.iter().position(|row| row.emphasised).unwrap_or(0);
         self.show_hierarchy(
             HierarchyKind::Type,
+            index.clone(),
             &index.qualified_name(owner),
             rows,
             selected,
@@ -417,6 +420,7 @@ impl Workspace {
         root.emphasised = true;
         self.show_hierarchy(
             HierarchyKind::Calls,
+            index.clone(),
             &index.qualified_name(id),
             vec![root],
             0,
@@ -428,6 +432,7 @@ impl Workspace {
     fn show_hierarchy(
         &mut self,
         kind: HierarchyKind,
+        index: Arc<Index>,
         name: &str,
         rows: Vec<Row>,
         selected: usize,
@@ -441,6 +446,7 @@ impl Workspace {
         scroll.scroll_to_item(selected, ScrollStrategy::Center);
         self.hierarchy_window = Some(HierarchyWindow {
             kind,
+            index,
             title,
             rows,
             selected,
@@ -453,10 +459,10 @@ impl Workspace {
     }
 
     fn expand_hierarchy_row(&mut self, row: usize, cx: &mut Context<Self>) {
-        let (Some(index), Some(hierarchy)) = (self.index.clone(), self.hierarchy_window.as_mut())
-        else {
+        let Some(hierarchy) = self.hierarchy_window.as_mut() else {
             return;
         };
+        let index = hierarchy.index.clone();
         let Some(target) = hierarchy.rows.get_mut(row) else {
             return;
         };

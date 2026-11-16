@@ -87,6 +87,15 @@ fn load(
             .map_err(|error| error.to_string())?
             .unwrap_or_default();
         (text.into_bytes(), None)
+    } else if let Some((workdir, commit, relative)) = dumbj_vcs::split_revision_path(path) {
+        let text = dumbj_vcs::Repository::discover(&workdir)
+            .and_then(|repository| match repository {
+                Some(repository) => repository.text_at(&commit, &relative),
+                None => Ok(None),
+            })
+            .map_err(|error| error.to_string())?
+            .unwrap_or_default();
+        (text.into_bytes(), None)
     } else if dumbj_jars::is_virtual_path(path) {
         let text = dumbj_jars::read_virtual(path).map_err(|error| error.to_string())?;
         (text.into_bytes(), None)
@@ -618,6 +627,10 @@ impl EditorView {
             .iter()
             .find(|icon| buffer.point_at(icon.offset).line.get() == line)
             .copied()
+    }
+
+    pub(crate) fn path(&self) -> &Path {
+        &self.path
     }
 
     pub(crate) fn caret_offset(&self) -> ByteOffset {

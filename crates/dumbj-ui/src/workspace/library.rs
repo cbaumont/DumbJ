@@ -112,7 +112,7 @@ impl Workspace {
             return;
         };
         let handle = window.window_handle();
-        let index = self.index.clone();
+        let index = self.active_index(cx);
         cx.spawn(async move |this, cx| {
             let found: Vec<Found> = cx
                 .background_spawn(async move {
