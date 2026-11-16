@@ -21,6 +21,7 @@ mod bookmarks;
 mod diff;
 mod editing;
 mod find_in_files;
+mod git_log;
 mod hierarchy;
 mod library;
 mod navigation;
@@ -36,6 +37,7 @@ use diff::{DiffSides, DiffTab};
 use dumbj_index::SearchScope;
 use dumbj_settings::ProjectState;
 use find_in_files::FindInFiles;
+use git_log::GitWindow;
 use hierarchy::HierarchyWindow;
 use navigation::{Chooser, Indexing, NavigationHistory};
 use review::{ReviewPrompt, ReviewWindow};
@@ -98,6 +100,8 @@ enum PendingFocus {
 enum FocusArea {
     FindWindow,
     HierarchyWindow,
+    Git,
+    GitFilter,
     Chooser,
     Search,
     FindInFiles,
@@ -154,6 +158,9 @@ pub(crate) struct Workspace {
     find_window: Option<FindWindow>,
     find_window_focus: FocusHandle,
     hierarchy_window: Option<HierarchyWindow>,
+    git_window: Option<GitWindow>,
+    git_focus: FocusHandle,
+    git_filter: Entity<TextInput>,
     hierarchy_window_focus: FocusHandle,
     usages_cancel: std::sync::Arc<std::sync::atomic::AtomicBool>,
     /// Results that arrived since the last render; it moves focus to them.
@@ -288,6 +295,11 @@ impl Workspace {
             find_window: None,
             find_window_focus: cx.focus_handle(),
             hierarchy_window: None,
+            git_window: None,
+            git_focus: cx.focus_handle(),
+            git_filter: cx.new(|cx| {
+                TextInput::new("Filter: text  author:  path:  branch:  since:  until:", cx)
+            }),
             hierarchy_window_focus: cx.focus_handle(),
 
             usages_cancel: std::sync::Arc::default(),
@@ -341,6 +353,10 @@ impl Workspace {
             FocusArea::Find
         } else if find_window_shown && self.find_window_focus.is_focused(window) {
             FocusArea::FindWindow
+        } else if self.git_filter_focused(window, cx) {
+            FocusArea::GitFilter
+        } else if self.git_window_focused(window) {
+            FocusArea::Git
         } else if self.hierarchy_window.as_ref().is_some_and(|h| h.visible)
             && self.hierarchy_window_focus.is_focused(window)
         {
@@ -662,7 +678,9 @@ impl Workspace {
             Action::NextDiff | Action::PreviousDiff | Action::FocusOppositeDiffPane => {
                 self.active_diff().is_some() && !popup_open
             }
-            Action::StartReview => self.repository.is_some() && !popup_open,
+            Action::StartReview | Action::ActivateGitToolWindow => {
+                self.repository.is_some() && !popup_open
+            }
             Action::ActivateReviewToolWindow | Action::NextUnviewedFile => {
                 self.review.is_some() && !popup_open
             }
@@ -671,6 +689,12 @@ impl Workspace {
             Action::ExportReviewNotes => self.has_review_notes() && !popup_open,
             Action::ActivateFindToolWindow => self.find_window.is_some() && !popup_open,
             Action::ActivateHierarchyToolWindow => self.hierarchy_window.is_some() && !popup_open,
+            Action::ShowFileHistory | Action::ShowHistoryForSelection => {
+                !popup_open
+                    && self.repository.is_some()
+                    && self.active_tab().is_some_and(Tab::shows_working_file)
+            }
+            Action::Find if self.focus_area(window, cx) == FocusArea::Git => !popup_open,
             Action::Back => self.history.can_go_back() && !popup_open,
             Action::Forward => self.history.can_go_forward() && !popup_open,
             Action::FindNext | Action::FindPrevious => {
@@ -739,6 +763,13 @@ impl Workspace {
             Action::TypeHierarchy => self.type_hierarchy(cx),
             Action::CallHierarchy => self.call_hierarchy(cx),
             Action::ActivateHierarchyToolWindow => self.toggle_hierarchy_window(window, cx),
+            Action::ActivateGitToolWindow => self.toggle_git_window(window, cx),
+            Action::ShowFileHistory | Action::ShowHistoryForSelection => {
+                self.show_file_history(action == Action::ShowHistoryForSelection, window, cx);
+            }
+            Action::Find if self.focus_area(window, cx) == FocusArea::Git => {
+                self.focus_git_filter(window, cx);
+            }
             Action::GotoDeclaration => self.goto_declaration(window, cx),
             Action::ShowDiff => {
                 if let Some(path) = self.diff_target(cx) {
@@ -806,12 +837,16 @@ impl Workspace {
     fn hide_all_tool_windows(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let hiding = self.project_window == ToolWindowState::Visible
             || self.find_window.as_ref().is_some_and(|find| find.visible)
-            || self.hierarchy_window.as_ref().is_some_and(|h| h.visible);
+            || self.hierarchy_window.as_ref().is_some_and(|h| h.visible)
+            || self.git_window.as_ref().is_some_and(|git| git.visible);
         let bottom = [
             self.find_window
                 .as_mut()
                 .map(|w| (&mut w.visible, &mut w.hidden_by_hide_all)),
             self.hierarchy_window
+                .as_mut()
+                .map(|w| (&mut w.visible, &mut w.hidden_by_hide_all)),
+            self.git_window
                 .as_mut()
                 .map(|w| (&mut w.visible, &mut w.hidden_by_hide_all)),
         ];
@@ -872,6 +907,8 @@ impl Workspace {
         match self.focus_area(window, cx) {
             FocusArea::FindWindow => self.find_window_action(action, window, cx),
             FocusArea::HierarchyWindow => self.hierarchy_window_action(action, window, cx),
+            FocusArea::Git => self.git_window_action(action, window, cx),
+            FocusArea::GitFilter => self.git_filter_action(action, window, cx),
             FocusArea::Chooser => self.chooser_action(action, window, cx),
             FocusArea::Search => self.search_action(action, window, cx),
             FocusArea::FindInFiles => self.find_in_files_action(action, window, cx),
@@ -1456,6 +1493,28 @@ impl Workspace {
 }
 
 impl Workspace {
+    fn render_bottom_windows(&self, window: &Window, cx: &mut Context<Self>) -> Vec<AnyElement> {
+        let hierarchy = self
+            .hierarchy_window
+            .as_ref()
+            .filter(|h| h.visible)
+            .map(|h| {
+                self.render_hierarchy_window(h, window, cx)
+                    .into_any_element()
+            });
+        let git = self
+            .git_window
+            .as_ref()
+            .filter(|git| git.visible)
+            .map(|git| self.render_git_window(git, window, cx).into_any_element());
+        let find = self
+            .find_window
+            .as_ref()
+            .filter(|find| find.visible)
+            .map(|find| self.render_find_window(find, window, cx).into_any_element());
+        hierarchy.into_iter().chain(git).chain(find).collect()
+    }
+
     /// The open popup; when several are, the one that takes the keys.
     fn render_popup(&self, window: &Window, cx: &mut Context<Self>) -> Option<AnyElement> {
         if let Some(chooser) = &self.chooser {
@@ -1516,19 +1575,7 @@ impl Render for Workspace {
             .project
             .is_some()
             .then(|| self.render_stripe(cx).into_any_element());
-        let find_window = self
-            .find_window
-            .as_ref()
-            .filter(|find| find.visible)
-            .map(|find| self.render_find_window(find, window, cx).into_any_element());
-        let hierarchy_window = self
-            .hierarchy_window
-            .as_ref()
-            .filter(|h| h.visible)
-            .map(|h| {
-                self.render_hierarchy_window(h, window, cx)
-                    .into_any_element()
-            });
+        let bottom_windows = self.render_bottom_windows(window, cx);
         if let Some(pending) = self.pending_focus.take() {
             let focus = match pending {
                 PendingFocus::Hierarchy => self.hierarchy_window_focus.clone(),
@@ -1550,8 +1597,7 @@ impl Render for Workspace {
                 .flex()
                 .flex_col()
                 .child(main)
-                .children(hierarchy_window)
-                .children(find_window),
+                .children(bottom_windows),
         );
         let popup = self.render_popup(window, cx);
         div()
