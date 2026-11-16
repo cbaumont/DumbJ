@@ -40,7 +40,10 @@ impl Workspace {
                 }
             }
             EditorEvent::StatusChanged => cx.notify(),
-            EditorEvent::Synced => self.schedule_index_refresh(cx),
+            EditorEvent::Synced => {
+                self.schedule_index_refresh(cx);
+                self.refresh_repository(cx);
+            }
         }
     }
 

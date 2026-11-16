@@ -8,8 +8,8 @@ Full spec: `docs/BRIEF.md`. Where it conflicts with the Decisions in `docs/ARCHI
 M2: Git and local review (BRIEF §9, §4.4), **in progress** (started 2026-11-16). M1c (editing) was completed on 2026-11-16 and its review package posted; M1b was approved on 2026-11-15, M1a on 2026-11-15, M0 on 2026-11-14. Decisions are in `docs/ARCHITECTURE.md`. At each milestone end write the review package (summary, run instructions, test status, known gaps, screenshots) and push; the owner asked on 2026-11-15 not to be asked for approval between milestones unless strictly necessary, so then continue with the next one.
 
 ### M2 plan
-1. `dumbj-vcs` (headless): repository discovery, branch, HEAD text of a file (`gix`), statuses, line hunks (`imara-diff`). *Delegated to a subagent in a worktree; review and merge its branch when it reports.*
-2. Gutter change markers against HEAD, refreshed on edits and saves; Next/Previous Change (`VcsShowNextChangeMarker`, `VcsShowPrevChangeMarker`); Rollback Changed Lines (`Vcs.RollbackChangedLines`); branch in the status bar; git status colours in the Project tree.
+1. **Done.** `dumbj-vcs` (headless): repository discovery, branch, HEAD text of a file (`gix`), statuses, line hunks (`imara-diff`).
+2. **Done.** Gutter change markers against HEAD, refreshed on edits and saves; Next/Previous Change (`VcsShowNextChangeMarker`, `VcsShowPrevChangeMarker`); Rollback Changed Lines (`Vcs.RollbackChangedLines`); branch in the status bar; git status colours in the Project tree.
 3. Revision filesystem: read-only tabs for a file at a revision, with a revision badge.
 4. Diff viewer: side-by-side and unified, word-level highlighting, next/previous difference and file, collapse unchanged, ignore whitespace; navigation inside both sides.
 5. Local review mode: base and head pickers, changes tree, viewed tracking (reset when a file changes), local notes exported as Markdown.

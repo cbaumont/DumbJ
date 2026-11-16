@@ -1,8 +1,10 @@
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use dumbj_actions::Action;
 use dumbj_settings::UiRole;
 use dumbj_syntax::Language;
+use dumbj_vcs::FileStatus;
 use gpui::{
     Context, EventEmitter, FocusHandle, IntoElement, MouseButton, MouseDownEvent, Render,
     ScrollStrategy, UniformListScrollHandle, Window, div, prelude::*, px, svg, uniform_list,
@@ -16,12 +18,22 @@ const INDENT: f32 = 16.;
 
 pub(crate) struct OpenFile(pub(crate) PathBuf);
 
+/// IDEA's file status colours: blue for modified, green for added, red for unversioned.
+fn status_role(status: FileStatus) -> UiRole {
+    match status {
+        FileStatus::Modified | FileStatus::Renamed => UiRole::Info,
+        FileStatus::Added => UiRole::Success,
+        FileStatus::Untracked | FileStatus::Conflicted | FileStatus::Deleted => UiRole::Error,
+    }
+}
+
 pub(crate) struct FileTree {
     root: PathBuf,
     model: TreeModel,
     selected: Option<usize>,
     focus: FocusHandle,
     scroll: UniformListScrollHandle,
+    statuses: HashMap<PathBuf, FileStatus>,
 }
 
 impl EventEmitter<OpenFile> for FileTree {}
@@ -34,9 +46,22 @@ impl FileTree {
             selected: None,
             focus: cx.focus_handle(),
             scroll: UniformListScrollHandle::new(),
+            statuses: HashMap::new(),
         };
         Self::load(root, cx);
         tree
+    }
+
+    /// Sets the git status of the changed files, by absolute path, to colour their names.
+    pub(crate) fn set_statuses(
+        &mut self,
+        statuses: HashMap<PathBuf, FileStatus>,
+        cx: &mut Context<Self>,
+    ) {
+        if self.statuses != statuses {
+            self.statuses = statuses;
+            cx.notify();
+        }
     }
 
     pub(crate) fn focus_handle(&self) -> &FocusHandle {
@@ -199,7 +224,14 @@ impl FileTree {
             )
             .child(arrow)
             .child(kind)
-            .child(div().truncate().child(row.entry.name.clone()))
+            .child(
+                div()
+                    .truncate()
+                    .when_some(self.statuses.get(&row.entry.path), |name, status| {
+                        name.text_color(theme::ui(cx, status_role(*status)))
+                    })
+                    .child(row.entry.name.clone()),
+            )
     }
 }
 

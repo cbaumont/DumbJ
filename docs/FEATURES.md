@@ -7,8 +7,8 @@
 - [~] Editor tabs — open, close, next/previous; no splits or drag
 - [~] Tool windows with stripe — Project only, left side
 - [ ] Navigation bar
-- [~] Status bar — breadcrumb, line:col, language
-- [~] Project tool window — tree; no git status colours
+- [~] Status bar — breadcrumb, branch, line:col, language
+- [~] Project tool window — tree with git status colours on files; folders are not coloured
 - [ ] Structure tool window
 - [x] Find tool window — Find Usages and Find in Files results, grouped by file
 - [ ] Git tool window
@@ -28,7 +28,7 @@
 - [~] Tree-sitter highlighting — Java, Kotlin, Groovy, YAML, XML, JSON, TOML, .properties, Markdown (block level only), shell, Dockerfile, SQL
 - [~] Scope-aware highlighting (locals) — parameters and their uses; locals keep the default colour
 - [ ] Semantic tokens (LSP)
-- [~] Gutter — line numbers, fold markers, implements/overrides icons, bookmarks
+- [~] Gutter — line numbers, fold markers, implements/overrides icons, bookmarks, change markers against HEAD
 - [ ] Inlay hints
 - [ ] Inline blame / Annotate
 - [x] Sticky lines
@@ -77,6 +77,7 @@
 - [x] Accuracy benchmark — 287 cases, nightly in CI
 
 ## 4.4 Version control and local review
+- [~] Change markers — added/modified/deleted against HEAD, Next/Previous Change, Rollback Lines; no marker popup with the old text
 - [ ] Git log tool window
 - [ ] Branch popup
 - [ ] Diff viewer
@@ -187,9 +188,9 @@ Windows & tabs
 - [ ] ShowSettings
 
 VCS & diff
-- [ ] VcsShowNextChangeMarker
-- [ ] VcsShowPrevChangeMarker
-- [ ] Vcs.RollbackChangedLines
+- [x] VcsShowNextChangeMarker
+- [x] VcsShowPrevChangeMarker
+- [x] Vcs.RollbackChangedLines
 - [ ] ShowDiff
 - [ ] NextDiff
 - [ ] PreviousDiff

@@ -13,12 +13,13 @@ All crates live in `crates/`. Only `dumbj-ui` depends on GPUI; everything else i
 | `dumbj-index` | Dumb navigation, headless: immutable `Index` snapshot (files, symbols, lookup by name, FQN and package), parallel cancellable indexer, SQLite cache of per-file facts, project model (modules and source roots), Go to Declaration (`resolve`), Find Usages (`usages`), fuzzy search for Search Everywhere, Go to Class/File/Symbol and File Structure (`search`, `fuzzy`), and the dumb hierarchy (`hierarchy`: subtypes and supertypes, overriders, super members, gutter marks, callers). Example: `accuracy` (benchmark runner) | syntax, text; `ignore`, `rusqlite` |
 | `dumbj-jars` | Library sources, headless: finds source jars in the Gradle and Maven caches and the JDK's `src.zip`, indexes them by class (`JarIndex`), reads entries in place through virtual paths (`lib.jar!/pkg/Class.java`) and locates a class or member in a source | syntax, text; `ignore`, `zip` |
 | `dumbj-search` | Find in Files, headless: a parallel, cancellable line search (literal or regex, case, whole word, file mask) that honours `.gitignore` and skips binary and huge files | `ignore`, `regex`, `globset` |
+| `dumbj-vcs` | Git, headless: repository discovery, branch, HEAD id and a file's HEAD text through `gix`; changed and untracked files through `git status --porcelain=v2`; line hunks between two texts (`diff`, on `imara-diff`) | `gix`, `imara-diff` |
 | `dumbj-actions` | Action registry, IntelliJ keymap XML loader, action ID map, key dispatcher, `KEYMAP.md` generator | none |
 | `dumbj-settings` | Themes as data (palette + role mapping); per-project state (`ProjectState`: recent files, recent locations, bookmarks) and its directory; user settings later | syntax |
 | `dumbj-ui` | GPUI front end: workspace window, file tree, tabs, editor view, text input, popups, chooser, Find and Hierarchy tool windows | all of the above |
 | `dumbj-app` | The `dumbj` binary: CLI, logging, starts the UI | ui |
 
-Planned, not created yet: `dumbj-lsp`, `dumbj-vcs`, `dumbj-review`, `dumbj-platform`.
+Planned, not created yet: `dumbj-lsp`, `dumbj-review`, `dumbj-platform`.
 
 Data that ships in the binary lives at the repo root: `keymaps/` (vendored XML + `action-id-map.toml`), `themes/` (Catppuccin palettes + `roles.toml`), `assets/` (JetBrains Mono, Lucide icons). Each has a NOTICE or LICENSE naming its source and revision.
 
@@ -41,6 +42,7 @@ Inside `dumbj-ui`, logic that needs no GPUI types sits in plain modules (`editor
 - **Editing.** Typed text arrives through GPUI's input handler (`EntityInputHandler` on `EditorView`, which shows the input method only the caret's line); editing keys are actions. Both call an `EditorModel` operation, which applies the change through `dumbj_text::History` and returns the `Edit`s. The view then shifts the syntax tree (`SyntaxTree::edit`), the folds, the gutter icons and, through an `Edited` event, the project's bookmarks and recent locations, and starts a background `reparse`; the shifted tree stays in use until the new one arrives, so highlighting never drops out. Undo and redo replay the recorded changes and restore the selection.
 - **Saving.** `EditorView::save` snapshots the rope and writes it in the background with `disk::write_atomic` (temporary file, fsync, rename, directory fsync). The workspace calls it when the tab or the window loses focus and when a tab closes; the editor calls it 15 s after the last edit; quitting saves on the main thread. Only modified files are written. Each editor keeps the file's stamp (mtime and length) from its last read or write: a save that finds another stamp on disk does not write, and a check on tab or window activation reloads an unmodified file and raises the conflict bar for a modified one.
 - **Index refresh.** After a save, a reload, or the window regaining focus, the workspace reruns the indexer 300 ms later. Unchanged files come from the SQLite cache, so the run costs a directory walk plus the changed files; the old snapshot stays in use until the new one replaces it.
+- **Git status.** Opening a project, regaining window focus and every save make the workspace rediscover the repository in the background: the branch goes to the status bar, `statuses` colours the Project tree, and each open editor receives its file's HEAD text. The editor diffs its buffer against that text in the background (200 ms after typing stops) and paints the hunks as gutter change markers; Next/Previous Change and Rollback Lines work on those hunks.
 - **Search.** The find field emits `TextChanged` → the editor searches a rope snapshot in the background → matches are painted and the status shows `current/total`.
 
 ## Threading model
@@ -183,3 +185,6 @@ Typing, undo/redo, autosave, the reload prompt and index refresh on change (M1b 
 - **Files that cannot round-trip are read-only:** library sources inside jars, and files that are not valid UTF-8 (other encodings are not supported yet).
 - **Formatting follows the file:** the line ending and the indent unit are detected from the file's first 2000 lines; EditorConfig is not read yet.
 - **Index refresh reruns the cached indexer** instead of patching the snapshot. Why: the snapshot is immutable and shared with background searches, and the cache already makes a rerun proportional to what changed. The edited file's own index entry is as old as its last save.
+
+### 2026-11-16: Git status comes from the git CLI, objects from gix
+`dumbj-vcs` reads refs and blobs with `gix` (default features off, `sha1` only) and runs `git --no-optional-locks status --porcelain=v2` for the changed-file list. Why: the CLI applies ignore rules, the index and rename detection exactly as the user's git does, and `--no-optional-locks` keeps it from writing to the repository; BRIEF §3 allows the CLI where gix is weaker. `gix` adds about 60 crates and roughly doubles a clean debug build.

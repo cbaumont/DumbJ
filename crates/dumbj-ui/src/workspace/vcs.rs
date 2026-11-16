@@ -1,7 +1,9 @@
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 
-use dumbj_vcs::Repository;
+use dumbj_vcs::{FileStatus, Repository};
 use gpui::{AppContext, Context, Entity};
 
 use super::Workspace;
@@ -23,13 +25,30 @@ impl Workspace {
                         .ok()
                         .flatten()?;
                     let branch = repository.branch().ok().flatten();
-                    Some((repository, branch))
+                    let statuses: HashMap<PathBuf, FileStatus> = repository
+                        .statuses(&AtomicBool::new(false))
+                        .inspect_err(|error| tracing::warn!(%error, "cannot read the git status"))
+                        .ok()
+                        .flatten()
+                        .unwrap_or_default()
+                        .into_iter()
+                        .map(|(path, status)| (repository.workdir().join(path), status))
+                        .collect();
+                    Some((repository, branch, statuses))
                 })
                 .await;
             let _ = this.update(cx, |this, cx| {
-                let (repository, branch) = found.unzip();
+                let (repository, branch, statuses) = match found {
+                    Some((repository, branch, statuses)) => (Some(repository), branch, statuses),
+                    None => (None, None, HashMap::new()),
+                };
                 this.repository = repository;
-                this.branch = branch.flatten();
+                this.branch = branch;
+                if let Some(project) = &this.project {
+                    project
+                        .tree
+                        .update(cx, |tree, cx| tree.set_statuses(statuses, cx));
+                }
                 let open: Vec<(Entity<EditorView>, PathBuf)> = this
                     .tabs
                     .iter()
