@@ -1,0 +1,20 @@
+[package]
+name = "dumbj-vcs"
+description = "DumbJ's version-control layer: repository discovery, HEAD contents, file statuses and line diffs. Headless."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+gix.workspace = true
+imara-diff.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
+
+[lints]
+workspace = true

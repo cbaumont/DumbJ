@@ -19,8 +19,12 @@ dumbj-settings = { path = "crates/dumbj-settings" }
 dumbj-syntax = { path = "crates/dumbj-syntax" }
 dumbj-text = { path = "crates/dumbj-text" }
 dumbj-ui = { path = "crates/dumbj-ui" }
+dumbj-vcs = { path = "crates/dumbj-vcs" }
 
 anyhow = "1"
+# Object reads only: no network and no worktree status.
+gix = { version = "0.90", default-features = false, features = ["sha1"] }
+imara-diff = "0.2"
 
 globset = "0.4"
 ignore = "0.4"
