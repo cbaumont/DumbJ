@@ -1,4 +1,5 @@
 use std::fmt;
+use std::sync::Arc;
 use std::time::Duration;
 
 use serde::de::DeserializeOwned;
@@ -58,6 +59,9 @@ impl Client {
             .tls_config(
                 TlsConfig::builder()
                     .root_certs(RootCerts::PlatformVerifier)
+                    .unversioned_rustls_crypto_provider(Arc::new(
+                        rustls::crypto::ring::default_provider(),
+                    ))
                     .build(),
             )
             .build();

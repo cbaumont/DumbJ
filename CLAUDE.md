@@ -5,12 +5,12 @@ A fast, native, keyboard-first **code reading and code review editor** with Inte
 Full spec: `docs/BRIEF.md`. Where it conflicts with the Decisions in `docs/ARCHITECTURE.md`, the Decisions win. Read the sections relevant to your current task, not the whole file every time.
 
 ## Current milestone
-M3: GitHub review (BRIEF §9, §4.5), **phase 1 in progress** (started 2026-11-16). M2 (git and local review) was completed on 2026-11-16 and its review package posted; M1c was completed on 2026-11-16, M1b approved on 2026-11-15, M1a on 2026-11-15, M0 on 2026-11-14. Decisions are in `docs/ARCHITECTURE.md`. At each milestone end write the review package (summary, run instructions, test status, known gaps, screenshots) and push; the owner asked on 2026-11-15 not to be asked for approval between milestones unless strictly necessary, so then continue with the next one.
+M3: GitHub review (BRIEF §9, §4.5), **phase 3 next** (started 2026-11-16). M2 (git and local review) was completed on 2026-11-16 and its review package posted; M1c was completed on 2026-11-16, M1b approved on 2026-11-15, M1a on 2026-11-15, M0 on 2026-11-14. Decisions are in `docs/ARCHITECTURE.md`. At each milestone end write the review package (summary, run instructions, test status, known gaps, screenshots) and push; the owner asked on 2026-11-15 not to be asked for approval between milestones unless strictly necessary, so then continue with the next one.
 
 ### M3 phases
 Design: "M3 design (GitHub review)" in `docs/ARCHITECTURE.md`. Tick a phase here when it is committed.
-1. [ ] `dumbj-review`: token from `gh auth token`, remote URL → host/owner/repo, GraphQL client on `ureq`, PR list query, mock-server tests.
-2. [ ] PR refs in `dumbj-vcs` (`refs/dumbj/pr/<n>/{head,base}`, prune) and the head-revision index in `dumbj-index` with read-only revision tabs.
+1. [x] `dumbj-review`: token from `gh auth token`, remote URL → host/owner/repo, GraphQL client on `ureq`, PR list query, mock-server tests.
+2. [x] PR refs in `dumbj-vcs` (`refs/dumbj/pr/<n>/{head,base}`, prune) and the head-revision index in `dumbj-index` with read-only revision tabs.
 3. [ ] Review tool window: PR list (review requested, assigned, authored, all; search), open a PR as a review, Open PR in Browser.
 4. [ ] Threads: fetch, block rows in the editor, fold/expand, resolved and outdated state, Next/Previous Comment Thread.
 5. [ ] Writing: Add Review Comment (line or range, suggestion block), reply, resolve/unresolve, pending comments in the project state, Start/Submit Review (Comment, Approve, Request changes).
@@ -58,6 +58,7 @@ Rust comes from rustup (`~/.cargo/bin` must be on `PATH`); the toolchain is pinn
 - Regenerate KEYMAP.md: `DUMBJ_REGENERATE_KEYMAP=1 cargo nextest run -p dumbj-actions keymap_md_is_up_to_date`
 - Update highlight snapshots: `cargo insta test --accept -p dumbj-syntax`
 - Screenshot: `scripts/screenshot.sh out.png <path>` (headless sway; `SCALE`, `KEYS`, `X11=1`)
+- GitHub API check: `cargo run -p dumbj-review --example pulls -- <remote-url>` (uses the `gh` token)
 - Scroll benchmark: `DUMBJ_SCROLL_BENCHMARK=1 cargo run --release -- <file>`
 
 ## Docs (only these are maintained by hand)
