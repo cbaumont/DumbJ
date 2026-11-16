@@ -1,6 +1,10 @@
 pub mod diff;
+mod status;
 
 use std::path::{Path, PathBuf};
+use std::sync::atomic::AtomicBool;
+
+pub use status::FileStatus;
 
 #[derive(Debug, thiserror::Error)]
 pub enum VcsError {
@@ -88,6 +92,15 @@ impl Repository {
         }
         let object = entry.object().map_err(git_err)?;
         Ok(String::from_utf8(object.detach().data).ok())
+    }
+
+    /// Files that differ from HEAD (staged or not) and untracked files, as paths relative to
+    /// the workdir. Ignored files are left out. Polls `cancelled`; `Ok(None)` when cancelled.
+    pub fn statuses(
+        &self,
+        cancelled: &AtomicBool,
+    ) -> Result<Option<Vec<(PathBuf, FileStatus)>>, VcsError> {
+        status::run(&self.workdir, cancelled)
     }
 
     fn relative(&self, path: &Path) -> Option<PathBuf> {
