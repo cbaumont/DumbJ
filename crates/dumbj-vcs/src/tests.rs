@@ -398,6 +398,70 @@ fn log_limit_skip_and_commit() {
     );
 }
 
+fn commit_dated(t: &TempRepo, message: &str, date: &str) {
+    t.git(&["add", "-A"]);
+    let out = Command::new("git")
+        .args(["-c", "user.name=T", "-c", "user.email=t@example.com"])
+        .args(["-c", "commit.gpgsign=false", "commit", "-q", "-m", message])
+        .current_dir(&t.0)
+        .env("GIT_CONFIG_GLOBAL", "/dev/null")
+        .env("GIT_CONFIG_SYSTEM", "/dev/null")
+        .env("GIT_AUTHOR_DATE", date)
+        .env("GIT_COMMITTER_DATE", date)
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+}
+
+#[test]
+fn log_lists_branches_and_tags_on_commits() {
+    let t = TempRepo::new();
+    t.file("a.txt", "1\n");
+    t.commit_msg("one");
+    t.git(&["tag", "v1"]);
+    t.git(&["branch", "side"]);
+    t.file("a.txt", "2\n");
+    t.commit_msg("two");
+    let commits = log(&t, &LogOptions::default());
+    assert_eq!(commits[0].refs, ["main"]);
+    assert_eq!(commits[1].refs, ["v1", "side"]);
+    let one = t.repo().commit("v1").unwrap().unwrap();
+    assert_eq!(one.refs, ["v1", "side"]);
+    let line = LogOptions {
+        path: Some(PathBuf::from("a.txt")),
+        lines: Some(0..1),
+        ..LogOptions::default()
+    };
+    assert_eq!(subjects(&log(&t, &line)), ["two", "one"]);
+    assert_eq!(log(&t, &line)[0].refs, ["main"]);
+}
+
+#[test]
+fn log_filters_by_date() {
+    let t = TempRepo::new();
+    t.file("a.txt", "1\n");
+    commit_dated(&t, "old", "2026-01-10T12:00:00Z");
+    t.file("a.txt", "2\n");
+    commit_dated(&t, "mid", "2026-02-10T12:00:00Z");
+    t.file("a.txt", "3\n");
+    commit_dated(&t, "new", "2026-03-10T12:00:00Z");
+    let range = |since: Option<&str>, until: Option<&str>| LogOptions {
+        since: since.map(str::to_owned),
+        until: until.map(str::to_owned),
+        ..LogOptions::default()
+    };
+    let after = log(&t, &range(Some("2026-02-01"), None));
+    assert_eq!(subjects(&after), ["new", "mid"]);
+    let before = log(&t, &range(None, Some("2026-02-01")));
+    assert_eq!(subjects(&before), ["old"]);
+    let between = log(&t, &range(Some("2026-02-01"), Some("2026-03-01")));
+    assert_eq!(subjects(&between), ["mid"]);
+    let bad = range(Some("--all"), None);
+    assert!(t.repo().log(&bad, &AtomicBool::new(false)).is_err());
+    let bad = range(None, Some("-1"));
+    assert!(t.repo().log(&bad, &AtomicBool::new(false)).is_err());
+}
+
 #[test]
 fn log_follows_renames_for_a_file_and_filters_directories() {
     let t = TempRepo::new();

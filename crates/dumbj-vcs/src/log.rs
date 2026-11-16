@@ -17,6 +17,8 @@ pub struct Commit {
     /// Author time, seconds since the Unix epoch.
     pub time: i64,
     pub subject: String,
+    /// Branch and tag names pointing at the commit, in git's order.
+    pub refs: Vec<String>,
     /// The message after the subject line, trimmed; may be empty.
     pub body: String,
 }
@@ -35,12 +37,16 @@ pub struct LogOptions {
     /// Only the history of these lines of `path` (zero-based, end exclusive), as
     /// `git log -L` gives it.
     pub lines: Option<Range<usize>>,
+    /// Only commits committed after this date, in git's date syntax.
+    pub since: Option<String>,
+    /// Only commits committed before this date, in git's date syntax.
+    pub until: Option<String>,
     pub skip: usize,
     /// At most this many commits; 0 means no limit.
     pub limit: usize,
 }
 
-const FORMAT: &str = "--format=%H%x1f%P%x1f%an%x1f%ae%x1f%at%x1f%s%x1f%b";
+const FORMAT: &str = "--format=%H%x1f%P%x1f%an%x1f%ae%x1f%at%x1f%s%x1f%D%x1f%b";
 
 impl Repository {
     /// Commits newest first, in `git log` order. Polls `cancelled`; `Ok(None)` when
@@ -89,6 +95,14 @@ impl Repository {
         if options.author.is_some() || options.text.is_some() {
             args.push("--regexp-ignore-case".to_owned());
             args.push("--fixed-strings".to_owned());
+        }
+        for (flag, value) in [("since", &options.since), ("until", &options.until)] {
+            if let Some(value) = value {
+                if value.starts_with('-') {
+                    return Err(VcsError::Git(format!("invalid date {value:?}")));
+                }
+                args.push(format!("--{flag}={value}"));
+            }
         }
         if let Some(author) = &options.author {
             args.push(format!("--author={author}"));
@@ -145,7 +159,7 @@ pub(crate) fn parse_log(raw: &[u8]) -> Vec<Commit> {
     for record in raw.split(|&b| b == 0) {
         let text = String::from_utf8_lossy(record);
         let text = text.trim_start_matches('\n');
-        let mut fields = text.splitn(7, '\x1f');
+        let mut fields = text.splitn(8, '\x1f');
         let (Some(id), Some(parents), Some(author), Some(email), Some(time), Some(subject)) = (
             fields.next(),
             fields.next(),
@@ -159,6 +173,7 @@ pub(crate) fn parse_log(raw: &[u8]) -> Vec<Commit> {
         let Ok(time) = time.parse() else {
             continue;
         };
+        let refs = fields.next().map_or_default(parse_refs);
         out.push(Commit {
             id: id.to_owned(),
             parents: parents.split_whitespace().map(str::to_owned).collect(),
@@ -166,10 +181,23 @@ pub(crate) fn parse_log(raw: &[u8]) -> Vec<Commit> {
             email: email.to_owned(),
             time,
             subject: subject.to_owned(),
+            refs,
             body: fields.next().unwrap_or_default().trim().to_owned(),
         });
     }
     out
+}
+
+fn parse_refs(decoration: &str) -> Vec<String> {
+    decoration
+        .split(", ")
+        .filter_map(|entry| {
+            let name = entry.strip_prefix("HEAD -> ").unwrap_or(entry);
+            let name = name.strip_prefix("tag: ").unwrap_or(name);
+            (!name.is_empty() && name != "HEAD" && !name.ends_with("/HEAD"))
+                .then(|| name.to_owned())
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -178,13 +206,15 @@ mod tests {
 
     #[test]
     fn parses_commits_with_bodies_and_merges() {
-        let raw = "aaa\x1fbbb ccc\x1fAnn\x1fa@x\x1f1700000000\x1fMerge it\x1f\0\
-            bbb\x1f\x1fBob B\x1fb@x\x1f-5\x1fSubject\x1fFirst para.\n\nSecond line\n\n\0"
+        let raw = "aaa\x1fbbb ccc\x1fAnn\x1fa@x\x1f1700000000\x1fMerge it\x1fHEAD -> main, tag: v1, origin/HEAD, origin/main\x1f\0\
+            bbb\x1f\x1fBob B\x1fb@x\x1f-5\x1fSubject\x1f\x1fFirst para.\n\nSecond line\n\n\0"
             .as_bytes();
         let commits = parse_log(raw);
         assert_eq!(commits.len(), 2);
         assert_eq!(commits[0].parents, ["bbb", "ccc"]);
         assert_eq!(commits[0].body, "");
+        assert_eq!(commits[0].refs, ["main", "v1", "origin/main"]);
+        assert_eq!(commits[1].refs, Vec::<String>::new());
         assert_eq!(commits[0].time, 1_700_000_000);
         assert_eq!(commits[1].parents, Vec::<String>::new());
         assert_eq!(commits[1].author, "Bob B");
@@ -194,7 +224,7 @@ mod tests {
 
     #[test]
     fn a_unit_separator_in_the_body_is_kept() {
-        let raw = "a\x1f\x1fn\x1fe\x1f1\x1fs\x1fx\x1fy\0".as_bytes();
+        let raw = "a\x1f\x1fn\x1fe\x1f1\x1fs\x1f\x1fx\x1fy\0".as_bytes();
         assert_eq!(parse_log(raw)[0].body, "x\x1fy");
     }
 
