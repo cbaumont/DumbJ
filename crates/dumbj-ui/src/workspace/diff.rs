@@ -11,7 +11,9 @@ use gpui::{
 };
 
 use super::{Tab, Workspace};
-use crate::editor::{BlockClicked, ContextMenuRequested, DiffMarks, EditorView, MousePressed};
+use crate::editor::{
+    BlockClicked, ContextMenuRequested, DiffMarks, EditorView, LineActionClicked, MousePressed,
+};
 use crate::theme;
 
 const HEADER_HEIGHT: gpui::Pixels = px(26.);
@@ -367,6 +369,13 @@ impl Workspace {
             window,
             |this, _, ContextMenuRequested(position), window, cx| {
                 this.open_context_menu(*position, window, cx);
+            },
+        ));
+        self.subscriptions.push(cx.subscribe_in(
+            editor,
+            window,
+            |this, _, _: &LineActionClicked, window, cx| {
+                this.line_action_clicked(window, cx);
             },
         ));
         self.subscriptions.push(cx.subscribe_in(

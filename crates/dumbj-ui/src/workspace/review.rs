@@ -606,8 +606,32 @@ impl Workspace {
             head: review.spec.head.clone(),
         };
         self.show_diff(sides, window, cx);
+        self.offer_line_actions(cx);
         self.refresh_note_marks(cx);
         self.apply_thread_blocks(cx);
+    }
+
+    /// Lets the gutters of the active diff offer a `+` on the line under the pointer.
+    fn offer_line_actions(&self, cx: &mut Context<Self>) {
+        let Some((tab, diff)) = self
+            .active_tab()
+            .and_then(|tab| Some((tab, tab.diff.as_ref()?)))
+        else {
+            return;
+        };
+        for editor in [&tab.editor, diff.left()] {
+            editor.update(cx, |editor, cx| editor.set_line_action(true, cx));
+        }
+    }
+
+    /// A comment on a pull request's line, a note on a local review's.
+    pub(super) fn line_action_clicked(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let action = [Action::AddReviewComment, Action::AddReviewNote]
+            .into_iter()
+            .find(|action| self.is_enabled(*action, window, cx));
+        if let Some(action) = action {
+            self.perform(action, window, cx);
+        }
     }
 
     /// From a diff that belongs to the review, opens the diff of the next (or previous)

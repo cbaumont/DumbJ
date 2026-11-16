@@ -224,6 +224,16 @@ pub(crate) struct GutterIcon {
 
 pub(crate) struct GutterIconClicked(pub(crate) GutterIcon);
 
+/// The `+` the gutter offers on the line under the pointer was clicked; the caret is on
+/// that line.
+pub(crate) struct LineActionClicked;
+
+#[derive(Default)]
+struct LineAction {
+    offered: bool,
+    hover: Option<usize>,
+}
+
 /// A click on the block with this id.
 pub(crate) struct BlockClicked(pub(crate) usize);
 
@@ -254,6 +264,7 @@ pub(crate) struct EditorView {
     pending_go_to: Option<(usize, Option<usize>)>,
     benchmark: Option<ScrollBenchmark>,
     gutter_icons: Vec<GutterIcon>,
+    line_action: LineAction,
     index: Option<Arc<Index>>,
     blocks: Vec<Block>,
     usages: Arc<Vec<UsageHighlight>>,
@@ -285,6 +296,7 @@ impl EventEmitter<EditorEvent> for EditorView {}
 impl EventEmitter<MousePressed> for EditorView {}
 impl EventEmitter<ContextMenuRequested> for EditorView {}
 impl EventEmitter<GutterIconClicked> for EditorView {}
+impl EventEmitter<LineActionClicked> for EditorView {}
 impl EventEmitter<BlockClicked> for EditorView {}
 
 impl Drop for EditorView {
@@ -407,6 +419,7 @@ impl EditorView {
             pending_go_to: None,
             benchmark: None,
             gutter_icons: Vec::new(),
+            line_action: LineAction::default(),
             index: None,
             blocks: Vec::new(),
             usages: Arc::new(Vec::new()),
@@ -680,6 +693,12 @@ impl EditorView {
         cx.notify();
     }
 
+    /// Offers a `+` in the gutter of the line under the pointer.
+    pub(crate) fn set_line_action(&mut self, offered: bool, cx: &mut Context<Self>) {
+        self.line_action.offered = offered;
+        cx.notify();
+    }
+
     fn gutter_icon_on_line(&self, line: usize) -> Option<GutterIcon> {
         let buffer = self.model.buffer();
         self.gutter_icons
@@ -904,6 +923,24 @@ impl EditorView {
         cx.notify();
     }
 
+    fn on_right_mouse_down(
+        &mut self,
+        position: Point<Pixels>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        window.focus(&self.focus, cx);
+        let on_block = self.block_at(position).is_some();
+        if let Some(offset) = self.offset_at(position).filter(|_| !on_block) {
+            let selection = self.model.selection();
+            if !(selection.start <= offset && offset <= selection.end) {
+                self.model.move_to(offset, false);
+            }
+        }
+        cx.notify();
+        cx.emit(ContextMenuRequested(position));
+    }
+
     fn on_mouse_down(
         &mut self,
         event: &MouseDownEvent,
@@ -922,16 +959,7 @@ impl EditorView {
             clicks: u8::try_from(event.click_count.min(2)).unwrap_or(1),
         };
         if event.button == MouseButton::Right {
-            window.focus(&self.focus, cx);
-            let on_block = self.block_at(event.position).is_some();
-            if let Some(offset) = self.offset_at(event.position).filter(|_| !on_block) {
-                let selection = self.model.selection();
-                if !(selection.start <= offset && offset <= selection.end) {
-                    self.model.move_to(offset, false);
-                }
-            }
-            cx.notify();
-            cx.emit(ContextMenuRequested(event.position));
+            self.on_right_mouse_down(event.position, window, cx);
             return;
         }
         if event.button != MouseButton::Left {
@@ -994,6 +1022,12 @@ impl EditorView {
                 cx.emit(GutterIconClicked(icon));
                 return;
             }
+            if self.line_action.offered {
+                self.model.move_to(offset, false);
+                cx.notify();
+                cx.emit(LineActionClicked);
+                return;
+            }
         }
         match event.click_count {
             1 => self.model.move_to(offset, event.modifiers.shift),
@@ -1026,7 +1060,17 @@ impl EditorView {
         }
     }
 
-    fn on_mouse_move(&mut self, event: &MouseMoveEvent, cx: &mut Context<Self>) {
+    fn on_mouse_move(&mut self, event: &MouseMoveEvent, hovered: bool, cx: &mut Context<Self>) {
+        if self.line_action.offered {
+            let line = self
+                .offset_at(event.position)
+                .filter(|_| hovered && self.block_at(event.position).is_none())
+                .map(|offset| self.model.buffer().point_at(offset).line.get());
+            if line != self.line_action.hover {
+                self.line_action.hover = line;
+                cx.notify();
+            }
+        }
         if event.pressed_button != Some(MouseButton::Left) {
             self.drag = None;
             return;
@@ -1452,6 +1496,13 @@ impl EditorView {
                     &[run(glyph.len(), theme::ui(cx, role))],
                 );
                 numbers.push((point(bounds.left() + px(4.), top), glyph));
+            } else if self.line_action.offered && self.line_action.hover == Some(line) {
+                let glyph = shape(
+                    window,
+                    "+".to_owned(),
+                    &[run(1, theme::ui(cx, UiRole::Accent))],
+                );
+                numbers.push((point(bounds.left() + px(5.), top), glyph));
             }
             lines.push((display, shaped));
         }
@@ -1775,9 +1826,11 @@ impl Element for EditorElement {
             }
         });
         let editor = self.editor.clone();
-        window.on_mouse_event(move |event: &MouseMoveEvent, phase, _, cx| {
+        let hovered = hitbox.clone();
+        window.on_mouse_event(move |event: &MouseMoveEvent, phase, window, cx| {
             if phase == DispatchPhase::Bubble {
-                editor.update(cx, |editor, cx| editor.on_mouse_move(event, cx));
+                let hovered = hovered.is_hovered(window);
+                editor.update(cx, |editor, cx| editor.on_mouse_move(event, hovered, cx));
             }
         });
         let editor = self.editor.clone();
