@@ -207,3 +207,6 @@ A review is a range in git's syntax (`base`, `base..head`, `base...head`); the w
 ### 2026-11-16: Annotate is read at HEAD and mapped through the change markers
 Blame runs on HEAD's version of the file (`git blame --porcelain HEAD`), not on the buffer, and each buffer line takes the annotation of the HEAD line the change hunks map it to; added and modified lines stay blank. Why: blaming the working file would need the buffer written to disk or fed through `--contents`, and the hunks are already computed for the gutter markers.
 
+### 2026-11-16: GitHub sign-in reuses the gh CLI
+M3 takes the GitHub token from `gh auth token` instead of implementing the device flow or storing tokens. Why: the owner already uses `gh`, it handles hosts, scopes and keyring storage, and it keeps credentials out of DumbJ. BRIEF §4.5's own sign-in (tokens, device flow, several accounts) is deferred.
+
