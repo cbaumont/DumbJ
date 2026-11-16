@@ -120,4 +120,6 @@ Linux uses the `DumbJ` keymap (IntelliJ's `macOS For All` plus DumbJ's own actio
 | Git | `tool-window.git` | `ActivateVersionControlToolWindow` | `Alt+9` | `⌘9` |
 | Show History | `vcs.file-history` | `DumbJ.ShowFileHistory`, `Vcs.ShowTabbedFileHistory` | `Ctrl+Alt+Shift+Q` | `⌃⌥⇧Q` |
 | Show History for Selection | `vcs.selection-history` | `DumbJ.ShowHistoryForSelection`, `Vcs.ShowHistoryForBlock` | `Ctrl+Alt+Shift+Z` | `⌃⌥⇧Z` |
+| Annotate with Git Blame | `vcs.annotate` | `Annotate`, `DumbJ.Annotate` | `Ctrl+Alt+Shift+A` | `⌃⌥⇧A` |
+| Branches | `vcs.branches` | `DumbJ.Branches`, `Git.Branches` | `Ctrl+Alt+Shift+N` | `⌃⌥⇧N` |
 | Escape | `text.escape` | `EditorEscape` | `Esc` | `Esc` |

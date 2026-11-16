@@ -124,6 +124,8 @@ pub enum Action {
     ActivateGitToolWindow,
     ShowFileHistory,
     ShowHistoryForSelection,
+    Annotate,
+    GitBranches,
     Escape,
 }
 
@@ -762,6 +764,18 @@ const REGISTRY: &[ActionInfo] = &[
         Action::ShowHistoryForSelection,
         "vcs.selection-history",
         "Show History for Selection",
+        Scope::Window,
+    ),
+    info(
+        Action::Annotate,
+        "vcs.annotate",
+        "Annotate with Git Blame",
+        Scope::Window,
+    ),
+    info(
+        Action::GitBranches,
+        "vcs.branches",
+        "Branches",
         Scope::Window,
     ),
     info(Action::Escape, "text.escape", "Escape", Scope::Text),

@@ -20,4 +20,10 @@
   <action id="DumbJ.ShowHistoryForSelection">
     <keyboard-shortcut first-keystroke="control alt shift Z"/>
   </action>
+  <action id="DumbJ.Annotate">
+    <keyboard-shortcut first-keystroke="control alt shift A"/>
+  </action>
+  <action id="DumbJ.Branches">
+    <keyboard-shortcut first-keystroke="control alt shift N"/>
+  </action>
 </keymap>
