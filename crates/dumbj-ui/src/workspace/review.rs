@@ -341,7 +341,7 @@ impl Workspace {
             saved.pull = pull;
             self.save_project_state(cx);
         }
-        self.pull_threads = None;
+        self.session.pull_threads = None;
         self.load_pull_threads(cx);
         self.left_tool = LeftTool::Review;
         self.project_window = ToolWindowState::Visible;

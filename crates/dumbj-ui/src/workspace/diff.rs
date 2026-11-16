@@ -362,10 +362,13 @@ impl Workspace {
                 this.on_editor_mouse(*stroke, window, cx);
             },
         ));
-        self.subscriptions
-            .push(cx.subscribe(editor, |this, _, BlockClicked(id), cx| {
-                this.toggle_thread(*id, cx);
-            }));
+        self.subscriptions.push(cx.subscribe_in(
+            editor,
+            window,
+            |this, _, BlockClicked(id), window, cx| {
+                this.block_clicked(*id, window, cx);
+            },
+        ));
         self.subscriptions
             .push(cx.observe(editor, |_, _, cx| cx.notify()));
     }

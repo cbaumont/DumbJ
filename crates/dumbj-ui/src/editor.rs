@@ -262,6 +262,8 @@ pub(crate) struct EditorView {
     note_lines: Vec<(usize, usize)>,
     annotations: Option<Arc<Vec<String>>>,
     read_only: bool,
+    /// Text that belongs to no file and is never saved.
+    scratch: bool,
     /// What the file looked like on disk when it was last read or written.
     stamp: Option<FileStamp>,
     /// The file's newer state on disk, while it also has unsaved edits here.
@@ -272,7 +274,7 @@ pub(crate) struct EditorView {
     marked: Option<ByteRange>,
     reparse_cancel: Arc<AtomicBool>,
     load_cancel: Arc<AtomicBool>,
-    _load: Task<()>,
+    load: Task<()>,
 }
 
 impl EventEmitter<EditorEvent> for EditorView {}
@@ -303,6 +305,42 @@ impl EditorView {
         cx: &mut Context<Self>,
     ) -> Self {
         Self::open_source(path, Some((repository, revision)), cx)
+    }
+
+    /// An editor for text that belongs to no file (a comment being written): it starts
+    /// empty and editable and is never saved. `name` only picks the language.
+    pub(crate) fn scratch(name: &str, cx: &mut Context<Self>) -> Self {
+        let mut editor = Self::open_source(PathBuf::from(name), None, cx);
+        editor.load_cancel.store(true, Ordering::Relaxed);
+        editor.load = Task::ready(());
+        editor.scratch = true;
+        editor.set_scratch_text("", cx);
+        editor
+    }
+
+    /// Replaces the text of a scratch editor and puts the caret at its end.
+    pub(crate) fn set_scratch_text(&mut self, text: &str, cx: &mut Context<Self>) {
+        if !self.scratch {
+            return;
+        }
+        let buffer = Buffer::new(text);
+        let end = buffer.len();
+        self.syntax = self.language.and_then(|language| {
+            dumbj_syntax::parse(language, &buffer, || false)
+                .ok()
+                .flatten()
+        });
+        self.model = EditorModel::new(buffer);
+        self.model.move_to(end, false);
+        self.highlights = None;
+        self.read_only = false;
+        self.state = LoadState::Ready;
+        self.scroll_top = 0.0;
+        cx.notify();
+    }
+
+    pub(crate) fn text(&self) -> String {
+        self.model.buffer().to_string()
     }
 
     fn open_source(
@@ -372,6 +410,7 @@ impl EditorView {
             note_lines: Vec::new(),
             annotations: None,
             read_only: true,
+            scratch: false,
             stamp: None,
             conflict: None,
             saving: false,
@@ -379,7 +418,7 @@ impl EditorView {
             marked: None,
             reparse_cancel: Arc::default(),
             load_cancel,
-            _load: task,
+            load: task,
         }
     }
 

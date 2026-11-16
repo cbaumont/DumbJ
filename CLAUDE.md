@@ -5,7 +5,7 @@ A fast, native, keyboard-first **code reading and code review editor** with Inte
 Full spec: `docs/BRIEF.md`. Where it conflicts with the Decisions in `docs/ARCHITECTURE.md`, the Decisions win. Read the sections relevant to your current task, not the whole file every time.
 
 ## Current milestone
-M3: GitHub review (BRIEF §9, §4.5), **phase 5 next** (started 2026-11-16). M2 (git and local review) was completed on 2026-11-16 and its review package posted; M1c was completed on 2026-11-16, M1b approved on 2026-11-15, M1a on 2026-11-15, M0 on 2026-11-14. Decisions are in `docs/ARCHITECTURE.md`. At each milestone end write the review package (summary, run instructions, test status, known gaps, screenshots) and push; the owner asked on 2026-11-15 not to be asked for approval between milestones unless strictly necessary, so then continue with the next one.
+M3: GitHub review (BRIEF §9, §4.5), **phase 6 next** (started 2026-11-16). M2 (git and local review) was completed on 2026-11-16 and its review package posted; M1c was completed on 2026-11-16, M1b approved on 2026-11-15, M1a on 2026-11-15, M0 on 2026-11-14. Decisions are in `docs/ARCHITECTURE.md`. At each milestone end write the review package (summary, run instructions, test status, known gaps, screenshots) and push; the owner asked on 2026-11-15 not to be asked for approval between milestones unless strictly necessary, so then continue with the next one.
 
 ### M3 phases
 Design: "M3 design (GitHub review)" in `docs/ARCHITECTURE.md`. Tick a phase here when it is committed.
@@ -13,7 +13,7 @@ Design: "M3 design (GitHub review)" in `docs/ARCHITECTURE.md`. Tick a phase here
 2. [x] PR refs in `dumbj-vcs` (`refs/dumbj/pr/<n>/{head,base}`, prune) and the head-revision index in `dumbj-index` with read-only revision tabs.
 3. [x] PR list popup (Ctrl+Alt+Shift+P, P: review requested, assigned, mine, all; search), open a PR as a review, Open PR in Browser. Left for phase 7: a Prune review refs action (`Repository::prune_pull_refs` exists).
 4. [x] Threads: `Client::review_threads`, block rows in the editor (`editor/blocks.rs`), `workspace/threads.rs` (fold/expand by click or Ctrl+Alt+Shift+P, T; resolved, outdated and pending state; Next/Previous Comment Thread on P, N and P, B).
-5. [ ] Writing: Add Review Comment (line or range, suggestion block), reply, resolve/unresolve, pending comments in the project state, Start/Submit Review (Comment, Approve, Request changes).
+5. [x] Writing (`workspace/compose.rs`, `Client::post_comments`): all under Ctrl+Alt+Shift+P: C comment on the line or selection, R reply, X resolve/unresolve, S/A/Q submit as comment/approve/request changes, G insert a suggestion; in the comment field Ctrl+Alt+Shift+Enter adds to the pending review and P, Enter sends at once. Comments are drafts in the project state until GitHub confirms. Checked live on PR 1 of the test repository (approve and request changes cannot be tried there: the PR is the owner's own).
 6. [ ] Viewed sync, PR overview (description, checks, commits, commit-by-commit review), Copy Permalink.
 7. [ ] Docs, FEATURES, screenshots, review package, push.
 

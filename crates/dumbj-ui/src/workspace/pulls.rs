@@ -49,6 +49,15 @@ pub(super) fn connect(repository: &Repository) -> Result<GitHub, String> {
     })
 }
 
+/// What is known about GitHub and the pull request under review.
+#[derive(Default)]
+pub(super) struct Session {
+    pub(super) github: Option<Arc<GitHub>>,
+    pub(super) pull_threads: Option<super::threads::PullThreads>,
+    /// Draft comments are on their way to GitHub.
+    pub(super) sending: bool,
+}
+
 fn filter_label(filter: PrFilter) -> &'static str {
     match filter {
         PrFilter::ReviewRequested => "Review requested",
@@ -120,7 +129,7 @@ impl Workspace {
         else {
             return;
         };
-        let (filter, known) = (popup.filter, self.github.clone());
+        let (filter, known) = (popup.filter, self.session.github.clone());
         popup.listing = Listing::Loading;
         popup.task = Some(cx.spawn(async move |this, cx| {
             if debounce {
@@ -145,7 +154,7 @@ impl Workspace {
                 };
                 match listed {
                     Ok((github, pulls)) => {
-                        this.github = Some(github);
+                        this.session.github = Some(github);
                         popup.pulls = pulls;
                         popup.listing = Listing::Loaded;
                     }
@@ -221,7 +230,8 @@ impl Workspace {
 
     /// Fetches the pull request into `refs/dumbj/pr/` and starts its review.
     fn open_pull(&mut self, pull: PullRequestSummary, window: &mut Window, cx: &mut Context<Self>) {
-        let (Some(repository), Some(github)) = (self.repository.clone(), self.github.clone())
+        let (Some(repository), Some(github)) =
+            (self.repository.clone(), self.session.github.clone())
         else {
             return;
         };
@@ -268,17 +278,43 @@ impl Workspace {
         self.state.review.as_ref()?.pull.as_ref()
     }
 
+    pub(super) fn pull_action_enabled(&self, action: Action, popup_open: bool) -> bool {
+        match action {
+            Action::SendComment | Action::SendCommentNow | Action::InsertSuggestion => {
+                self.compose_open()
+            }
+            _ if popup_open => false,
+            Action::PullRequests => self.repository.is_some(),
+            Action::OpenPullRequestInBrowser => self.review_pull().is_some(),
+            Action::AddReviewComment => self.can_comment(),
+            Action::SubmitReview | Action::ApproveReview | Action::RequestChanges => {
+                self.review_pull().is_some()
+            }
+            _ => self.has_threads_here(),
+        }
+    }
+
     pub(super) fn pull_action(
         &mut self,
         action: Action,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        match (action, self.review_pull()) {
-            (Action::PullRequests, _) => self.open_pull_popup(window, cx),
-            (Action::OpenPullRequestInBrowser, Some(pull)) => cx.open_url(&pull.url),
-            (Action::OpenPullRequestInBrowser, None) => {}
-            _ => self.thread_action(action, cx),
+        match action {
+            Action::PullRequests => self.open_pull_popup(window, cx),
+            Action::OpenPullRequestInBrowser => {
+                if let Some(pull) = self.review_pull() {
+                    cx.open_url(&pull.url);
+                }
+            }
+            Action::AddReviewComment => self.compose_comment(window, cx),
+            Action::SubmitReview | Action::ApproveReview | Action::RequestChanges => {
+                self.compose_verdict(action, window, cx);
+            }
+            Action::SendComment | Action::SendCommentNow | Action::InsertSuggestion => {
+                self.compose_action(action, window, cx);
+            }
+            _ => self.thread_action(action, window, cx),
         }
     }
 

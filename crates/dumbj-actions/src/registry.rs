@@ -126,6 +126,15 @@ pub enum Action {
     NextThread,
     PreviousThread,
     ToggleThread,
+    AddReviewComment,
+    ReplyToThread,
+    ResolveThread,
+    SubmitReview,
+    ApproveReview,
+    RequestChanges,
+    InsertSuggestion,
+    SendCommentNow,
+    SendComment,
     ActivateGitToolWindow,
     ShowFileHistory,
     ShowHistoryForSelection,
@@ -784,6 +793,55 @@ const REGISTRY: &[ActionInfo] = &[
         Scope::Window,
     ),
     info(
+        Action::AddReviewComment,
+        "review.add-comment",
+        "Add Review Comment",
+        Scope::Window,
+    ),
+    info(
+        Action::ReplyToThread,
+        "review.reply",
+        "Reply to Comment Thread",
+        Scope::Window,
+    ),
+    info(
+        Action::ResolveThread,
+        "review.resolve-thread",
+        "Resolve or Unresolve Comment Thread",
+        Scope::Window,
+    ),
+    info(
+        Action::SubmitReview,
+        "review.submit",
+        "Submit Review",
+        Scope::Window,
+    ),
+    info(
+        Action::ApproveReview,
+        "review.approve",
+        "Approve Pull Request",
+        Scope::Window,
+    ),
+    info(
+        Action::RequestChanges,
+        "review.request-changes",
+        "Request Changes",
+        Scope::Window,
+    ),
+    info(
+        Action::InsertSuggestion,
+        "review.insert-suggestion",
+        "Insert Suggested Change",
+        Scope::Window,
+    ),
+    info(
+        Action::SendCommentNow,
+        "review.send-now",
+        "Send Comment Now",
+        Scope::Window,
+    ),
+    info(Action::SendComment, "review.send", "Send", Scope::Window),
+    info(
         Action::ActivateGitToolWindow,
         "tool-window.git",
         "Git",
@@ -822,12 +880,34 @@ impl Action {
         REGISTRY.iter().map(|info| info.action)
     }
 
+    /// Whether the action belongs to pull request review.
+    #[must_use]
+    pub fn is_pull_request_action(self) -> bool {
+        self.is_thread_action()
+            || matches!(
+                self,
+                Self::PullRequests
+                    | Self::OpenPullRequestInBrowser
+                    | Self::AddReviewComment
+                    | Self::SubmitReview
+                    | Self::ApproveReview
+                    | Self::RequestChanges
+                    | Self::InsertSuggestion
+                    | Self::SendCommentNow
+                    | Self::SendComment
+            )
+    }
+
     /// Whether the action works on the review thread at the caret.
     #[must_use]
     pub fn is_thread_action(self) -> bool {
         matches!(
             self,
-            Self::NextThread | Self::PreviousThread | Self::ToggleThread
+            Self::NextThread
+                | Self::PreviousThread
+                | Self::ToggleThread
+                | Self::ReplyToThread
+                | Self::ResolveThread
         )
     }
 

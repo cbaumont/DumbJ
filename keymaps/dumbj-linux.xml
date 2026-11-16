@@ -29,6 +29,33 @@
   <action id="DumbJ.Review.ToggleThread">
     <keyboard-shortcut first-keystroke="control alt shift P" second-keystroke="T"/>
   </action>
+  <action id="DumbJ.Review.AddComment">
+    <keyboard-shortcut first-keystroke="control alt shift P" second-keystroke="C"/>
+  </action>
+  <action id="DumbJ.Review.Reply">
+    <keyboard-shortcut first-keystroke="control alt shift P" second-keystroke="R"/>
+  </action>
+  <action id="DumbJ.Review.ResolveThread">
+    <keyboard-shortcut first-keystroke="control alt shift P" second-keystroke="X"/>
+  </action>
+  <action id="DumbJ.Review.Submit">
+    <keyboard-shortcut first-keystroke="control alt shift P" second-keystroke="S"/>
+  </action>
+  <action id="DumbJ.Review.Approve">
+    <keyboard-shortcut first-keystroke="control alt shift P" second-keystroke="A"/>
+  </action>
+  <action id="DumbJ.Review.RequestChanges">
+    <keyboard-shortcut first-keystroke="control alt shift P" second-keystroke="Q"/>
+  </action>
+  <action id="DumbJ.Review.InsertSuggestion">
+    <keyboard-shortcut first-keystroke="control alt shift P" second-keystroke="G"/>
+  </action>
+  <action id="DumbJ.Review.SendNow">
+    <keyboard-shortcut first-keystroke="control alt shift P" second-keystroke="ENTER"/>
+  </action>
+  <action id="DumbJ.Review.Send">
+    <keyboard-shortcut first-keystroke="control alt shift ENTER"/>
+  </action>
   <action id="DumbJ.ShowFileHistory">
     <keyboard-shortcut first-keystroke="control alt shift Q"/>
   </action>

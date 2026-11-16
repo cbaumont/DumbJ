@@ -19,6 +19,7 @@ use crate::theme;
 
 mod bookmarks;
 mod branches;
+mod compose;
 mod diff;
 mod editing;
 mod find_in_files;
@@ -113,6 +114,7 @@ enum FocusArea {
     NotePrompt,
     BranchPopup,
     PullPopup,
+    Compose,
     GotoLine,
     Find,
     Review,
@@ -141,8 +143,9 @@ pub(crate) struct Workspace {
     branch_input: Entity<TextInput>,
     pull_popup: Option<pulls::PullPopup>,
     pull_input: Entity<TextInput>,
-    github: Option<std::sync::Arc<pulls::GitHub>>,
-    pull_threads: Option<threads::PullThreads>,
+    session: pulls::Session,
+    compose: Option<compose::Compose>,
+    compose_editor: Entity<EditorView>,
     note_input: Entity<TextInput>,
     find: Entity<TextInput>,
     find_open: bool,
@@ -295,8 +298,9 @@ impl Workspace {
             branch_input,
             pull_popup: None,
             pull_input,
-            github: None,
-            pull_threads: None,
+            session: pulls::Session::default(),
+            compose: None,
+            compose_editor: cx.new(|cx| EditorView::scratch("comment.md", cx)),
             note_input: cx.new(|cx| TextInput::new("Note", cx)),
             find,
             find_open: false,
@@ -385,6 +389,8 @@ impl Workspace {
             FocusArea::BranchPopup
         } else if self.pull_popup.is_some() {
             FocusArea::PullPopup
+        } else if self.compose_open() {
+            FocusArea::Compose
         } else if self.goto_line_open && self.goto_line.read(cx).focus_handle().is_focused(window) {
             FocusArea::GotoLine
         } else if self.find_open && self.find.read(cx).focus_handle().is_focused(window) {
@@ -436,8 +442,7 @@ impl Workspace {
         window.focus(&handle, cx);
         self.index = None;
         self.head_index = None;
-        self.github = None;
-        self.pull_threads = None;
+        self.session = pulls::Session::default();
         self.start_indexing(root.clone(), cx);
         self.load_project_state(root.clone(), cx);
         self.start_jar_indexing(cx);
@@ -656,6 +661,7 @@ impl Workspace {
             || self.note_prompt.is_some()
             || self.branch_popup.is_some()
             || self.pull_popup.is_some()
+            || self.compose_open()
     }
 
     fn is_enabled(&self, action: Action, window: &Window, cx: &App) -> bool {
@@ -728,12 +734,10 @@ impl Workspace {
             Action::NextDiff | Action::PreviousDiff | Action::FocusOppositeDiffPane => {
                 self.active_diff().is_some() && !popup_open
             }
-            Action::StartReview
-            | Action::ActivateGitToolWindow
-            | Action::GitBranches
-            | Action::PullRequests => self.repository.is_some() && !popup_open,
-            Action::OpenPullRequestInBrowser => self.review_pull().is_some() && !popup_open,
-            _ if action.is_thread_action() => self.has_threads_here() && !popup_open,
+            Action::StartReview | Action::ActivateGitToolWindow | Action::GitBranches => {
+                self.repository.is_some() && !popup_open
+            }
+            _ if action.is_pull_request_action() => self.pull_action_enabled(action, popup_open),
             Action::ActivateReviewToolWindow | Action::NextUnviewedFile => {
                 self.review.is_some() && !popup_open
             }
@@ -810,11 +814,7 @@ impl Workspace {
             Action::ActivateHierarchyToolWindow => self.toggle_hierarchy_window(window, cx),
             Action::ActivateGitToolWindow => self.toggle_git_window(window, cx),
             Action::GitBranches => self.open_branch_popup(window, cx),
-            Action::PullRequests
-            | Action::OpenPullRequestInBrowser
-            | Action::NextThread
-            | Action::PreviousThread
-            | Action::ToggleThread => self.pull_action(action, window, cx),
+            _ if action.is_pull_request_action() => self.pull_action(action, window, cx),
             Action::Annotate => self.toggle_annotate(cx),
             Action::ShowFileHistory | Action::ShowHistoryForSelection => {
                 self.show_file_history(action == Action::ShowHistoryForSelection, window, cx);
@@ -968,6 +968,7 @@ impl Workspace {
             FocusArea::NotePrompt => self.note_prompt_action(action, window, cx),
             FocusArea::BranchPopup => self.branch_popup_action(action, window, cx),
             FocusArea::PullPopup => self.pull_popup_action(action, window, cx),
+            FocusArea::Compose => self.compose_action(action, window, cx),
             FocusArea::Review => self.review_window_action(action, window, cx),
             FocusArea::GotoLine => match action {
                 Action::Enter => self.submit_goto_line(window, cx),
@@ -1599,6 +1600,8 @@ impl Workspace {
             Some(self.render_branch_popup(popup, cx).into_any_element())
         } else if let Some(popup) = &self.pull_popup {
             Some(self.render_pull_popup(popup, cx).into_any_element())
+        } else if let Some(compose) = &self.compose {
+            Some(self.render_compose(compose, cx).into_any_element())
         } else {
             self.goto_line_open
                 .then(|| self.render_goto_line_popup(cx).into_any_element())

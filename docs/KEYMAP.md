@@ -122,6 +122,15 @@ Linux uses the `DumbJ` keymap (IntelliJ's `macOS For All` plus DumbJ's own actio
 | Next Comment Thread | `review.next-thread` | `DumbJ.Review.NextThread` | `Ctrl+Alt+Shift+P, N` | `⌃⌥⇧P, N` |
 | Previous Comment Thread | `review.previous-thread` | `DumbJ.Review.PreviousThread` | `Ctrl+Alt+Shift+P, B` | `⌃⌥⇧P, B` |
 | Expand or Collapse Comment Thread | `review.toggle-thread` | `DumbJ.Review.ToggleThread` | `Ctrl+Alt+Shift+P, T` | `⌃⌥⇧P, T` |
+| Add Review Comment | `review.add-comment` | `DumbJ.Review.AddComment` | `Ctrl+Alt+Shift+P, C` | `⌃⌥⇧P, C` |
+| Reply to Comment Thread | `review.reply` | `DumbJ.Review.Reply` | `Ctrl+Alt+Shift+P, R` | `⌃⌥⇧P, R` |
+| Resolve or Unresolve Comment Thread | `review.resolve-thread` | `DumbJ.Review.ResolveThread` | `Ctrl+Alt+Shift+P, X` | `⌃⌥⇧P, X` |
+| Submit Review | `review.submit` | `DumbJ.Review.Submit` | `Ctrl+Alt+Shift+P, S` | `⌃⌥⇧P, S` |
+| Approve Pull Request | `review.approve` | `DumbJ.Review.Approve` | `Ctrl+Alt+Shift+P, A` | `⌃⌥⇧P, A` |
+| Request Changes | `review.request-changes` | `DumbJ.Review.RequestChanges` | `Ctrl+Alt+Shift+P, Q` | `⌃⌥⇧P, Q` |
+| Insert Suggested Change | `review.insert-suggestion` | `DumbJ.Review.InsertSuggestion` | `Ctrl+Alt+Shift+P, G` | `⌃⌥⇧P, G` |
+| Send Comment Now | `review.send-now` | `DumbJ.Review.SendNow` | `Ctrl+Alt+Shift+P, Enter` | `⌃⌥⇧P, Enter` |
+| Send | `review.send` | `DumbJ.Review.Send` | `Ctrl+Alt+Shift+Enter` | `⌃⌥⇧Enter` |
 | Git | `tool-window.git` | `ActivateVersionControlToolWindow` | `Alt+9` | `⌘9` |
 | Show History | `vcs.file-history` | `DumbJ.ShowFileHistory`, `Vcs.ShowTabbedFileHistory` | `Ctrl+Alt+Shift+Q` | `⌃⌥⇧Q` |
 | Show History for Selection | `vcs.selection-history` | `DumbJ.ShowHistoryForSelection`, `Vcs.ShowHistoryForBlock` | `Ctrl+Alt+Shift+Z` | `⌃⌥⇧Z` |

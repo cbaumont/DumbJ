@@ -20,7 +20,7 @@ pub(super) struct NotePrompt {
 impl Workspace {
     /// The review file, side and editor the caret is in, when the active tab is one of the
     /// review's diffs.
-    fn note_site(&self) -> Option<(PathBuf, NoteSide, Entity<EditorView>)> {
+    pub(super) fn note_site(&self) -> Option<(PathBuf, NoteSide, Entity<EditorView>)> {
         let index = self.active_review_file()?;
         let path = self.review_file_path(index)?;
         let diff = self.active_diff()?;

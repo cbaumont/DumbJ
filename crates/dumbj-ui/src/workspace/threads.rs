@@ -1,13 +1,13 @@
 //! A pull request's review threads, shown as blocks inside the diff.
 
 use std::collections::HashSet;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use dumbj_actions::Action;
 use dumbj_review::{DiffSide, PullRequestDetails, RepoId, ReviewThread};
-use dumbj_settings::NoteSide;
-use gpui::{AppContext, Context, Entity, Task};
+use dumbj_settings::{DraftComment, NoteSide};
+use gpui::{AppContext, Context, Entity, Task, Window};
 
 use super::Workspace;
 use super::pulls::connect;
@@ -122,11 +122,32 @@ fn thread_block(id: usize, thread: &ReviewThread, expanded: bool) -> Option<Bloc
             count => format!(" · {count} comments"),
         };
         rows.push(row(
-            format!("▸ {}: {summary}{more}{}", first.author, state(thread)),
+            format!("▸ {}{}{more}: {summary}", first.author, state(thread)),
             BlockTone::Faint,
         ));
     }
     Some(Block { id, line, rows })
+}
+
+/// Block ids from here on stand for unsent comments: this plus the draft's id.
+const DRAFT_BLOCKS: usize = usize::MAX / 2;
+
+fn draft_block(draft: &DraftComment) -> Block {
+    let row = |text: String, tone| BlockRow { text, tone };
+    let mut rows = vec![row(
+        "▾ not sent yet · click to edit".to_owned(),
+        BlockTone::Title,
+    )];
+    rows.extend(
+        wrap(&draft.body, WRAP_COLUMNS)
+            .into_iter()
+            .map(|text| row(format!("  {text}"), BlockTone::Text)),
+    );
+    Block {
+        id: DRAFT_BLOCKS.saturating_add(usize::try_from(draft.id).unwrap_or(0)),
+        line: draft.last_line.saturating_sub(1),
+        rows,
+    }
 }
 
 fn side_of(side: DiffSide) -> NoteSide {
@@ -156,11 +177,11 @@ impl Workspace {
     pub(super) fn load_pull_threads(&mut self, cx: &mut Context<Self>) {
         let (Some(repository), Some(pull)) = (self.repository.clone(), self.review_pull().cloned())
         else {
-            self.pull_threads = None;
+            self.session.pull_threads = None;
             self.apply_thread_blocks(cx);
             return;
         };
-        let known = self.github.clone();
+        let known = self.session.github.clone();
         let task = cx.spawn(async move |this, cx| {
             let loaded = cx
                 .background_spawn(async move {
@@ -188,8 +209,8 @@ impl Workspace {
             let _ = this.update(cx, |this, cx| {
                 match loaded {
                     Ok((github, details, threads)) => {
-                        this.github = Some(github);
-                        if let Some(pull) = this.pull_threads.as_mut() {
+                        this.session.github = Some(github);
+                        if let Some(pull) = this.session.pull_threads.as_mut() {
                             pull.details = Some(details);
                             pull.threads = threads;
                         }
@@ -200,11 +221,12 @@ impl Workspace {
                     }
                 }
                 this.apply_thread_blocks(cx);
+                this.send_drafts(cx);
                 cx.notify();
             });
         });
-        let previous = self.pull_threads.take();
-        self.pull_threads = Some(PullThreads {
+        let previous = self.session.pull_threads.take();
+        self.session.pull_threads = Some(PullThreads {
             details: previous.as_ref().and_then(|pull| pull.details.clone()),
             threads: previous
                 .as_ref()
@@ -214,7 +236,7 @@ impl Workspace {
         });
     }
 
-    fn thread_sites(&self) -> Vec<(Entity<EditorView>, std::path::PathBuf, NoteSide)> {
+    fn thread_sites(&self) -> Vec<(Entity<EditorView>, PathBuf, NoteSide)> {
         let Some(workdir) = self.repository.as_ref().map(|r| r.workdir().to_path_buf()) else {
             return Vec::new();
         };
@@ -232,19 +254,74 @@ impl Workspace {
             .collect()
     }
 
-    /// Gives every open diff of the review the blocks of its threads.
+    /// Gives every open diff of the review the blocks of its threads and unsent comments.
     pub(super) fn apply_thread_blocks(&self, cx: &mut Context<Self>) {
+        let drafts = self
+            .state
+            .review
+            .as_ref()
+            .filter(|review| review.pull.is_some())
+            .map_or(&[][..], |review| review.drafts());
         for (editor, path, side) in self.thread_sites() {
-            let blocks = self
+            let mut blocks = self
+                .session
                 .pull_threads
                 .as_ref()
                 .map_or_else(Vec::new, |pull| pull.blocks(&path, side));
+            blocks.extend(
+                drafts
+                    .iter()
+                    .filter(|draft| draft.path == path && draft.side == side)
+                    .map(draft_block),
+            );
             editor.update(cx, |editor, cx| editor.set_blocks(blocks, cx));
         }
     }
 
+    pub(super) fn reload_pull_threads(&mut self, cx: &mut Context<Self>) {
+        self.load_pull_threads(cx);
+        cx.notify();
+    }
+
+    pub(super) fn block_clicked(&mut self, id: usize, window: &mut Window, cx: &mut Context<Self>) {
+        match id.checked_sub(DRAFT_BLOCKS) {
+            Some(draft) => self.compose_draft(draft as u64, window, cx),
+            None => self.toggle_thread(id, cx),
+        }
+    }
+
+    fn set_resolved(&mut self, id: usize, cx: &mut Context<Self>) {
+        let thread = self
+            .session
+            .pull_threads
+            .as_ref()
+            .and_then(|pull| pull.threads.get(id));
+        let (Some(thread), Some(github)) = (thread, self.session.github.clone()) else {
+            return;
+        };
+        let (thread_id, resolve) = (thread.id.clone(), !thread.is_resolved);
+        cx.spawn(async move |this, cx| {
+            let outcome = cx
+                .background_spawn(async move {
+                    if resolve {
+                        github.client.resolve_thread(&thread_id)
+                    } else {
+                        github.client.unresolve_thread(&thread_id)
+                    }
+                })
+                .await;
+            let _ = this.update(cx, |this, cx| {
+                if let Err(error) = outcome {
+                    this.status_message = Some(format!("GitHub: {error}"));
+                }
+                this.reload_pull_threads(cx);
+            });
+        })
+        .detach();
+    }
+
     pub(super) fn toggle_thread(&mut self, id: usize, cx: &mut Context<Self>) {
-        let Some(pull) = self.pull_threads.as_mut() else {
+        let Some(pull) = self.session.pull_threads.as_mut() else {
             return;
         };
         let Some(thread) = pull.threads.get(id) else {
@@ -258,7 +335,7 @@ impl Workspace {
 
     /// The threads of the side the caret is in, as (thread index, zero-based line), by line.
     fn threads_here(&self) -> Vec<(usize, usize)> {
-        let (Some(pull), Some(editor)) = (&self.pull_threads, self.active_editor()) else {
+        let (Some(pull), Some(editor)) = (&self.session.pull_threads, self.active_editor()) else {
             return Vec::new();
         };
         let here = self
@@ -283,7 +360,12 @@ impl Workspace {
         !self.threads_here().is_empty()
     }
 
-    pub(super) fn thread_action(&mut self, action: Action, cx: &mut Context<Self>) {
+    pub(super) fn thread_action(
+        &mut self,
+        action: Action,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let Some(editor) = self.active_editor() else {
             return;
         };
@@ -297,10 +379,25 @@ impl Workspace {
         let Some(&(id, line)) = target else {
             return;
         };
-        if action == Action::ToggleThread {
-            self.toggle_thread(id, cx);
-        } else {
-            editor.update(cx, |editor, cx| editor.go_to(line + 1, None, cx));
+        match action {
+            Action::ToggleThread => self.toggle_thread(id, cx),
+            Action::ResolveThread => self.set_resolved(id, cx),
+            Action::ReplyToThread => {
+                let thread = self
+                    .session
+                    .pull_threads
+                    .as_ref()
+                    .and_then(|pull| pull.threads.get(id));
+                if let Some(thread) = thread {
+                    let (thread_id, path, side) = (
+                        thread.id.clone(),
+                        PathBuf::from(&thread.path),
+                        side_of(thread.side),
+                    );
+                    self.compose_reply(thread_id, path, side, line + 1, window, cx);
+                }
+            }
+            _ => editor.update(cx, |editor, cx| editor.go_to(line + 1, None, cx)),
         }
     }
 }
@@ -386,12 +483,12 @@ mod tests {
             block.line, 8,
             "an outdated thread stays on its original line"
         );
-        assert_eq!(texts(&block), ["▸ ana: Rename this · resolved · outdated"]);
+        assert_eq!(texts(&block), ["▸ ana · resolved · outdated: Rename this"]);
         thread.comments.push(comment("bo", "ok", false));
         let block = thread_block(0, &thread, false).unwrap();
         assert_eq!(
             texts(&block),
-            ["▸ ana: Rename this · 2 comments · resolved · outdated"]
+            ["▸ ana · resolved · outdated · 2 comments: Rename this"]
         );
     }
 

@@ -90,11 +90,11 @@
 - [~] PR list — popup (review requested, assigned, mine, all; search), open PRs only
 - [~] Open PR into private refs — navigation across the head; no Prune action yet
 - [~] Inline threads — folded/expanded blocks in the diff, resolved/outdated/pending state, next/previous; Markdown not rendered
-- [ ] Comments, pending review, suggestions
-- [ ] Submit review
+- [x] Comments, pending review, suggestions — line or range, reply, resolve/unresolve, suggestion block from the selected lines
+- [x] Submit review — comment, approve, request changes, with a summary
 - [ ] Viewed sync
 - [ ] Description, timeline, checks, commits
-- [ ] Pending comments survive restart
+- [x] Pending comments survive restart — drafts in the project state until GitHub confirms; then GitHub's pending review holds them
 
 ## 4.6 Settings and keymap
 - [ ] Settings UI

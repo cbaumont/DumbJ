@@ -208,7 +208,12 @@ impl EditorView {
     /// Writes unsaved edits to disk in the background. Does nothing for a file that was
     /// not edited, and refuses to overwrite a file that changed on disk in the meantime.
     pub(crate) fn save(&mut self, cx: &mut Context<Self>) {
-        if self.read_only || self.saving || self.conflict.is_some() || !self.model.is_modified() {
+        if self.read_only
+            || self.scratch
+            || self.saving
+            || self.conflict.is_some()
+            || !self.model.is_modified()
+        {
             return;
         }
         self.model.seal_history();
@@ -252,7 +257,7 @@ impl EditorView {
 
     /// Writes unsaved edits on the calling thread, for when the application is quitting.
     pub(crate) fn save_blocking(&mut self) {
-        if self.read_only || self.conflict.is_some() || !self.model.is_modified() {
+        if self.read_only || self.scratch || self.conflict.is_some() || !self.model.is_modified() {
             return;
         }
         if FileStamp::of(&self.path).is_ok_and(|stamp| Some(stamp) != self.stamp) {
@@ -271,7 +276,8 @@ impl EditorView {
     /// Looks whether the file changed on disk: an unmodified file is reloaded, a modified
     /// one is flagged as a conflict for the user to settle.
     pub(crate) fn check_disk(&mut self, cx: &mut Context<Self>) {
-        if self.read_only || self.saving || !matches!(self.state, LoadState::Ready) {
+        if self.read_only || self.scratch || self.saving || !matches!(self.state, LoadState::Ready)
+        {
             return;
         }
         let (path, known) = (self.path.clone(), self.stamp);
