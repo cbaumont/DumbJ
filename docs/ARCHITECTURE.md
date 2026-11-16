@@ -14,6 +14,7 @@ All crates live in `crates/`. Only `dumbj-ui` depends on GPUI; everything else i
 | `dumbj-jars` | Library sources, headless: finds source jars in the Gradle and Maven caches and the JDK's `src.zip`, indexes them by class (`JarIndex`), reads entries in place through virtual paths (`lib.jar!/pkg/Class.java`) and locates a class or member in a source | syntax, text; `ignore`, `zip` |
 | `dumbj-search` | Find in Files, headless: a parallel, cancellable line search (literal or regex, case, whole word, file mask) that honours `.gitignore` and skips binary and huge files | `ignore`, `regex`, `globset` |
 | `dumbj-vcs` | Git, headless: repository discovery, branch, HEAD id and a file's HEAD text through `gix`; changed and untracked files through `git status --porcelain=v2`; line hunks between two texts (`diff`, on `imara-diff`) | `gix`, `imara-diff` |
+| `dumbj-review` | GitHub review, headless: `RepoId` from remote URLs, the `gh` token, a blocking GraphQL `Client` (`ureq`, system certificate store) and the pull-request search | `ureq`, `serde_json` |
 | `dumbj-actions` | Action registry, IntelliJ keymap XML loader, action ID map, key dispatcher, `KEYMAP.md` generator | none |
 | `dumbj-settings` | Themes as data (palette + role mapping); per-project state (`ProjectState`: recent files, recent locations, bookmarks) and its directory; user settings later | syntax |
 | `dumbj-ui` | GPUI front end: workspace window, file tree, tabs, editor view, text input, popups, chooser, Find and Hierarchy tool windows | all of the above |
