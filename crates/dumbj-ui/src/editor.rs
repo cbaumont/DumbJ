@@ -210,6 +210,9 @@ enum Drag {
 /// workspace can run a mouse shortcut bound to it.
 pub(crate) struct MousePressed(pub(crate) MouseStroke);
 
+/// The right button was pressed at this window position; the caret is already there.
+pub(crate) struct ContextMenuRequested(pub(crate) Point<Pixels>);
+
 /// An implements/overrides marker next to a declaration.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct GutterIcon {
@@ -280,6 +283,7 @@ pub(crate) struct EditorView {
 impl EventEmitter<EditorEvent> for EditorView {}
 
 impl EventEmitter<MousePressed> for EditorView {}
+impl EventEmitter<ContextMenuRequested> for EditorView {}
 impl EventEmitter<GutterIconClicked> for EditorView {}
 impl EventEmitter<BlockClicked> for EditorView {}
 
@@ -853,6 +857,22 @@ impl EditorView {
         Some(self.model.buffer().offset_at(TextPoint { line, column }))
     }
 
+    /// Where a popup for the caret goes: under the caret, if it is on screen.
+    pub(crate) fn caret_popup_position(&self) -> Option<Point<Pixels>> {
+        let painted = self.painted.as_ref()?;
+        let caret = self.model.caret_point();
+        let row = (0..painted.rows.len()).find(|row| {
+            painted.rows.get(*row) == Some(&caret.line.get())
+                && painted.blocks.get(*row).is_some_and(Option::is_none)
+        })?;
+        let (display, shaped) = painted.lines.get(row)?;
+        let x = painted.text_left - painted.scroll_x
+            + shaped.x_for_index(display.to_display(caret.column));
+        #[expect(clippy::cast_precision_loss, reason = "a row on screen")]
+        let y = painted.first_line_top + LINE_HEIGHT * (row + 1) as f32;
+        Some(gpui::point(x, y))
+    }
+
     /// The id of the block painted under a window position.
     fn block_at(&self, position: Point<Pixels>) -> Option<usize> {
         let painted = self.painted.as_ref()?;
@@ -901,6 +921,19 @@ impl EditorView {
             },
             clicks: u8::try_from(event.click_count.min(2)).unwrap_or(1),
         };
+        if event.button == MouseButton::Right {
+            window.focus(&self.focus, cx);
+            let on_block = self.block_at(event.position).is_some();
+            if let Some(offset) = self.offset_at(event.position).filter(|_| !on_block) {
+                let selection = self.model.selection();
+                if !(selection.start <= offset && offset <= selection.end) {
+                    self.model.move_to(offset, false);
+                }
+            }
+            cx.notify();
+            cx.emit(ContextMenuRequested(event.position));
+            return;
+        }
         if event.button != MouseButton::Left {
             cx.emit(MousePressed(stroke));
             return;

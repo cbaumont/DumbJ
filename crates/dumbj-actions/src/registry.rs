@@ -143,6 +143,8 @@ pub enum Action {
     ShowHistoryForSelection,
     Annotate,
     GitBranches,
+    ShowMainMenu,
+    ShowContextMenu,
     Escape,
 }
 
@@ -890,6 +892,18 @@ const REGISTRY: &[ActionInfo] = &[
         Action::GitBranches,
         "vcs.branches",
         "Branches",
+        Scope::Window,
+    ),
+    info(
+        Action::ShowMainMenu,
+        "menu.main",
+        "Main Menu",
+        Scope::Window,
+    ),
+    info(
+        Action::ShowContextMenu,
+        "menu.context",
+        "Context Menu",
         Scope::Window,
     ),
     info(Action::Escape, "text.escape", "Escape", Scope::Text),

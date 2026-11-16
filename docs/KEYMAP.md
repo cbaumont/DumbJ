@@ -139,4 +139,6 @@ Linux uses the `DumbJ` keymap (IntelliJ's `macOS For All` plus DumbJ's own actio
 | Show History for Selection | `vcs.selection-history` | `DumbJ.ShowHistoryForSelection`, `Vcs.ShowHistoryForBlock` | `Ctrl+Alt+Shift+Z` | `⌃⌥⇧Z` |
 | Annotate with Git Blame | `vcs.annotate` | `Annotate`, `DumbJ.Annotate` | `Ctrl+Alt+Shift+A` | `⌃⌥⇧A` |
 | Branches | `vcs.branches` | `DumbJ.Branches`, `Git.Branches` | `Ctrl+Alt+Shift+N` | `⌃⌥⇧N` |
+| Main Menu | `menu.main` | `MainMenuButton.ShowMenu` | `Alt+\` | `⌃F2` |
+| Context Menu | `menu.context` | `ShowPopupMenu` | `Menu` | `Menu` |
 | Escape | `text.escape` | `EditorEscape` | `Esc` | `Esc` |

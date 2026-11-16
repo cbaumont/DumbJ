@@ -81,4 +81,10 @@
   <action id="DumbJ.Branches">
     <keyboard-shortcut first-keystroke="control alt shift N"/>
   </action>
+  <action id="ShowPopupMenu">
+    <keyboard-shortcut first-keystroke="CONTEXT_MENU"/>
+  </action>
+  <action id="MainMenuButton.ShowMenu">
+    <keyboard-shortcut first-keystroke="control F2"/>
+  </action>
 </keymap>

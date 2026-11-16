@@ -10,7 +10,7 @@ use gpui::{
     WindowOptions, div, prelude::*, px, size, svg,
 };
 
-use crate::editor::{EditorView, GutterIconClicked, MousePressed};
+use crate::editor::{ContextMenuRequested, EditorView, GutterIconClicked, MousePressed};
 use crate::editor_model::parse_line_column;
 use crate::file_tree::{FileTree, OpenFile};
 use crate::keys::{modifiers_from_gpui, stroke_from_gpui};
@@ -27,6 +27,7 @@ mod git_log;
 mod head_index;
 mod hierarchy;
 mod library;
+mod menu;
 mod navigation;
 mod overview;
 mod pulls;
@@ -145,6 +146,7 @@ pub(crate) struct Workspace {
     branch_popup: Option<BranchPopup>,
     branch_input: Entity<TextInput>,
     pull_list: pulls::PullList,
+    menus: menu::Menus,
     pull_input: Entity<TextInput>,
     session: pulls::Session,
     compose: Option<compose::Compose>,
@@ -300,6 +302,7 @@ impl Workspace {
             branch_popup: None,
             branch_input,
             pull_list: pulls::PullList::new(),
+            menus: menu::Menus::default(),
             pull_input,
             session: pulls::Session::default(),
             compose: None,
@@ -510,6 +513,13 @@ impl Workspace {
         self.subscriptions.push(cx.subscribe_in(
             &editor,
             window,
+            |this, _, ContextMenuRequested(position), window, cx| {
+                this.open_context_menu(*position, window, cx);
+            },
+        ));
+        self.subscriptions.push(cx.subscribe_in(
+            &editor,
+            window,
             |this, _, GutterIconClicked(icon), window, cx| {
                 this.gutter_icon_clicked(*icon, window, cx);
             },
@@ -677,7 +687,10 @@ impl Workspace {
             || self.vcs_popup_open();
         let popup_open = other_popup || self.search.is_some();
         match action {
-            Action::OpenFolder => !popup_open,
+            Action::OpenFolder | Action::ShowMainMenu => !popup_open,
+            Action::ShowContextMenu => {
+                !popup_open && self.focus_area(window, cx) == FocusArea::Editor
+            }
             Action::CloseTab => has_editor && !popup_open,
             Action::NextTab | Action::PreviousTab => self.tabs.len() > 1 && !popup_open,
             Action::ActivateProjectToolWindow | Action::HideAllToolWindows => {
@@ -857,6 +870,8 @@ impl Workspace {
                 self.activate_tab((active + step) % count, window, cx);
             }
             Action::ActivateProjectToolWindow => self.toggle_project_window(window, cx),
+            Action::ShowMainMenu => self.open_main_menu(window, cx),
+            Action::ShowContextMenu => self.open_context_menu_at_caret(window, cx),
             Action::HideAllToolWindows => self.hide_all_tool_windows(window, cx),
             Action::GotoLine => self.open_goto_line(window, cx),
             Action::Find => self.open_find(window, cx),
@@ -1020,6 +1035,13 @@ impl Workspace {
             cx.stop_propagation();
             return;
         }
+        if self.menu_open() {
+            cx.stop_propagation();
+            if let Dispatch::Action(action) = self.dispatcher.key_down(stroke, Self::menu_keys) {
+                self.menu_action(action, window, cx);
+            }
+            return;
+        }
         let enabled = self.enabled_actions(window, cx);
         let dispatch = self
             .dispatcher
@@ -1140,7 +1162,14 @@ impl Workspace {
                         window.show_window_menu(event.position);
                     })
             })
-            .child(project_button)
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(8.))
+                    .child(project_button)
+                    .child(self.render_menu_bar(cx)),
+            )
             .children(controls)
     }
 
@@ -1602,7 +1631,9 @@ impl Workspace {
 
     /// The open popup; when several are, the one that takes the keys.
     fn render_popup(&self, window: &Window, cx: &mut Context<Self>) -> Option<AnyElement> {
-        if let Some(chooser) = &self.chooser {
+        if let Some(menu) = &self.menus.open {
+            Some(self.render_menu(menu, cx).into_any_element())
+        } else if let Some(chooser) = &self.chooser {
             Some(Self::render_chooser(chooser, cx).into_any_element())
         } else if let Some(search) = &self.search {
             Some(self.render_search(search, cx).into_any_element())
