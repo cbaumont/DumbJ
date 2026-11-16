@@ -19,6 +19,8 @@ const SUMMARY_CHARS: usize = 80;
 pub(super) struct PullThreads {
     pub(super) details: Option<PullRequestDetails>,
     pub(super) threads: Vec<ReviewThread>,
+    /// The files GitHub has as viewed, until they are copied into the review state.
+    viewed: Option<Vec<String>>,
     /// Threads whose fold state the user flipped from the default.
     toggled: HashSet<String>,
     _task: Option<Task<()>>,
@@ -203,17 +205,23 @@ impl Workspace {
                         .client
                         .review_threads(&repo, pull.number)
                         .map_err(error)?;
-                    Ok::<_, String>((github, details, threads))
+                    let viewed = github
+                        .client
+                        .viewed_files(&repo, pull.number)
+                        .map_err(error)?;
+                    Ok::<_, String>((github, details, threads, viewed))
                 })
                 .await;
             let _ = this.update(cx, |this, cx| {
                 match loaded {
-                    Ok((github, details, threads)) => {
+                    Ok((github, details, threads, viewed)) => {
                         this.session.github = Some(github);
                         if let Some(pull) = this.session.pull_threads.as_mut() {
                             pull.details = Some(details);
                             pull.threads = threads;
+                            pull.viewed = Some(viewed);
                         }
+                        this.take_viewed_from_github(cx);
                     }
                     Err(message) => {
                         tracing::warn!(%message, "cannot read the review threads");
@@ -232,6 +240,7 @@ impl Workspace {
                 .as_ref()
                 .map_or_else(Vec::new, |pull| pull.threads.clone()),
             toggled: previous.map_or_else(HashSet::new, |pull| pull.toggled),
+            viewed: None,
             _task: Some(task),
         });
     }
@@ -276,6 +285,45 @@ impl Workspace {
             );
             editor.update(cx, |editor, cx| editor.set_blocks(blocks, cx));
         }
+    }
+
+    /// The viewed marks GitHub sent, once the review's file list is there to apply them to.
+    pub(super) fn github_viewed(&mut self) -> Option<Vec<String>> {
+        self.session.pull_threads.as_mut()?.viewed.take()
+    }
+
+    /// Tells GitHub that the viewer has, or has not, viewed `path`.
+    pub(super) fn push_viewed(&mut self, path: &Path, viewed: bool, cx: &mut Context<Self>) {
+        let details = self
+            .session
+            .pull_threads
+            .as_ref()
+            .and_then(|pull| pull.details.as_ref());
+        let (Some(pull_id), Some(github)) = (
+            details.map(|details| details.id.clone()),
+            self.session.github.clone(),
+        ) else {
+            return;
+        };
+        let path = path.to_string_lossy().into_owned();
+        cx.spawn(async move |this, cx| {
+            let outcome = cx
+                .background_spawn(async move {
+                    if viewed {
+                        github.client.mark_file_viewed(&pull_id, &path)
+                    } else {
+                        github.client.unmark_file_viewed(&pull_id, &path)
+                    }
+                })
+                .await;
+            if let Err(error) = outcome {
+                let _ = this.update(cx, |this, cx| {
+                    this.status_message = Some(format!("Viewed mark not synced: {error}"));
+                    cx.notify();
+                });
+            }
+        })
+        .detach();
     }
 
     pub(super) fn reload_pull_threads(&mut self, cx: &mut Context<Self>) {
@@ -510,6 +558,7 @@ mod tests {
             details: None,
             threads: vec![open.clone(), resolved.clone()],
             toggled: HashSet::new(),
+            viewed: None,
             _task: None,
         };
         assert!(pull.expanded(&open));

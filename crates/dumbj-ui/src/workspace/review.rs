@@ -350,6 +350,26 @@ impl Workspace {
         self.refresh_review(cx);
     }
 
+    /// Makes the viewed marks of a pull request's files those GitHub has. Waits until both
+    /// the file list and GitHub's answer are there.
+    pub(super) fn take_viewed_from_github(&mut self, cx: &mut Context<Self>) {
+        if self.review.as_ref().is_none_or(|review| review.loading) {
+            return;
+        }
+        let Some(viewed) = self.github_viewed() else {
+            return;
+        };
+        let (Some(review), Some(saved)) = (&self.review, &mut self.state.review) else {
+            return;
+        };
+        for (change, fingerprint) in review.changes.iter().zip(&review.fingerprints) {
+            let on_github = viewed.iter().any(|path| Path::new(path) == change.path);
+            saved.set_viewed(&change.path, fingerprint, on_github);
+        }
+        self.save_project_state(cx);
+        cx.notify();
+    }
+
     fn review_file_viewed(&self, index: usize) -> bool {
         let (Some(review), Some(saved)) = (&self.review, &self.state.review) else {
             return false;
@@ -389,6 +409,8 @@ impl Workspace {
             .zip(review.fingerprints.get(index))
         {
             saved.set_viewed(&change.path, fingerprint, viewed);
+            let path = change.path.clone();
+            self.push_viewed(&path, viewed, cx);
         }
         self.save_project_state(cx);
         cx.notify();
@@ -445,6 +467,7 @@ impl Workspace {
                     (Some(head), Some(commit)) => self.index_head(&head, &commit, cx),
                     _ => self.drop_head_index(),
                 }
+                self.take_viewed_from_github(cx);
             }
             Ok(None) => {}
             Err(message) => {
