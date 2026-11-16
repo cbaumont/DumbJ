@@ -205,6 +205,7 @@ impl Workspace {
                     for (editor, path) in open {
                         this.refresh_gutter_icons(&editor, &path, cx);
                     }
+                    this.index_revision_editors(cx);
                 }
                 this.indexing = None;
                 cx.notify();
@@ -244,7 +245,7 @@ impl Workspace {
     }
 
     pub(super) fn current_location(&self, cx: &Context<Self>) -> Option<Location> {
-        let tab = self.active_tab()?;
+        let tab = self.active_tab().filter(|_| !self.in_revision())?;
         Some(Location {
             path: tab.path.clone(),
             offset: tab.editor.read(cx).caret_offset(),

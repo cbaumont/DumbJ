@@ -117,7 +117,7 @@ impl Workspace {
     /// Remembers where the caret of the active editor is, as a place to come back to.
     pub(super) fn record_current_location(&mut self, cx: &mut Context<Self>) {
         let Some(tab) = self.active_tab() else { return };
-        if self.project.is_none() || !is_project_file(&tab.path) {
+        if self.project.is_none() || !is_project_file(&tab.path) || self.in_revision() {
             return;
         }
         let editor = tab.editor.read(cx);

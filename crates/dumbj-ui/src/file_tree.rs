@@ -68,6 +68,11 @@ impl FileTree {
         &self.focus
     }
 
+    pub(crate) fn selected_file(&self) -> Option<&Path> {
+        let row = self.model.rows().get(self.selected?)?;
+        (!row.entry.is_dir).then_some(row.entry.path.as_path())
+    }
+
     fn load(dir: PathBuf, cx: &mut Context<Self>) {
         cx.spawn(async move |this, cx| {
             let listing_dir = dir.clone();

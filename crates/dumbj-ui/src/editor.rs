@@ -29,7 +29,10 @@ use crate::keys::modifiers_from_gpui;
 use crate::theme;
 
 mod changes;
+mod diff_marks;
 mod editing;
+
+pub(crate) use diff_marks::DiffMarks;
 
 pub(crate) use editing::EditorEvent;
 
@@ -71,8 +74,19 @@ fn fold_regions(tree: &SyntaxTree, buffer: &Buffer) -> Vec<FoldRegion> {
         .collect()
 }
 
-fn load(path: &Path, language: Option<Language>, cancelled: &AtomicBool) -> Result<Loaded, String> {
-    let (bytes, stamp) = if dumbj_jars::is_virtual_path(path) {
+fn load(
+    path: &Path,
+    revision: Option<&(dumbj_vcs::Repository, String)>,
+    language: Option<Language>,
+    cancelled: &AtomicBool,
+) -> Result<Loaded, String> {
+    let (bytes, stamp) = if let Some((repository, revision)) = revision {
+        let text = repository
+            .text_at(revision, path)
+            .map_err(|error| error.to_string())?
+            .unwrap_or_default();
+        (text.into_bytes(), None)
+    } else if dumbj_jars::is_virtual_path(path) {
         let text = dumbj_jars::read_virtual(path).map_err(|error| error.to_string())?;
         (text.into_bytes(), None)
     } else {
@@ -224,6 +238,7 @@ pub(crate) struct EditorView {
     usages_task: Option<Task<()>>,
     bookmarks: Vec<BookmarkMark>,
     changes: changes::Changes,
+    diff_marks: DiffMarks,
     read_only: bool,
     /// What the file looked like on disk when it was last read or written.
     stamp: Option<FileStamp>,
@@ -253,12 +268,33 @@ impl Drop for EditorView {
 
 impl EditorView {
     pub(crate) fn open(path: PathBuf, cx: &mut Context<Self>) -> Self {
+        Self::open_source(path, None, cx)
+    }
+
+    /// Opens `path` as it is in `revision`, read-only. A file that does not exist there
+    /// opens empty.
+    pub(crate) fn open_revision(
+        path: PathBuf,
+        repository: dumbj_vcs::Repository,
+        revision: String,
+        cx: &mut Context<Self>,
+    ) -> Self {
+        Self::open_source(path, Some((repository, revision)), cx)
+    }
+
+    fn open_source(
+        path: PathBuf,
+        revision: Option<(dumbj_vcs::Repository, String)>,
+        cx: &mut Context<Self>,
+    ) -> Self {
         let language = Language::from_path(&path);
         let load_cancel = Arc::new(AtomicBool::new(false));
         let (load_path, cancel) = (path.clone(), load_cancel.clone());
         let task = cx.spawn(async move |this, cx| {
             let loaded = cx
-                .background_spawn(async move { load(&load_path, language, &cancel) })
+                .background_spawn(
+                    async move { load(&load_path, revision.as_ref(), language, &cancel) },
+                )
                 .await;
             let _ = this.update(cx, |this, cx| {
                 match loaded {
@@ -308,6 +344,7 @@ impl EditorView {
             usages_task: None,
             bookmarks: Vec::new(),
             changes: changes::Changes::default(),
+            diff_marks: DiffMarks::default(),
             read_only: true,
             stamp: None,
             conflict: None,
@@ -956,6 +993,7 @@ impl EditorView {
         let caret_point = self.model.caret_point();
         let row_count = self.model.folds.row_count(line_count);
         let caret_row = self.model.folds.row_of(caret_point.line.get());
+        let revealed = self.reveal.is_some();
         match self.reveal.take() {
             Some(Reveal::Minimal) => {
                 self.scroll_top = scroll_to_reveal(
@@ -971,7 +1009,12 @@ impl EditorView {
             }
             None => {}
         }
+        let scroll_before = self.scroll_top;
         self.scroll_top = self.scroll_top.clamp(0.0, self.max_scroll_top());
+        if (self.scroll_top - scroll_before).abs() > f64::EPSILON || revealed {
+            // Tells whoever follows this editor's scrolling (a diff's other side).
+            cx.on_next_frame(window, |_, _, cx| cx.notify());
+        }
 
         #[expect(
             clippy::cast_possible_truncation,
@@ -1097,6 +1140,23 @@ impl EditorView {
             if line == caret_point.line.get() && !has_selection {
                 let current_line = theme::ui(cx, UiRole::EditorCurrentLine);
                 backgrounds.push(band(bounds.left(), bounds.right(), current_line));
+            }
+            if let Some(role) = self.diff_marks.role_of(line) {
+                let color = theme::ui(cx, role);
+                backgrounds.push(band(bounds.left(), bounds.right(), color.opacity(0.13)));
+                for word in self.diff_marks.words_in(&(line_start..line_end)) {
+                    let (from, to) = (word.start.max(line_start), word.end.min(line_end));
+                    backgrounds.push(band(x(from), x(to), color.opacity(0.3)));
+                }
+            }
+            if self.diff_marks.gaps.contains(&line) {
+                backgrounds.push(fill(
+                    Bounds::new(
+                        point(bounds.left(), top - px(0.5)),
+                        size(bounds.size.width, px(1.5)),
+                    ),
+                    theme::ui(cx, UiRole::TextFaint),
+                ));
             }
             while let Some(usage) = usages
                 .get(usage_index)

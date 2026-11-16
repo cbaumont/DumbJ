@@ -51,7 +51,7 @@ fn chooser_item(bookmark: &Bookmark) -> ChooserItem {
 impl Workspace {
     /// The file, line and line text under the caret, when a bookmark can be set there.
     fn bookmark_site(&self, cx: &Context<Self>) -> Option<(PathBuf, usize, String)> {
-        let tab = self.active_tab()?;
+        let tab = self.active_tab().filter(|_| !self.in_revision())?;
         if self.project.is_none() || !is_project_file(&tab.path) {
             return None;
         }

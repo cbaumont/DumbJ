@@ -80,7 +80,7 @@
 - [~] Change markers — added/modified/deleted against HEAD, Next/Previous Change, Rollback Lines; no marker popup with the old text
 - [ ] Git log tool window
 - [ ] Branch popup
-- [ ] Diff viewer
+- [~] Diff viewer — side by side against HEAD from the Project tree, word-level highlighting, next/previous difference, ignore whitespace (mouse-only), synchronised scrolling, editable right side; no unified view, collapse unchanged or next/previous file
 - [ ] Local review mode
 - [ ] File history
 - [ ] Checkout / fetch
@@ -191,9 +191,10 @@ VCS & diff
 - [x] VcsShowNextChangeMarker
 - [x] VcsShowPrevChangeMarker
 - [x] Vcs.RollbackChangedLines
-- [ ] ShowDiff
-- [ ] NextDiff
-- [ ] PreviousDiff
+- [x] ShowDiff (`Compare.SameVersion`, Project tree only)
+- [x] NextDiff
+- [x] PreviousDiff
+- [x] Diff.FocusOppositePane
 - [ ] Vcs.QuickListPopupAction
 - [ ] RecentChanges
 - [ ] Annotate

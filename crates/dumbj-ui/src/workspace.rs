@@ -18,6 +18,7 @@ use crate::text_input::{TextChanged, TextInput};
 use crate::theme;
 
 mod bookmarks;
+mod diff;
 mod editing;
 mod find_in_files;
 mod hierarchy;
@@ -29,6 +30,7 @@ mod usages;
 mod vcs;
 
 use bookmarks::MnemonicPrompt;
+use diff::DiffTab;
 use dumbj_index::SearchScope;
 use dumbj_settings::ProjectState;
 use find_in_files::FindInFiles;
@@ -54,7 +56,10 @@ struct Project {
 struct Tab {
     path: PathBuf,
     title: String,
+    /// The file's editor; a diff tab shows it on the right and shares it with the file's
+    /// own tab, so both show the same unsaved text.
     editor: Entity<EditorView>,
+    diff: Option<DiffTab>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -264,7 +269,9 @@ impl Workspace {
     }
 
     fn active_editor(&self) -> Option<Entity<EditorView>> {
-        self.active_tab().map(|tab| tab.editor.clone())
+        let tab = self.active_tab()?;
+        let left = tab.diff.as_ref().filter(|diff| diff.left_active());
+        Some(left.map_or_else(|| tab.editor.clone(), |diff| diff.left().clone()))
     }
 
     fn focus_area(&self, window: &Window, cx: &App) -> FocusArea {
@@ -272,9 +279,11 @@ impl Workspace {
             .project
             .as_ref()
             .is_some_and(|project| project.tree.read(cx).focus_handle().is_focused(window));
-        let editor_focused = self
-            .active_tab()
-            .is_some_and(|tab| tab.editor.read(cx).focus_handle().is_focused(window));
+        let editor_focused = self.active_tab().is_some_and(|tab| {
+            let focused =
+                |editor: &Entity<EditorView>| editor.read(cx).focus_handle().is_focused(window);
+            focused(&tab.editor) || tab.diff.as_ref().is_some_and(|diff| focused(diff.left()))
+        });
         let find_window_shown = self.find_window.as_ref().is_some_and(|find| find.visible);
         if self.chooser.is_some() {
             FocusArea::Chooser
@@ -341,45 +350,60 @@ impl Workspace {
         let index = self
             .tabs
             .iter()
-            .position(|tab| tab.path == path)
+            .position(|tab| tab.path == path && tab.diff.is_none())
             .unwrap_or_else(|| {
                 let title = path.file_name().map_or_else(
                     || path.display().to_string(),
                     |name| name.to_string_lossy().into_owned(),
                 );
-                let editor = cx.new(|cx| EditorView::open(path.clone(), cx));
-                self.subscriptions.push(cx.subscribe_in(
-                    &editor,
-                    window,
-                    |this, _, MousePressed(stroke), window, cx| {
-                        this.on_editor_mouse(*stroke, window, cx);
-                    },
-                ));
-                self.subscriptions.push(cx.subscribe_in(
-                    &editor,
-                    window,
-                    |this, _, GutterIconClicked(icon), window, cx| {
-                        this.gutter_icon_clicked(*icon, window, cx);
-                    },
-                ));
-                self.subscriptions
-                    .push(cx.subscribe(&editor, |this, editor, event, cx| {
-                        this.on_editor_event(&editor, event, cx);
-                    }));
-                self.subscriptions
-                    .push(cx.observe(&editor, |_, _, cx| cx.notify()));
-                self.refresh_gutter_icons(&editor, &path, cx);
-                self.refresh_base_text(&editor, &path, cx);
+                let editor = self.editor_for(&path, window, cx);
                 self.tabs.push(Tab {
                     path,
                     title,
                     editor,
+                    diff: None,
                 });
                 self.tabs.len() - 1
             });
         self.activate_tab(index, window, cx);
         self.record_recent_file(&opened, cx);
         self.refresh_bookmark_marks(cx);
+    }
+
+    /// The editor of `path`: the one a tab already shows, or a new one.
+    fn editor_for(
+        &mut self,
+        path: &Path,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Entity<EditorView> {
+        if let Some(tab) = self.tabs.iter().find(|tab| tab.path == path) {
+            return tab.editor.clone();
+        }
+        let editor = cx.new(|cx| EditorView::open(path.to_path_buf(), cx));
+        self.subscriptions.push(cx.subscribe_in(
+            &editor,
+            window,
+            |this, _, MousePressed(stroke), window, cx| {
+                this.on_editor_mouse(*stroke, window, cx);
+            },
+        ));
+        self.subscriptions.push(cx.subscribe_in(
+            &editor,
+            window,
+            |this, _, GutterIconClicked(icon), window, cx| {
+                this.gutter_icon_clicked(*icon, window, cx);
+            },
+        ));
+        self.subscriptions
+            .push(cx.subscribe(&editor, |this, editor, event, cx| {
+                this.on_editor_event(&editor, event, cx);
+            }));
+        self.subscriptions
+            .push(cx.observe(&editor, |_, _, cx| cx.notify()));
+        self.refresh_gutter_icons(&editor, path, cx);
+        self.refresh_base_text(&editor, path, cx);
+        editor
     }
 
     fn activate_tab(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
@@ -396,13 +420,20 @@ impl Workspace {
             return;
         };
         self.active = Some(index);
-        tab.editor.update(cx, EditorView::check_disk);
+        let marks = tab.diff.as_ref().map(DiffTab::right_marks);
+        tab.editor.update(cx, |editor, cx| {
+            editor.set_diff_marks(marks.unwrap_or_default(), cx);
+            editor.check_disk(cx);
+        });
         let handle = tab.editor.read(cx).focus_handle().clone();
         window.focus(&handle, cx);
         if self.find_open {
             let query = self.find.read(cx).text().to_owned();
             tab.editor
                 .update(cx, |editor, cx| editor.set_search_query(&query, cx));
+        }
+        if let Some(left) = tab.diff.as_ref().map(|diff| diff.left().entity_id()) {
+            self.diff_changed(left, cx);
         }
         self.update_title(window);
         cx.notify();
@@ -563,6 +594,18 @@ impl Workspace {
             | Action::GotoSuperMethod
             | Action::TypeHierarchy
             | Action::CallHierarchy => has_editor && self.index.is_some() && !popup_open,
+            Action::ShowDiff => {
+                !popup_open
+                    && self.focus_area(window, cx) == FocusArea::Tree
+                    && self.diff_target(cx).is_some()
+            }
+            // Shares its shortcut with Show Diff, which the Project tree takes.
+            Action::DuplicateLine => {
+                has_editor && !popup_open && self.focus_area(window, cx) != FocusArea::Tree
+            }
+            Action::NextDiff | Action::PreviousDiff | Action::FocusOppositeDiffPane => {
+                self.active_diff().is_some() && !popup_open
+            }
             Action::ActivateFindToolWindow => self.find_window.is_some() && !popup_open,
             Action::ActivateHierarchyToolWindow => self.hierarchy_window.is_some() && !popup_open,
             Action::Back => self.history.can_go_back() && !popup_open,
@@ -634,6 +677,15 @@ impl Workspace {
             Action::CallHierarchy => self.call_hierarchy(cx),
             Action::ActivateHierarchyToolWindow => self.toggle_hierarchy_window(window, cx),
             Action::GotoDeclaration => self.goto_declaration(window, cx),
+            Action::ShowDiff => {
+                if let Some(path) = self.diff_target(cx) {
+                    self.show_diff(path, window, cx);
+                }
+            }
+            Action::NextDiff | Action::PreviousDiff => {
+                self.go_to_difference(action == Action::NextDiff, cx);
+            }
+            Action::FocusOppositeDiffPane => self.focus_opposite_diff_pane(window, cx),
             Action::Back => self.go_back(window, cx),
             Action::Forward => self.go_forward(window, cx),
             Action::OpenFolder => Self::prompt_for_folder(window, cx),
@@ -1188,7 +1240,10 @@ impl Workspace {
             .child(tab_bar)
             .children(find_bar)
             .children(conflict_bar)
-            .child(div().flex_1().min_h_0().child(tab.editor.clone()))
+            .child(div().flex_1().min_h_0().child(match &tab.diff {
+                Some(diff) => Self::render_diff(tab, diff, cx).into_any_element(),
+                None => tab.editor.clone().into_any_element(),
+            }))
     }
 
     fn render_status_bar(&self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -1225,8 +1280,8 @@ impl Workspace {
         right.extend(self.status_message.clone());
         right.extend(self.index_status());
         right.extend(self.branch.clone());
-        if let Some(tab) = tab {
-            let editor = tab.editor.read(cx);
+        if let Some(editor) = self.active_editor() {
+            let editor = editor.read(cx);
             let (line, column) = editor.caret_line_column();
             right.push(format!("{line}:{column}"));
             right.push(
