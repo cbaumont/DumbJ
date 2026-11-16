@@ -12,6 +12,7 @@
 - [ ] Structure tool window
 - [x] Find tool window — Find Usages and Find in Files results, grouped by file
 - [~] Git tool window — log only; no branches pane
+- [x] Menu bar — File, Edit, View, Navigate, Git, Review: every window action with its shortcut; Main Menu (Alt+Backslash) and Context Menu (Menu key) open them from the keyboard
 - [x] Review tool window — the changed files of a local review as a folder tree (Alt+0); Pull Requests has its own (Alt+8)
 - [ ] Bookmarks tool window
 - [ ] Problems tool window
@@ -89,7 +90,8 @@
 - [~] Sign in — the `gh` CLI's token; no own sign-in
 - [~] PR list — Pull Requests tool window (review requested, assigned, mine, all; search), open PRs only, first 50
 - [x] Open PR into private refs — navigation across the whole head from git objects; Prune Review Refs
-- [~] Inline threads — folded/expanded blocks in the diff, resolved/outdated/pending state, next/previous; Markdown not rendered
+- [~] Inline threads — folded/expanded blocks in the diff wrapped to the pane, resolved/outdated/pending state, next/previous, code fences and suggested changes set apart; inline Markdown not rendered
+- [x] Mouse: `+` in the gutter of a review diff to comment on the hovered line, editor context menu
 - [x] Comments, pending review, suggestions — line or range, reply, resolve/unresolve, suggestion block from the selected lines
 - [x] Submit review — comment, approve, request changes, with a summary
 - [x] Viewed sync
