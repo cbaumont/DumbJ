@@ -26,7 +26,14 @@ fn file_facts(path: &Path, language: Language, cancelled: &AtomicBool) -> FileFa
             return FileFacts::default();
         }
     };
-    let buffer = Buffer::new(&text);
+    text_facts(&text, language, cancelled)
+}
+
+pub(crate) fn text_facts(text: &str, language: Language, cancelled: &AtomicBool) -> FileFacts {
+    if text.len() as u64 > MAX_INDEXED_FILE_BYTES {
+        return FileFacts::default();
+    }
+    let buffer = Buffer::new(text);
     match dumbj_syntax::parse(language, &buffer, || cancelled.load(Ordering::Relaxed)) {
         Ok(Some(tree)) => tree.facts(&buffer),
         Ok(None) => FileFacts::default(),

@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::OnceLock;
+use std::sync::{Arc, OnceLock};
 
 use dumbj_syntax::{FileFacts, Language, Symbol};
 
@@ -24,9 +24,43 @@ pub struct IndexedFile {
     pub facts: FileFacts,
 }
 
+/// How an index reads the text of its files: from disk, or from git objects for a
+/// revision that is not checked out.
+#[derive(Clone)]
+pub struct FileReader(Arc<ReadFn>);
+
+type ReadFn = dyn Fn(&Path) -> Option<String> + Send + Sync;
+
+impl FileReader {
+    pub fn new(read: impl Fn(&Path) -> Option<String> + Send + Sync + 'static) -> Self {
+        Self(Arc::new(read))
+    }
+
+    #[must_use]
+    pub fn read(&self, path: &Path) -> Option<String> {
+        (self.0)(path)
+    }
+}
+
+impl Default for FileReader {
+    fn default() -> Self {
+        Self::new(|path| {
+            let bytes = std::fs::read(path).ok()?;
+            Some(String::from_utf8_lossy(&bytes).into_owned())
+        })
+    }
+}
+
+impl std::fmt::Debug for FileReader {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("FileReader")
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct Index {
     files: Vec<IndexedFile>,
+    reader: FileReader,
     by_path: HashMap<PathBuf, FileId>,
     by_name: HashMap<String, Vec<SymbolId>>,
     by_package: HashMap<String, Vec<FileId>>,
@@ -47,16 +81,23 @@ impl Index {
     /// Builds the lookup tables for `files`. Files are sorted by path so that IDs and
     /// result orders do not depend on the order indexing threads finished in.
     #[must_use]
-    pub fn new(mut files: Vec<IndexedFile>) -> Self {
+    pub fn new(files: Vec<IndexedFile>) -> Self {
+        Self::with_reader(files, FileReader::default())
+    }
+
+    /// [`Index::new`] for files whose text comes from `reader` instead of the disk.
+    #[must_use]
+    pub fn with_reader(mut files: Vec<IndexedFile>, reader: FileReader) -> Self {
         files.sort_by(|a, b| a.path.cmp(&b.path));
         files.dedup_by(|a, b| a.path == b.path);
-        let project = ProjectModel::discover(&files);
+        let project = ProjectModel::discover(&files, &reader);
         let modules = files
             .iter()
             .map(|file| project.module_of_path(&file.relative))
             .collect();
         let mut index = Self {
             files,
+            reader,
             project,
             modules,
             ..Self::default()
@@ -95,18 +136,25 @@ impl Index {
             .cloned()
             .collect();
         files.push(file);
-        Self::new(files)
+        Self::with_reader(files, self.reader.clone())
     }
 
     #[must_use]
     pub fn without_file(&self, path: &Path) -> Self {
-        Self::new(
+        Self::with_reader(
             self.files
                 .iter()
                 .filter(|file| file.path != path)
                 .cloned()
                 .collect(),
+            self.reader.clone(),
         )
+    }
+
+    /// The text of one of this index's files.
+    #[must_use]
+    pub fn read(&self, path: &Path) -> Option<String> {
+        self.reader.read(path)
     }
 
     #[must_use]

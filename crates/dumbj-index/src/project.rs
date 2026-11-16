@@ -6,7 +6,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::index::IndexedFile;
+use crate::index::{FileReader, IndexedFile};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct ModuleId(pub(crate) u32);
@@ -121,9 +121,9 @@ fn source_root_of(file: &IndexedFile) -> Option<String> {
 
 impl ProjectModel {
     /// Works out the modules of a project from its indexed files. Reads the settings and
-    /// POM files among them from disk.
+    /// POM files among them through `reader`.
     #[must_use]
-    pub fn discover(files: &[IndexedFile]) -> Self {
+    pub fn discover(files: &[IndexedFile], reader: &FileReader) -> Self {
         let mut dirs: BTreeMap<String, Option<String>> = BTreeMap::from([(String::new(), None)]);
         for file in files {
             let (dir, name) = (
@@ -134,11 +134,13 @@ impl ProjectModel {
                 dirs.entry(dir.to_owned()).or_default();
             }
             let declared = if SETTINGS_FILES.contains(&name) {
-                std::fs::read_to_string(&file.path)
-                    .map_or_else(|_| Vec::new(), |text| gradle_includes(&text))
+                reader
+                    .read(&file.path)
+                    .map_or_else(Vec::new, |text| gradle_includes(&text))
             } else if name == "pom.xml" {
-                std::fs::read_to_string(&file.path)
-                    .map_or_else(|_| Vec::new(), |text| maven_modules(&text))
+                reader
+                    .read(&file.path)
+                    .map_or_else(Vec::new, |text| maven_modules(&text))
             } else {
                 continue;
             };
@@ -315,7 +317,7 @@ mod tests {
             file("scripts/Tool.java", Some("")),
             file("docs/readme.md", None),
         ];
-        let model = ProjectModel::discover(&files);
+        let model = ProjectModel::discover(&files, &FileReader::default());
         let summary: Vec<String> = model
             .modules()
             .iter()
@@ -363,9 +365,15 @@ mod tests {
 
     #[test]
     fn a_package_that_does_not_match_the_path_gives_no_root() {
-        let model = ProjectModel::discover(&[file("src/odd/place/A.java", Some("com.shop"))]);
+        let model = ProjectModel::discover(
+            &[file("src/odd/place/A.java", Some("com.shop"))],
+            &FileReader::default(),
+        );
         assert_eq!(model.modules()[0].source_roots, []);
-        let model = ProjectModel::discover(&[file("src/xcom/shop/A.java", Some("com.shop"))]);
+        let model = ProjectModel::discover(
+            &[file("src/xcom/shop/A.java", Some("com.shop"))],
+            &FileReader::default(),
+        );
         assert_eq!(
             model.modules()[0].source_roots,
             [],

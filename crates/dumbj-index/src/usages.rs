@@ -171,7 +171,7 @@ fn parse_if_mentions(
     let language = indexed
         .language
         .filter(|l| matches!(l, Language::Java | Language::Kotlin))?;
-    let text = String::from_utf8_lossy(&std::fs::read(&indexed.path).ok()?).into_owned();
+    let text = index.read(&indexed.path)?;
     if !names.iter().any(|name| text.contains(name.as_str())) {
         return None;
     }

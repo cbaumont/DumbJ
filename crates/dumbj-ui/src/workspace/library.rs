@@ -49,7 +49,7 @@ fn build_text(index: &Index) -> String {
                 .and_then(|name| name.to_str())
                 .is_some_and(|name| BUILD_FILES.contains(&name))
         })
-        .filter_map(|(_, file)| std::fs::read_to_string(&file.path).ok())
+        .filter_map(|(_, file)| index.read(&file.path))
         .collect::<Vec<_>>()
         .join("\n")
 }
