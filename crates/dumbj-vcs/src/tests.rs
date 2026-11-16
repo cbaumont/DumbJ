@@ -707,3 +707,72 @@ fn content_ids_of_nothing_runs_no_git() {
         Some(vec![])
     );
 }
+
+fn commit_as(t: &TempRepo, author: &str, message: &str) {
+    t.git(&["add", "-A"]);
+    let name = format!("user.name={author}");
+    let out = Command::new("git")
+        .args(["-c", &name, "-c", "user.email=t@example.com"])
+        .args(["-c", "commit.gpgsign=false", "commit", "-q", "-m", message])
+        .current_dir(&t.0)
+        .env("GIT_CONFIG_GLOBAL", "/dev/null")
+        .env("GIT_CONFIG_SYSTEM", "/dev/null")
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+}
+
+#[test]
+fn blame_attributes_lines_to_their_last_commit() {
+    let t = TempRepo::new();
+    t.file("a.txt", "one\ntwo\nthree\n");
+    commit_as(&t, "Ann", "first");
+    let first = t.rev("HEAD");
+    t.file("a.txt", "one\nTWO\nthree\nfour\n");
+    commit_as(&t, "Bob", "second");
+    let second = t.rev("HEAD");
+    let repo = t.repo();
+    let lines = repo
+        .blame("HEAD", &t.0.join("a.txt"), &git::never())
+        .unwrap()
+        .unwrap();
+    let got: Vec<_> = lines
+        .iter()
+        .map(|l| (l.commit.as_str(), l.author.as_str(), l.summary.as_str()))
+        .collect();
+    assert_eq!(
+        got,
+        [
+            (first.as_str(), "Ann", "first"),
+            (second.as_str(), "Bob", "second"),
+            (first.as_str(), "Ann", "first"),
+            (second.as_str(), "Bob", "second"),
+        ]
+    );
+    assert!(lines.iter().all(|l| l.time > 0));
+    let old = repo
+        .blame(&first, Path::new("a.txt"), &git::never())
+        .unwrap()
+        .unwrap();
+    assert_eq!(old.len(), 3);
+    assert!(old.iter().all(|l| l.author == "Ann"));
+}
+
+#[test]
+fn blame_is_empty_for_a_missing_file_or_revision() {
+    let t = TempRepo::new();
+    t.file("a.txt", "1\n");
+    t.commit_msg("one");
+    let repo = t.repo();
+    let blame = |rev: &str, path: &str| {
+        repo.blame(rev, Path::new(path), &git::never())
+            .unwrap()
+            .unwrap()
+    };
+    assert_eq!(blame("HEAD", "missing.txt"), []);
+    assert_eq!(blame("nope", "a.txt"), []);
+    assert!(
+        repo.blame("--x", Path::new("a.txt"), &git::never())
+            .is_err()
+    );
+}
