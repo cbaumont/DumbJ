@@ -925,3 +925,95 @@ fn many_blobs_in_one_batch() {
         assert_eq!(blob.as_deref(), Some(format!("{i}\n{big}").as_bytes()));
     }
 }
+
+fn pull_fixture() -> (TempRepo, TempRepo) {
+    let upstream = TempRepo::new();
+    upstream.file("a.txt", "one\n");
+    upstream.commit_all();
+    upstream.git(&["switch", "-q", "-c", "topic"]);
+    upstream.file("a.txt", "two\n");
+    upstream.commit_all();
+    upstream.git(&["update-ref", "refs/pull/7/head", "HEAD"]);
+    upstream.git(&["switch", "-q", "main"]);
+    upstream.git(&["branch", "-q", "-D", "topic"]);
+    let local = TempRepo::new();
+    local.git(&["remote", "add", "origin", upstream.0.to_str().unwrap()]);
+    local.git(&["fetch", "-q", "origin"]);
+    local.git(&["switch", "-q", "-c", "main", "origin/main"]);
+    (upstream, local)
+}
+
+#[test]
+fn remotes_are_listed_with_their_urls() {
+    let (upstream, local) = pull_fixture();
+    local.git(&["remote", "add", "fork", "git@github.com:me/fork.git"]);
+    let remotes: Vec<_> = local
+        .repo()
+        .remotes()
+        .unwrap()
+        .into_iter()
+        .map(|remote| (remote.name, remote.url))
+        .collect();
+    assert_eq!(
+        remotes,
+        [
+            ("fork".to_owned(), "git@github.com:me/fork.git".to_owned()),
+            ("origin".to_owned(), upstream.0.to_str().unwrap().to_owned()),
+        ]
+    );
+    assert_eq!(upstream.repo().remotes().unwrap(), []);
+}
+
+#[test]
+fn a_pull_request_is_fetched_into_private_refs_and_pruned() {
+    let (upstream, local) = pull_fixture();
+    let repo = local.repo();
+    assert_eq!(repo.pull_refs(7).unwrap(), None);
+    let branches_before = repo.branches().unwrap();
+    let head_before = repo.head_id().unwrap();
+
+    let refs = repo
+        .fetch_pull("origin", 7, "main", &git::never())
+        .unwrap()
+        .unwrap();
+    assert_eq!(refs.head, rev_parse(&upstream, "refs/pull/7/head"));
+    assert_eq!(refs.base, rev_parse(&upstream, "main"));
+    assert_eq!(rev_parse(&local, "refs/dumbj/pr/7/head"), refs.head);
+    assert_eq!(repo.pull_refs(7).unwrap(), Some(refs.clone()));
+    assert_eq!(
+        repo.text_at(&refs.head, Path::new("a.txt")).unwrap(),
+        Some("two\n".to_owned())
+    );
+    assert_eq!(repo.branches().unwrap(), branches_before);
+    assert_eq!(repo.head_id().unwrap(), head_before);
+    let fetch_head = fs::read_to_string(local.0.join(".git/FETCH_HEAD")).unwrap_or_default();
+    assert!(!fetch_head.contains(&refs.head));
+
+    upstream.git(&["switch", "-q", "--detach", "refs/pull/7/head"]);
+    upstream.file("a.txt", "three\n");
+    upstream.commit_all();
+    upstream.git(&["update-ref", "refs/pull/7/head", "HEAD"]);
+    let updated = repo
+        .fetch_pull("origin", 7, "main", &git::never())
+        .unwrap()
+        .unwrap();
+    assert_ne!(updated.head, refs.head);
+    assert_eq!(updated.base, refs.base);
+
+    assert_eq!(repo.prune_pull_refs().unwrap(), 2);
+    assert_eq!(repo.pull_refs(7).unwrap(), None);
+    assert_eq!(repo.prune_pull_refs().unwrap(), 0);
+}
+
+#[test]
+fn fetching_a_missing_pull_request_fails() {
+    let (_upstream, local) = pull_fixture();
+    let repo = local.repo();
+    assert!(repo.fetch_pull("origin", 8, "main", &git::never()).is_err());
+    assert!(repo.fetch_pull("origin", 7, "nope", &git::never()).is_err());
+    assert!(
+        repo.fetch_pull("--upload-pack=x", 7, "main", &git::never())
+            .is_err()
+    );
+    assert_eq!(repo.pull_refs(7).unwrap(), None);
+}
