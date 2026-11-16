@@ -142,6 +142,17 @@ impl Workspace {
         };
         let editor = editor.read(cx);
         let (first_line, last_line) = editor.selected_lines();
+        let in_diff = self
+            .active_diff()
+            .is_some_and(|diff| diff.takes_comment(first_line, last_line));
+        if !in_diff {
+            self.status_message = Some(
+                "GitHub takes comments only on changed lines and the 3 lines around them"
+                    .to_owned(),
+            );
+            cx.notify();
+            return;
+        }
         let excerpt = editor.lines_text(first_line, last_line);
         let purpose = Purpose::Thread {
             path,

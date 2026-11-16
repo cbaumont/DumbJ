@@ -1678,6 +1678,7 @@ fn resize_edge(position: Point<Pixels>, window_size: Size<Pixels>) -> Option<Res
 
 impl Render for Workspace {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        self.rewrap_threads(cx);
         let client_decorated = matches!(window.window_decorations(), Decorations::Client { .. });
         let project_window = (self.project_window == ToolWindowState::Visible)
             .then(|| self.render_left_window(window, cx))

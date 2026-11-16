@@ -9,6 +9,8 @@ pub(crate) enum BlockTone {
     Title,
     Text,
     Faint,
+    Code,
+    Suggestion,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

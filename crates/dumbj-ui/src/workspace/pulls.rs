@@ -57,6 +57,8 @@ pub(super) struct Session {
     pub(super) pull_threads: Option<super::threads::PullThreads>,
     /// Draft comments are on their way to GitHub.
     pub(super) sending: bool,
+    /// The width the threads of each open diff side were last wrapped at.
+    pub(super) wrapped_at: Vec<usize>,
 }
 
 impl GitHub {

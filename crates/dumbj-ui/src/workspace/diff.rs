@@ -1,3 +1,4 @@
+use std::ops::Range;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
@@ -44,6 +45,14 @@ pub(super) struct DiffTab {
 impl DiffTab {
     pub(super) fn left(&self) -> &Entity<EditorView> {
         &self.left
+    }
+
+    /// Whether GitHub would take a comment on the lines `first..=last` of the active side.
+    /// With whitespace ignored the hunks are not GitHub's, so nothing is ruled out.
+    pub(super) fn takes_comment(&self, first: usize, last: usize) -> bool {
+        self.options.ignore_whitespace
+            || self.computed.is_none()
+            || in_github_diff(&self.hunks, self.left_active, first, last)
     }
 
     pub(super) fn left_active(&self) -> bool {
@@ -189,6 +198,26 @@ fn opposite_line(hunks: &[Hunk], line: f64, from_old: bool) -> f64 {
 }
 
 /// The first line of the nearest difference after (or before) `line` on one side.
+/// GitHub shows this many unchanged lines around a change and takes comments on them too.
+const GITHUB_CONTEXT: usize = 3;
+
+/// Whether GitHub's diff shows the one-based lines `first..=last` of a side in one piece,
+/// which is what it needs to take a comment on them.
+fn in_github_diff(hunks: &[Hunk], old_side: bool, first: usize, last: usize) -> bool {
+    let (first, last) = (first.saturating_sub(1), last.saturating_sub(1));
+    let mut shown: Option<Range<usize>> = None;
+    for hunk in hunks {
+        let lines = if old_side { &hunk.old } else { &hunk.new };
+        let around = lines.start.saturating_sub(GITHUB_CONTEXT)..lines.end + GITHUB_CONTEXT;
+        match &mut shown {
+            Some(piece) if around.start <= piece.end => piece.end = around.end,
+            Some(piece) if piece.start <= first && last < piece.end => return true,
+            _ => shown = Some(around),
+        }
+    }
+    shown.is_some_and(|piece| piece.start <= first && last < piece.end)
+}
+
 fn neighbour(hunks: &[Hunk], line: usize, old_side: bool, forward: bool) -> Option<usize> {
     let side = |hunk: &Hunk| {
         if old_side {
@@ -650,6 +679,38 @@ mod tests {
 
     fn hunk(kind: HunkKind, old: std::ops::Range<usize>, new: std::ops::Range<usize>) -> Hunk {
         Hunk { kind, old, new }
+    }
+
+    #[test]
+    fn github_takes_comments_on_changes_and_three_lines_around() {
+        let hunk = |old: Range<usize>, new: Range<usize>| Hunk {
+            kind: HunkKind::Modified,
+            old,
+            new,
+        };
+        let hunks = [
+            hunk(10..12, 10..11),
+            hunk(16..16, 15..17),
+            hunk(40..41, 41..42),
+        ];
+        assert!(in_github_diff(&hunks, false, 11, 11));
+        assert!(in_github_diff(&hunks, false, 8, 8), "context above");
+        assert!(!in_github_diff(&hunks, false, 7, 7));
+        assert!(
+            in_github_diff(&hunks, false, 9, 19),
+            "two hunks whose context joins"
+        );
+        assert!(!in_github_diff(&hunks, false, 20, 39));
+        assert!(
+            !in_github_diff(&hunks, false, 19, 41),
+            "two separate pieces"
+        );
+        assert!(in_github_diff(&hunks, true, 41, 41));
+        assert!(
+            in_github_diff(&hunks, true, 14, 16),
+            "around a pure addition"
+        );
+        assert!(!in_github_diff(&[], false, 1, 1));
     }
 
     fn hunks() -> Vec<Hunk> {

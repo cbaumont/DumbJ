@@ -180,6 +180,8 @@ struct PaintedLines {
     gutter_right: Pixels,
     visible_lines: f64,
     scroll_x: Pixels,
+    /// How many characters fit between the gutter and the scrollbar.
+    columns: usize,
     lines: Arc<Vec<(DisplayLine, ShapedLine)>>,
     scrollbar: Option<Bounds<Pixels>>,
     sticky_lines: Vec<usize>,
@@ -876,6 +878,11 @@ impl EditorView {
         Some(self.model.buffer().offset_at(TextPoint { line, column }))
     }
 
+    /// How many characters fit on a line, once the editor has been painted.
+    pub(crate) fn text_columns(&self) -> Option<usize> {
+        self.painted.as_ref().map(|painted| painted.columns)
+    }
+
     /// Where a popup for the caret goes: under the caret, if it is on screen.
     pub(crate) fn caret_popup_position(&self) -> Option<Point<Pixels>> {
         let painted = self.painted.as_ref()?;
@@ -1268,7 +1275,8 @@ impl EditorView {
                     let role = match tone {
                         BlockTone::Title => UiRole::Accent,
                         BlockTone::Text => UiRole::Text,
-                        BlockTone::Faint => UiRole::TextMuted,
+                        BlockTone::Faint | BlockTone::Code => UiRole::TextMuted,
+                        BlockTone::Suggestion => UiRole::Success,
                     };
                     let display = DisplayLine::new(text, MAX_LINE_BYTES);
                     let shaped = shape(
@@ -1612,6 +1620,13 @@ impl EditorView {
             benchmark.layout_times.push(layout_started.elapsed());
         }
         let lines = Arc::new(lines);
+        #[expect(
+            clippy::cast_possible_truncation,
+            clippy::cast_sign_loss,
+            reason = "a few hundred characters at most"
+        )]
+        let columns =
+            ((bounds.size.width - gutter_width - SCROLLBAR_WIDTH) / digit_width).max(0.0) as usize;
         self.painted = Some(PaintedLines {
             bounds,
             text_left,
@@ -1621,6 +1636,7 @@ impl EditorView {
             gutter_right: bounds.left() + gutter_width,
             visible_lines,
             scroll_x: self.scroll_x,
+            columns,
             lines: lines.clone(),
             scrollbar,
             sticky_lines,

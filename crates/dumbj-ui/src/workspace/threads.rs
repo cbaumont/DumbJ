@@ -14,6 +14,7 @@ use super::pulls::connect;
 use crate::editor::{Block, BlockRow, BlockTone, EditorView};
 
 const WRAP_COLUMNS: usize = 100;
+const WRAP_RANGE: (usize, usize) = (30, 160);
 const SUMMARY_CHARS: usize = 80;
 
 pub(super) struct PullThreads {
@@ -60,6 +61,32 @@ fn wrap(text: &str, width: usize) -> Vec<String> {
     lines
 }
 
+/// The rows of a comment's Markdown: paragraphs wrapped at `width`, fenced code kept as
+/// written, a suggested change in its own colour.
+fn body_rows(body: &str, width: usize) -> Vec<BlockRow> {
+    let row = |text: String, tone| BlockRow { text, tone };
+    let mut rows = Vec::new();
+    let mut fence: Option<BlockTone> = None;
+    for line in body.lines() {
+        let marker = line.trim_start().strip_prefix("```");
+        match (fence, marker) {
+            (Some(_), Some(_)) => fence = None,
+            (Some(tone), None) => rows.push(row(format!("  │ {line}"), tone)),
+            (None, Some(info)) if info.trim() == "suggestion" => {
+                rows.push(row("  Suggested change:".to_owned(), BlockTone::Faint));
+                fence = Some(BlockTone::Suggestion);
+            }
+            (None, Some(_)) => fence = Some(BlockTone::Code),
+            (None, None) => rows.extend(
+                wrap(line, width)
+                    .into_iter()
+                    .map(|text| row(format!("  {text}"), BlockTone::Text)),
+            ),
+        }
+    }
+    rows
+}
+
 fn state(thread: &ReviewThread) -> String {
     let pending = thread.comments.iter().any(|comment| comment.pending);
     let mut state = String::new();
@@ -86,7 +113,7 @@ fn thread_line(thread: &ReviewThread) -> Option<usize> {
     usize::try_from(line).ok()?.checked_sub(1)
 }
 
-fn thread_block(id: usize, thread: &ReviewThread, expanded: bool) -> Option<Block> {
+fn thread_block(id: usize, thread: &ReviewThread, expanded: bool, width: usize) -> Option<Block> {
     let line = thread_line(thread)?;
     let first = thread.comments.first()?;
     let row = |text: String, tone| BlockRow { text, tone };
@@ -106,19 +133,14 @@ fn thread_block(id: usize, thread: &ReviewThread, expanded: bool) -> Option<Bloc
                 format!("{marker} {} · {day}{pending}{state}", comment.author),
                 BlockTone::Title,
             ));
-            for text in wrap(&comment.body, WRAP_COLUMNS) {
-                rows.push(row(format!("  {text}"), BlockTone::Text));
-            }
+            rows.extend(body_rows(&comment.body, width));
         }
     } else {
-        let summary: String = first
-            .body
-            .lines()
-            .next()
-            .unwrap_or_default()
-            .chars()
-            .take(SUMMARY_CHARS)
-            .collect();
+        let summary: String = body_rows(&first.body, SUMMARY_CHARS)
+            .first()
+            .map_or("", |row| row.text.trim_start_matches([' ', '│']))
+            .trim_end_matches(':')
+            .to_owned();
         let more = match thread.comments.len() {
             1 => String::new(),
             count => format!(" · {count} comments"),
@@ -134,22 +156,28 @@ fn thread_block(id: usize, thread: &ReviewThread, expanded: bool) -> Option<Bloc
 /// Block ids from here on stand for unsent comments: this plus the draft's id.
 const DRAFT_BLOCKS: usize = usize::MAX / 2;
 
-fn draft_block(draft: &DraftComment) -> Block {
+fn draft_block(draft: &DraftComment, width: usize) -> Block {
     let row = |text: String, tone| BlockRow { text, tone };
     let mut rows = vec![row(
         "▾ not sent yet · click to edit".to_owned(),
         BlockTone::Title,
     )];
-    rows.extend(
-        wrap(&draft.body, WRAP_COLUMNS)
-            .into_iter()
-            .map(|text| row(format!("  {text}"), BlockTone::Text)),
-    );
+    rows.extend(body_rows(&draft.body, width));
     Block {
         id: DRAFT_BLOCKS.saturating_add(usize::try_from(draft.id).unwrap_or(0)),
         line: draft.last_line.saturating_sub(1),
         rows,
     }
+}
+
+/// The width comments wrap at in `editor`: what fits beside the indent.
+fn wrap_width(editor: &Entity<EditorView>, cx: &gpui::App) -> usize {
+    editor
+        .read(cx)
+        .text_columns()
+        .map_or(WRAP_COLUMNS, |columns| {
+            columns.saturating_sub(4).clamp(WRAP_RANGE.0, WRAP_RANGE.1)
+        })
 }
 
 fn side_of(side: DiffSide) -> NoteSide {
@@ -164,12 +192,12 @@ impl PullThreads {
         expanded_by_default(thread) != self.toggled.contains(&thread.id)
     }
 
-    fn blocks(&self, path: &Path, side: NoteSide) -> Vec<Block> {
+    fn blocks(&self, path: &Path, side: NoteSide, width: usize) -> Vec<Block> {
         self.threads
             .iter()
             .enumerate()
             .filter(|(_, thread)| Path::new(&thread.path) == path && side_of(thread.side) == side)
-            .filter_map(|(id, thread)| thread_block(id, thread, self.expanded(thread)))
+            .filter_map(|(id, thread)| thread_block(id, thread, self.expanded(thread), width))
             .collect()
     }
 }
@@ -263,6 +291,22 @@ impl Workspace {
             .collect()
     }
 
+    /// Wraps the threads again when a diff pane has changed width.
+    pub(super) fn rewrap_threads(&mut self, cx: &mut Context<Self>) {
+        if self.session.pull_threads.is_none() {
+            return;
+        }
+        let widths: Vec<usize> = self
+            .thread_sites()
+            .iter()
+            .map(|(editor, ..)| wrap_width(editor, cx))
+            .collect();
+        if widths != self.session.wrapped_at {
+            self.session.wrapped_at = widths;
+            self.apply_thread_blocks(cx);
+        }
+    }
+
     /// Gives every open diff of the review the blocks of its threads and unsent comments.
     pub(super) fn apply_thread_blocks(&self, cx: &mut Context<Self>) {
         let drafts = self
@@ -272,16 +316,17 @@ impl Workspace {
             .filter(|review| review.pull.is_some())
             .map_or(&[][..], |review| review.drafts());
         for (editor, path, side) in self.thread_sites() {
+            let width = wrap_width(&editor, cx);
             let mut blocks = self
                 .session
                 .pull_threads
                 .as_ref()
-                .map_or_else(Vec::new, |pull| pull.blocks(&path, side));
+                .map_or_else(Vec::new, |pull| pull.blocks(&path, side, width));
             blocks.extend(
                 drafts
                     .iter()
                     .filter(|draft| draft.path == path && draft.side == side)
-                    .map(draft_block),
+                    .map(|draft| draft_block(draft, width)),
             );
             editor.update(cx, |editor, cx| editor.set_blocks(blocks, cx));
         }
@@ -499,6 +544,28 @@ mod tests {
     }
 
     #[test]
+    fn code_fences_are_kept_and_suggestions_stand_out() {
+        let body = "Use the size once, it is computed twice here.\n```suggestion\n    val size = tracks.size\n```\nOr:\n```kotlin\nfoo()\n```";
+        let rows = body_rows(body, 20);
+        let rows: Vec<(&str, BlockTone)> = rows
+            .iter()
+            .map(|row| (row.text.as_str(), row.tone))
+            .collect();
+        assert_eq!(
+            rows,
+            [
+                ("  Use the size once,", BlockTone::Text),
+                ("  it is computed twice", BlockTone::Text),
+                ("  here.", BlockTone::Text),
+                ("  Suggested change:", BlockTone::Faint),
+                ("  │     val size = tracks.size", BlockTone::Suggestion),
+                ("  Or:", BlockTone::Text),
+                ("  │ foo()", BlockTone::Code),
+            ]
+        );
+    }
+
+    #[test]
     fn an_expanded_thread_lists_every_comment() {
         let thread = thread(
             Some(4),
@@ -507,7 +574,7 @@ mod tests {
                 comment("bo", "Fixed.", true),
             ],
         );
-        let block = thread_block(7, &thread, true).unwrap();
+        let block = thread_block(7, &thread, true, 100).unwrap();
         assert_eq!((block.id, block.line), (7, 3));
         assert_eq!(
             texts(&block),
@@ -526,14 +593,14 @@ mod tests {
         let mut thread = thread(None, vec![comment("ana", "Rename this", false)]);
         thread.is_outdated = true;
         thread.is_resolved = true;
-        let block = thread_block(0, &thread, false).unwrap();
+        let block = thread_block(0, &thread, false, 100).unwrap();
         assert_eq!(
             block.line, 8,
             "an outdated thread stays on its original line"
         );
         assert_eq!(texts(&block), ["▸ ana · resolved · outdated: Rename this"]);
         thread.comments.push(comment("bo", "ok", false));
-        let block = thread_block(0, &thread, false).unwrap();
+        let block = thread_block(0, &thread, false, 100).unwrap();
         assert_eq!(
             texts(&block),
             ["▸ ana · resolved · outdated · 2 comments: Rename this"]
@@ -544,8 +611,11 @@ mod tests {
     fn threads_without_a_place_or_comments_have_no_block() {
         let mut nowhere = thread(None, vec![comment("ana", "x", false)]);
         nowhere.original_line = None;
-        assert_eq!(thread_block(0, &nowhere, true), None);
-        assert_eq!(thread_block(0, &thread(Some(1), Vec::new()), true), None);
+        assert_eq!(thread_block(0, &nowhere, true, 100), None);
+        assert_eq!(
+            thread_block(0, &thread(Some(1), Vec::new()), true, 100),
+            None
+        );
     }
 
     #[test]
@@ -565,9 +635,9 @@ mod tests {
         assert!(!pull.expanded(&resolved));
         pull.toggled.insert("T2".to_owned());
         assert!(pull.expanded(&resolved));
-        let blocks = pull.blocks(Path::new("src/A.kt"), NoteSide::Head);
+        let blocks = pull.blocks(Path::new("src/A.kt"), NoteSide::Head, 100);
         assert_eq!(blocks.len(), 2);
-        assert_eq!(pull.blocks(Path::new("src/A.kt"), NoteSide::Base), []);
-        assert_eq!(pull.blocks(Path::new("src/B.kt"), NoteSide::Head), []);
+        assert_eq!(pull.blocks(Path::new("src/A.kt"), NoteSide::Base, 100), []);
+        assert_eq!(pull.blocks(Path::new("src/B.kt"), NoteSide::Head, 100), []);
     }
 }
