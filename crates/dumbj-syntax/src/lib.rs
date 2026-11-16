@@ -111,9 +111,11 @@ fn parse_with(
 }
 
 impl SyntaxTree {
-    /// Shifts the tree's positions to follow `edit`, so that it stays aligned with the
-    /// buffer until [`reparse`] replaces it. The shifted tree is approximate around the edit.
-    pub fn edit(&mut self, edit: &Edit) {
+    /// Shifts the tree's positions to follow `edit`, which produced `buffer`, so that it
+    /// stays aligned with the text until [`reparse`] replaces it. The shifted tree is
+    /// approximate around the edit.
+    pub fn edit(&mut self, edit: &Edit, buffer: &Buffer) {
+        self.buffer_version = buffer.version();
         let point = |point: dumbj_text::Point| tree_sitter::Point {
             row: point.line.get(),
             column: point.column,

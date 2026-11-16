@@ -8,23 +8,29 @@ use dumbj_actions::{Action, MouseStroke};
 use dumbj_index::{Index, LibraryTarget, Resolution, Site, SymbolId, UsageHighlight, UsageTarget};
 use dumbj_settings::UiRole;
 use dumbj_syntax::{HighlightSpan, Language, SyntaxTree};
+use dumbj_text::disk::FileStamp;
 use dumbj_text::search::{self, SearchOptions};
 use dumbj_text::{Buffer, ByteOffset, ByteRange, LineIndex, Point as TextPoint};
 use gpui::{
     App, Bounds, ClipboardItem, ContentMask, Context, CursorStyle, DispatchPhase, Element,
-    ElementId, Entity, EventEmitter, FocusHandle, Font, FontFeatures, GlobalElementId, Hitbox,
-    HitboxBehavior, Hsla, InspectorElementId, IntoElement, LayoutId, MouseButton, MouseDownEvent,
-    MouseMoveEvent, MouseUpEvent, NavigationDirection, PaintQuad, Pixels, Point, Render,
-    ScrollEvent, ShapedLine, SharedString, Style, Task, TextAlign, TextRun, Window, div, fill,
-    font, point, prelude::*, px, relative, size,
+    ElementId, ElementInputHandler, Entity, EventEmitter, FocusHandle, Font, FontFeatures,
+    GlobalElementId, Hitbox, HitboxBehavior, Hsla, InspectorElementId, IntoElement, LayoutId,
+    MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, NavigationDirection, PaintQuad,
+    Pixels, Point, Render, ScrollEvent, ShapedLine, SharedString, Style, Task, TextAlign, TextRun,
+    Window, div, fill, font, point, prelude::*, px, relative, size,
 };
 
 use crate::assets::EDITOR_FONT;
 use crate::editor_model::{
-    DisplayLine, EditorModel, FoldKind, FoldRegion, Motion, scroll_to_center, scroll_to_reveal,
+    DisplayLine, EditorModel, FoldKind, FoldRegion, Format, Motion, scroll_to_center,
+    scroll_to_reveal,
 };
 use crate::keys::modifiers_from_gpui;
 use crate::theme;
+
+mod editing;
+
+pub(crate) use editing::EditorEvent;
 
 const FONT_SIZE: Pixels = px(13.);
 const LINE_HEIGHT: Pixels = px(20.);
@@ -47,18 +53,39 @@ struct Loaded {
     buffer: Buffer,
     syntax: Option<SyntaxTree>,
     folds: Vec<FoldRegion>,
+    format: Format,
+    /// `None` for files that cannot be saved: library sources and files that are not UTF-8.
+    stamp: Option<FileStamp>,
+}
+
+fn fold_regions(tree: &SyntaxTree, buffer: &Buffer) -> Vec<FoldRegion> {
+    tree.folds(buffer)
+        .into_iter()
+        .map(|fold| FoldRegion {
+            header: fold.header.get(),
+            start: fold.start.get(),
+            end: fold.end.get(),
+            kind: fold.kind,
+        })
+        .collect()
 }
 
 fn load(path: &Path, language: Option<Language>, cancelled: &AtomicBool) -> Result<Loaded, String> {
-    let bytes = if dumbj_jars::is_virtual_path(path) {
-        dumbj_jars::read_virtual(path)
-            .map_err(|error| error.to_string())?
-            .into_bytes()
+    let (bytes, stamp) = if dumbj_jars::is_virtual_path(path) {
+        let text = dumbj_jars::read_virtual(path).map_err(|error| error.to_string())?;
+        (text.into_bytes(), None)
     } else {
-        std::fs::read(path).map_err(|error| error.to_string())?
+        let stamp = FileStamp::of(path).ok();
+        (
+            std::fs::read(path).map_err(|error| error.to_string())?,
+            stamp,
+        )
     };
     let degraded = bytes.len() as u64 > MAX_HIGHLIGHT_FILE_BYTES;
-    let buffer = Buffer::new(&String::from_utf8_lossy(&bytes));
+    let text = String::from_utf8_lossy(&bytes);
+    // A lossy decoding cannot be written back without damaging the file.
+    let stamp = stamp.filter(|_| matches!(text, std::borrow::Cow::Borrowed(_)));
+    let buffer = Buffer::new(&text);
     let syntax = match language.filter(|_| !degraded) {
         Some(language) => {
             match dumbj_syntax::parse(language, &buffer, || cancelled.load(Ordering::Relaxed)) {
@@ -71,21 +98,15 @@ fn load(path: &Path, language: Option<Language>, cancelled: &AtomicBool) -> Resu
         }
         None => None,
     };
-    let folds = syntax.as_ref().map_or_else(Vec::new, |tree| {
-        tree.folds(&buffer)
-            .into_iter()
-            .map(|fold| FoldRegion {
-                header: fold.header.get(),
-                start: fold.start.get(),
-                end: fold.end.get(),
-                kind: fold.kind,
-            })
-            .collect()
-    });
+    let folds = syntax
+        .as_ref()
+        .map_or_else(Vec::new, |tree| fold_regions(tree, &buffer));
     Ok(Loaded {
+        format: Format::detect(&buffer),
         buffer,
         syntax,
         folds,
+        stamp,
     })
 }
 
@@ -201,9 +222,21 @@ pub(crate) struct EditorView {
     usages_at: Option<ByteOffset>,
     usages_task: Option<Task<()>>,
     bookmarks: Vec<BookmarkMark>,
+    read_only: bool,
+    /// What the file looked like on disk when it was last read or written.
+    stamp: Option<FileStamp>,
+    /// The file's newer state on disk, while it also has unsaved edits here.
+    conflict: Option<FileStamp>,
+    saving: bool,
+    idle_save: Option<Task<()>>,
+    /// The text an input method is composing.
+    marked: Option<ByteRange>,
+    reparse_cancel: Arc<AtomicBool>,
     load_cancel: Arc<AtomicBool>,
     _load: Task<()>,
 }
+
+impl EventEmitter<EditorEvent> for EditorView {}
 
 impl EventEmitter<MousePressed> for EditorView {}
 impl EventEmitter<GutterIconClicked> for EditorView {}
@@ -211,6 +244,7 @@ impl EventEmitter<GutterIconClicked> for EditorView {}
 impl Drop for EditorView {
     fn drop(&mut self) {
         self.load_cancel.store(true, Ordering::Relaxed);
+        self.reparse_cancel.store(true, Ordering::Relaxed);
         self.search.cancel.store(true, Ordering::Relaxed);
     }
 }
@@ -228,6 +262,9 @@ impl EditorView {
                 match loaded {
                     Ok(loaded) => {
                         this.model = EditorModel::new(loaded.buffer);
+                        this.model.set_format(loaded.format);
+                        this.read_only = loaded.stamp.is_none();
+                        this.stamp = loaded.stamp;
                         this.model.folds.set_regions(loaded.folds);
                         this.model.folds.collapse_all(Some(FoldKind::Imports));
                         this.syntax = loaded.syntax;
@@ -267,6 +304,13 @@ impl EditorView {
             usages_at: None,
             usages_task: None,
             bookmarks: Vec::new(),
+            read_only: true,
+            stamp: None,
+            conflict: None,
+            saving: false,
+            idle_save: None,
+            marked: None,
+            reparse_cancel: Arc::default(),
             load_cancel,
             _load: task,
         }
@@ -382,6 +426,9 @@ impl EditorView {
 
     /// Runs an editor or text action. Returns `false` if the editor has no use for it.
     pub(crate) fn handle_action(&mut self, action: Action, cx: &mut Context<Self>) -> bool {
+        if self.handle_edit_action(action, cx) {
+            return true;
+        }
         let page = self.page_lines();
         let motion = |motion, extend| Some((motion, extend));
         let movement = match action {
@@ -1429,6 +1476,12 @@ impl Element for EditorElement {
             }
         });
 
+        let focus = self.editor.read(cx).focus.clone();
+        window.handle_input(
+            &focus,
+            ElementInputHandler::new(bounds, self.editor.clone()),
+            cx,
+        );
         let editor = self.editor.clone();
         let hovered = hitbox.clone();
         window.on_mouse_event(move |event: &MouseDownEvent, phase, window, cx| {

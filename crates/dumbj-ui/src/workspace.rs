@@ -6,7 +6,7 @@ use dumbj_settings::UiRole;
 use gpui::{
     AnyElement, App, Bounds, Context, CursorStyle, Decorations, Entity, FocusHandle, IntoElement,
     KeyDownEvent, ModifiersChangedEvent, MouseButton, MouseDownEvent, PathPromptOptions, Pixels,
-    Point, Render, ResizeEdge, Size, Subscription, Window, WindowBounds, WindowDecorations,
+    Point, Render, ResizeEdge, Size, Subscription, Task, Window, WindowBounds, WindowDecorations,
     WindowOptions, div, prelude::*, px, size, svg,
 };
 
@@ -18,6 +18,7 @@ use crate::text_input::{TextChanged, TextInput};
 use crate::theme;
 
 mod bookmarks;
+mod editing;
 mod find_in_files;
 mod hierarchy;
 mod library;
@@ -100,6 +101,7 @@ pub(crate) struct Workspace {
     index: Option<std::sync::Arc<dumbj_index::Index>>,
     jars: Option<std::sync::Arc<dumbj_jars::JarIndex>>,
     indexing: Option<Indexing>,
+    index_refresh: Option<Task<()>>,
     history: NavigationHistory,
     chooser: Option<Chooser>,
     search_input: Entity<TextInput>,
@@ -154,6 +156,18 @@ pub(crate) fn open_window(
     let opened = cx.open_window(options, |window, cx| {
         cx.new(|cx| {
             let mut workspace = Workspace::new(bindings, shortcut_style, cx);
+            workspace.subscriptions.push(cx.observe_window_activation(
+                window,
+                |this: &mut Workspace, window, cx| {
+                    this.on_window_activation(window, cx);
+                },
+            ));
+            workspace
+                .subscriptions
+                .push(cx.on_app_quit(|this: &mut Workspace, cx| {
+                    this.save_all_blocking(cx);
+                    async {}
+                }));
             if let Some(folder) = folder {
                 workspace.set_project(folder, window, cx);
             }
@@ -209,6 +223,7 @@ impl Workspace {
             index: None,
             jars: None,
             indexing: None,
+            index_refresh: None,
             history: NavigationHistory::default(),
             chooser: None,
             search_input,
@@ -305,6 +320,7 @@ impl Workspace {
         ));
         let handle = tree.read(cx).focus_handle().clone();
         window.focus(&handle, cx);
+        self.index = None;
         self.start_indexing(root.clone(), cx);
         self.load_project_state(root.clone(), cx);
         self.start_jar_indexing(cx);
@@ -341,6 +357,10 @@ impl Workspace {
                     },
                 ));
                 self.subscriptions
+                    .push(cx.subscribe(&editor, |this, editor, event, cx| {
+                        this.on_editor_event(&editor, event, cx);
+                    }));
+                self.subscriptions
                     .push(cx.observe(&editor, |_, _, cx| cx.notify()));
                 self.refresh_gutter_icons(&editor, &path, cx);
                 self.tabs.push(Tab {
@@ -361,11 +381,15 @@ impl Workspace {
         }
         if self.active != Some(index) {
             self.record_current_location(cx);
+            if let Some(editor) = self.active_editor() {
+                editor.update(cx, EditorView::save);
+            }
         }
         let Some(tab) = self.tabs.get(index) else {
             return;
         };
         self.active = Some(index);
+        tab.editor.update(cx, EditorView::check_disk);
         let handle = tab.editor.read(cx).focus_handle().clone();
         window.focus(&handle, cx);
         if self.find_open {
@@ -384,7 +408,8 @@ impl Workspace {
         if self.active == Some(index) {
             self.record_current_location(cx);
         }
-        self.tabs.remove(index);
+        let closed = self.tabs.remove(index);
+        closed.editor.update(cx, EditorView::save);
         let active = self.active.unwrap_or(0);
         let next = if index < active { active - 1 } else { active };
         if self.tabs.is_empty() {
@@ -1012,6 +1037,14 @@ impl Workspace {
                 cx.listener(move |this, _, window, cx| this.close_tab(index, window, cx)),
             )
             .child(tab.title.clone())
+            .when(tab.editor.read(cx).is_modified(), |tab| {
+                tab.child(
+                    div()
+                        .size(px(6.))
+                        .rounded_full()
+                        .bg(theme::ui(cx, UiRole::Info)),
+                )
+            })
             .child(close)
     }
 
@@ -1132,6 +1165,11 @@ impl Workspace {
             .border_b_1()
             .border_color(theme::ui(cx, UiRole::Border))
             .children(tabs);
+        let conflict_bar = tab
+            .editor
+            .read(cx)
+            .has_conflict()
+            .then(|| Self::render_conflict_bar(&tab.editor, cx).into_any_element());
         let find_bar = self
             .find_open
             .then(|| self.render_find_bar(&tab.editor, cx));
@@ -1142,6 +1180,7 @@ impl Workspace {
             .flex_col()
             .child(tab_bar)
             .children(find_bar)
+            .children(conflict_bar)
             .child(div().flex_1().min_h_0().child(tab.editor.clone()))
     }
 

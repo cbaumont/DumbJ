@@ -96,4 +96,12 @@ Linux uses the `macOS For All` keymap and macOS uses IntelliJ's `Mac OS X 10.5+`
 | Delete | `text.delete` | `EditorDelete` | `Delete` | `Delete` |
 | Tab | `text.tab` | `EditorTab` | `Tab` | `Tab` |
 | Enter | `text.enter` | `EditorEnter` | `Enter` | `Enter` |
+| Unindent | `edit.unindent` | `EditorUnindentSelection` | `Shift+Tab` | `⇧Tab` |
+| Undo | `edit.undo` | `$Undo` | `Ctrl+Z` | `⌘Z` |
+| Redo | `edit.redo` | `$Redo` | `Ctrl+Shift+Z` / `Alt+Shift+Backspace` | `⇧⌘Z` / `⌥⇧Backspace` |
+| Duplicate Line or Selection | `edit.duplicate-line` | `EditorDuplicate` | `Ctrl+D` | `⌘D` |
+| Delete Line | `edit.delete-line` | `EditorDeleteLine` | `Ctrl+Backspace` | `⌘Backspace` |
+| Move Line Up | `edit.move-line-up` | `MoveLineUp` | `Alt+Shift+Up` | `⌥⇧Up` |
+| Move Line Down | `edit.move-line-down` | `MoveLineDown` | `Alt+Shift+Down` | `⌥⇧Down` |
+| Comment with Line Comment | `edit.toggle-line-comment` | `CommentByLineComment` | `Ctrl+/` / `Ctrl+Num/` | `⌘/` / `⌘Num/` |
 | Escape | `text.escape` | `EditorEscape` | `Esc` | `Esc` |

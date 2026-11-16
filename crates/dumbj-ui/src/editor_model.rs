@@ -1,4 +1,7 @@
-use dumbj_text::{Buffer, ByteOffset, ByteRange, LineIndex, Point};
+use dumbj_text::disk::LineEnding;
+use dumbj_text::{
+    Buffer, ByteOffset, ByteRange, Carets, Edit, EditKind, History, LineIndex, Point,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Motion {
@@ -32,6 +35,76 @@ pub(crate) struct EditorModel {
     /// Each Extend Selection step as (before, after), for Shrink Selection.
     extended: Vec<(ByteRange, ByteRange)>,
     pub(crate) folds: Folds,
+    history: History,
+    format: Format,
+}
+
+/// How the file is written, so that edits match what is already there.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Format {
+    pub(crate) line_ending: LineEnding,
+    /// One level of indentation: a tab or a run of spaces.
+    pub(crate) indent: String,
+}
+
+impl Default for Format {
+    fn default() -> Self {
+        Self {
+            line_ending: LineEnding::Lf,
+            indent: " ".repeat(TAB_WIDTH),
+        }
+    }
+}
+
+impl Format {
+    /// Reads the line ending and the indentation unit off the first lines of `buffer`.
+    pub(crate) fn detect(buffer: &Buffer) -> Self {
+        const SAMPLE_LINES: usize = 2000;
+        let lines = buffer.line_count().min(SAMPLE_LINES);
+        let sample_end = buffer.line_end(LineIndex(lines - 1));
+        let end = buffer.next_char(buffer.next_char(sample_end));
+        let sample = buffer.text(ByteOffset::ZERO..end).unwrap_or_default();
+        let mut spaces: Option<usize> = None;
+        let mut indent = None;
+        for line in sample.lines() {
+            if line.starts_with('\t') {
+                indent = Some("\t".to_owned());
+                break;
+            }
+            let width = line.len() - line.trim_start_matches(' ').len();
+            if width >= 2 && width < line.len() {
+                spaces = Some(spaces.map_or(width, |least| least.min(width)));
+            }
+        }
+        Self {
+            line_ending: LineEnding::detect(&sample),
+            indent: indent.unwrap_or_else(|| " ".repeat(spaces.unwrap_or(TAB_WIDTH).min(8))),
+        }
+    }
+}
+
+/// Where `position` ends up after `removed` bytes at `offset` were replaced by `inserted`.
+fn shifted(
+    position: ByteOffset,
+    offset: ByteOffset,
+    removed: usize,
+    inserted: usize,
+) -> ByteOffset {
+    if position <= offset {
+        position
+    } else if position.get() >= offset.get() + removed {
+        ByteOffset(position.get() - removed + inserted)
+    } else {
+        ByteOffset(offset.get() + inserted)
+    }
+}
+
+fn opens_block(c: char) -> bool {
+    matches!(c, '{' | '(' | '[')
+}
+
+fn closes(open: char, close: char) -> bool {
+    matches!((open, close), ('{', '}') | ('(', ')') | ('[', ']'))
 }
 
 impl EditorModel {
@@ -67,6 +140,7 @@ impl EditorModel {
     }
 
     pub(crate) fn move_to(&mut self, offset: ByteOffset, extend: bool) {
+        self.history.seal();
         self.caret = self.buffer.clamp(offset);
         self.folds
             .reveal(self.buffer.point_at(self.caret).line.get());
@@ -77,6 +151,7 @@ impl EditorModel {
     }
 
     pub(crate) fn select(&mut self, range: ByteRange) {
+        self.history.seal();
         self.anchor = self.buffer.clamp(range.start);
         self.caret = self.buffer.clamp(range.end);
         self.folds
@@ -151,6 +226,452 @@ impl EditorModel {
                 false
             }
         }
+    }
+
+    pub(crate) fn set_format(&mut self, format: Format) {
+        self.format = format;
+    }
+
+    pub(crate) fn is_modified(&self) -> bool {
+        self.history.is_modified()
+    }
+
+    pub(crate) fn mark_saved(&mut self) {
+        self.history.mark_saved();
+    }
+
+    /// Ends the current typing group, so the next edit is its own undo step.
+    pub(crate) fn seal_history(&mut self) {
+        self.history.seal();
+    }
+
+    /// Replaces the text with what is on disk now, as one undoable edit that counts as saved.
+    pub(crate) fn reload(&mut self, text: &str) -> Vec<Edit> {
+        let caret = self.caret.min(ByteOffset(text.len()));
+        let mut caret = caret.get();
+        while !text.is_char_boundary(caret) {
+            caret -= 1;
+        }
+        let caret = ByteOffset(caret);
+        let edits = self.replace(
+            ByteOffset::ZERO..self.buffer.len(),
+            text,
+            EditKind::Other,
+            caret..caret,
+        );
+        self.history.seal();
+        self.history.mark_saved();
+        edits
+    }
+
+    fn carets(&self) -> Carets {
+        Carets {
+            anchor: self.anchor,
+            caret: self.caret,
+        }
+    }
+
+    fn after_edit(&mut self, edit: &Edit) {
+        self.folds.apply_edit(
+            edit.start_point.line.get(),
+            edit.old_end_point.line.get(),
+            edit.new_end_point.line.get(),
+        );
+        self.goal_column = None;
+        self.extended.clear();
+    }
+
+    fn restore(&mut self, carets: Carets) {
+        self.anchor = self.buffer.clamp(carets.anchor);
+        self.caret = self.buffer.clamp(carets.caret);
+        self.folds
+            .reveal(self.buffer.point_at(self.caret).line.get());
+    }
+
+    /// One edit; the selection becomes `select` (anchor first) afterwards.
+    fn replace(
+        &mut self,
+        range: ByteRange,
+        text: &str,
+        kind: EditKind,
+        select: ByteRange,
+    ) -> Vec<Edit> {
+        let after = Carets {
+            anchor: select.start,
+            caret: select.end,
+        };
+        let before = self.carets();
+        let Ok(edit) = self
+            .history
+            .apply(&mut self.buffer, range, text, kind, before, after)
+        else {
+            return Vec::new();
+        };
+        self.after_edit(&edit);
+        self.restore(after);
+        vec![edit]
+    }
+
+    /// Several edits as one undo step. `edits` do not overlap and are sorted from the
+    /// last in the buffer to the first, so that applying one leaves the others in place.
+    /// The selection follows the text it was on.
+    fn replace_many(&mut self, edits: &[(ByteRange, String)]) -> Vec<Edit> {
+        let before = self.carets();
+        let mut after = before;
+        for (range, text) in edits {
+            let removed = range.end.get() - range.start.get();
+            after.anchor = shifted(after.anchor, range.start, removed, text.len());
+            after.caret = shifted(after.caret, range.start, removed, text.len());
+        }
+        let mut applied = Vec::new();
+        self.history.seal();
+        self.history.begin_group();
+        for (range, text) in edits {
+            if let Ok(edit) = self.history.apply(
+                &mut self.buffer,
+                range.clone(),
+                text,
+                EditKind::Other,
+                before,
+                after,
+            ) {
+                self.after_edit(&edit);
+                applied.push(edit);
+            }
+        }
+        self.history.end_group();
+        self.restore(after);
+        applied
+    }
+
+    /// Types `text` over the selection.
+    pub(crate) fn insert(&mut self, text: &str) -> Vec<Edit> {
+        let range = self.selection();
+        let end = ByteOffset(range.start.get() + text.len());
+        self.replace(range, text, EditKind::Insert, end..end)
+    }
+
+    /// Replaces `range`, which need not be the selection (an input method does this).
+    pub(crate) fn replace_range(&mut self, range: ByteRange, text: &str) -> Vec<Edit> {
+        let range = self.buffer.clamp(range.start)..self.buffer.clamp(range.end);
+        let end = ByteOffset(range.start.get() + text.len());
+        self.replace(range, text, EditKind::Insert, end..end)
+    }
+
+    /// Inserts clipboard text, with its line breaks turned into the file's.
+    pub(crate) fn paste(&mut self, text: &str) -> Vec<Edit> {
+        let ending = self.format.line_ending.as_str();
+        let text = text.replace("\r\n", "\n").replace('\n', ending);
+        let range = self.selection();
+        let end = ByteOffset(range.start.get() + text.len());
+        self.history.seal();
+        let edits = self.replace(range, &text, EditKind::Other, end..end);
+        self.history.seal();
+        edits
+    }
+
+    pub(crate) fn delete_selection(&mut self) -> Vec<Edit> {
+        let range = self.selection();
+        if range.is_empty() {
+            return Vec::new();
+        }
+        let start = range.start;
+        self.replace(range, "", EditKind::Other, start..start)
+    }
+
+    pub(crate) fn backspace(&mut self) -> Vec<Edit> {
+        if self.has_selection() {
+            return self.delete_selection();
+        }
+        let point = self.caret_point();
+        let start = if point.column == 0 && point.line.get() > 0 {
+            self.buffer.line_end(LineIndex(point.line.get() - 1))
+        } else {
+            self.buffer.prev_char(self.caret)
+        };
+        self.replace(
+            start..self.caret,
+            "",
+            EditKind::DeleteBackward,
+            start..start,
+        )
+    }
+
+    pub(crate) fn delete_forward(&mut self) -> Vec<Edit> {
+        if self.has_selection() {
+            return self.delete_selection();
+        }
+        let point = self.caret_point();
+        let next_line = LineIndex(point.line.get() + 1);
+        let end = if self.caret == self.buffer.line_end(point.line)
+            && next_line.get() < self.buffer.line_count()
+        {
+            self.buffer.line_start(next_line)
+        } else {
+            self.buffer.next_char(self.caret)
+        };
+        let caret = self.caret;
+        self.replace(caret..end, "", EditKind::DeleteForward, caret..caret)
+    }
+
+    /// Breaks the line, keeping its indentation and adding a level after an opening bracket.
+    pub(crate) fn newline(&mut self) -> Vec<Edit> {
+        let range = self.selection();
+        let point = self.buffer.point_at(range.start);
+        let line = self.buffer.line(point.line);
+        let before = line.get(..point.column).unwrap_or(&line);
+        let base: String = before
+            .chars()
+            .take_while(|c| *c == ' ' || *c == '\t')
+            .collect();
+        let ending = self.format.line_ending.as_str();
+        let opener = before
+            .trim_end()
+            .chars()
+            .next_back()
+            .filter(|c| opens_block(*c));
+        let after = self.buffer.line(self.buffer.point_at(range.end).line);
+        let end_column = self.buffer.point_at(range.end).column;
+        let closer = after
+            .get(end_column..)
+            .and_then(|rest| rest.trim_start().chars().next());
+        let mut text = format!("{ending}{base}");
+        if opener.is_some() {
+            text.push_str(&self.format.indent);
+        }
+        let caret = ByteOffset(range.start.get() + text.len());
+        if opener
+            .zip(closer)
+            .is_some_and(|(open, close)| closes(open, close))
+        {
+            text.push_str(ending);
+            text.push_str(&base);
+        }
+        self.replace(range, &text, EditKind::Insert, caret..caret)
+    }
+
+    /// The lines the selection touches; a selection ending at the start of a line does
+    /// not include that line.
+    fn selected_lines(&self) -> std::ops::RangeInclusive<usize> {
+        let selection = self.selection();
+        let first = self.buffer.point_at(selection.start).line.get();
+        let end = self.buffer.point_at(selection.end);
+        let last = if end.column == 0 && end.line.get() > first {
+            end.line.get() - 1
+        } else {
+            end.line.get()
+        };
+        first..=last
+    }
+
+    /// Tab: indents the selected lines, or moves the caret to the next indentation stop.
+    pub(crate) fn indent(&mut self) -> Vec<Edit> {
+        let lines = self.selected_lines();
+        if !self.has_selection() || lines.start() == lines.end() {
+            let unit = &self.format.indent;
+            let text = if unit.starts_with('\t') {
+                unit.clone()
+            } else {
+                let start = self.buffer.point_at(self.selection().start);
+                let column = self.buffer.char_column(start);
+                " ".repeat(unit.len() - column % unit.len())
+            };
+            return self.insert(&text);
+        }
+        let edits: Vec<(ByteRange, String)> = lines
+            .rev()
+            .filter(|line| self.buffer.line_len(LineIndex(*line)) > 0)
+            .map(|line| {
+                let start = self.buffer.line_start(LineIndex(line));
+                (start..start, self.format.indent.clone())
+            })
+            .collect();
+        self.replace_many(&edits)
+    }
+
+    /// Shift+Tab: removes one level of indentation from the selected lines.
+    pub(crate) fn unindent(&mut self) -> Vec<Edit> {
+        let width = self.format.indent.len();
+        let edits: Vec<(ByteRange, String)> = self
+            .selected_lines()
+            .rev()
+            .filter_map(|line| {
+                let text = self.buffer.line(LineIndex(line));
+                let remove = if text.starts_with('\t') {
+                    1
+                } else {
+                    text.bytes().take(width).take_while(|b| *b == b' ').count()
+                };
+                let start = self.buffer.line_start(LineIndex(line));
+                (remove > 0).then(|| (start..ByteOffset(start.get() + remove), String::new()))
+            })
+            .collect();
+        self.replace_many(&edits)
+    }
+
+    /// The selected lines with their line breaks, as a range of whole lines.
+    fn line_block(&self, lines: &std::ops::RangeInclusive<usize>) -> ByteRange {
+        let start = self.buffer.line_start(LineIndex(*lines.start()));
+        let next = LineIndex(lines.end() + 1);
+        if next.get() < self.buffer.line_count() {
+            start..self.buffer.line_start(next)
+        } else {
+            start..self.buffer.len()
+        }
+    }
+
+    pub(crate) fn delete_line(&mut self) -> Vec<Edit> {
+        let lines = self.selected_lines();
+        let column = self.buffer.char_column(self.caret_point());
+        let mut range = self.line_block(&lines);
+        let last_line = lines.end() + 1 >= self.buffer.line_count();
+        if last_line && *lines.start() > 0 {
+            range.start = self.buffer.line_end(LineIndex(lines.start() - 1));
+        }
+        let start = range.start;
+        let edits = self.replace(range, "", EditKind::Other, start..start);
+        let line = self.buffer.point_at(start).line;
+        self.restore_column(line, column);
+        edits
+    }
+
+    fn restore_column(&mut self, line: LineIndex, column: usize) {
+        let offset = self.offset_at_char_column(line, column);
+        self.anchor = offset;
+        self.caret = offset;
+    }
+
+    /// Duplicates the selection after itself, or the caret's line below itself.
+    pub(crate) fn duplicate(&mut self) -> Vec<Edit> {
+        if self.has_selection() {
+            let selection = self.selection();
+            let text = self.selected_text();
+            let end = ByteOffset(selection.end.get() + text.len());
+            return self.replace(
+                selection.end..selection.end,
+                &text,
+                EditKind::Other,
+                selection.end..end,
+            );
+        }
+        let line = self.caret_point().line;
+        let text = self.buffer.line(line).into_owned();
+        let end = self.buffer.line_end(line);
+        let insert = format!("{}{text}", self.format.line_ending.as_str());
+        let caret = ByteOffset(
+            self.caret.get() - self.buffer.line_start(line).get()
+                + end.get()
+                + self.format.line_ending.as_str().len(),
+        );
+        self.replace(end..end, &insert, EditKind::Other, caret..caret)
+    }
+
+    /// Moves the selected lines one line up or down, with the selection.
+    pub(crate) fn move_lines(&mut self, down: bool) -> Vec<Edit> {
+        let lines = self.selected_lines();
+        let last = self.buffer.line_count() - 1;
+        if (down && *lines.end() >= last) || (!down && *lines.start() == 0) {
+            return Vec::new();
+        }
+        let ending = self.format.line_ending.as_str();
+        let content = |from: usize, to: usize| {
+            self.buffer
+                .text(self.buffer.line_start(LineIndex(from))..self.buffer.line_end(LineIndex(to)))
+                .unwrap_or_default()
+        };
+        let block = content(*lines.start(), *lines.end());
+        let (first, last_line, text, moved_by) = if down {
+            let other = content(lines.end() + 1, lines.end() + 1);
+            let by = other.len() + ending.len();
+            (
+                *lines.start(),
+                lines.end() + 1,
+                format!("{other}{ending}{block}"),
+                by.cast_signed(),
+            )
+        } else {
+            let other = content(lines.start() - 1, lines.start() - 1);
+            let by = other.len() + ending.len();
+            (
+                lines.start() - 1,
+                *lines.end(),
+                format!("{block}{ending}{other}"),
+                -by.cast_signed(),
+            )
+        };
+        let range =
+            self.buffer.line_start(LineIndex(first))..self.buffer.line_end(LineIndex(last_line));
+        let moved = |offset: ByteOffset| ByteOffset(offset.get().saturating_add_signed(moved_by));
+        let select = moved(self.anchor)..moved(self.caret);
+        self.replace(range, &text, EditKind::Other, select)
+    }
+
+    /// Comments the selected lines with `prefix`, or uncomments them if all are commented.
+    /// Without a selection the caret then moves down a line, as IDEA's does.
+    pub(crate) fn toggle_line_comment(&mut self, prefix: &str) -> Vec<Edit> {
+        let lines: Vec<usize> = self
+            .selected_lines()
+            .filter(|line| !self.buffer.line(LineIndex(*line)).trim().is_empty())
+            .collect();
+        let indent_of = |line: usize| {
+            let text = self.buffer.line(LineIndex(line));
+            text.len() - text.trim_start().len()
+        };
+        let commented = !lines.is_empty()
+            && lines.iter().all(|line| {
+                self.buffer
+                    .line(LineIndex(*line))
+                    .trim_start()
+                    .starts_with(prefix)
+            });
+        let column = lines.iter().map(|line| indent_of(*line)).min().unwrap_or(0);
+        let edits: Vec<(ByteRange, String)> = lines
+            .iter()
+            .rev()
+            .map(|line| {
+                let start = self.buffer.line_start(LineIndex(*line)).get();
+                if commented {
+                    let at = start + indent_of(*line);
+                    let text = self.buffer.line(LineIndex(*line));
+                    let spaced = text
+                        .get(indent_of(*line) + prefix.len()..)
+                        .is_some_and(|rest| rest.starts_with(' '));
+                    let end = at + prefix.len() + usize::from(spaced);
+                    (ByteOffset(at)..ByteOffset(end), String::new())
+                } else {
+                    let at = ByteOffset(start + column);
+                    (at..at, format!("{prefix} "))
+                }
+            })
+            .collect();
+        let had_selection = self.has_selection();
+        let applied = self.replace_many(&edits);
+        if !had_selection {
+            self.apply_motion(Motion::Down, false);
+        }
+        applied
+    }
+
+    pub(crate) fn undo(&mut self) -> Vec<Edit> {
+        let Some((edits, carets)) = self.history.undo(&mut self.buffer) else {
+            return Vec::new();
+        };
+        for edit in &edits {
+            self.after_edit(edit);
+        }
+        self.restore(carets);
+        edits
+    }
+
+    pub(crate) fn redo(&mut self) -> Vec<Edit> {
+        let Some((edits, carets)) = self.history.redo(&mut self.buffer) else {
+            return Vec::new();
+        };
+        for edit in &edits {
+            self.after_edit(edit);
+        }
+        self.restore(carets);
+        edits
     }
 
     /// Puts the caret at a one-based line and optional one-based character column.
@@ -328,6 +849,55 @@ impl Folds {
         self.hidden = merged;
     }
 
+    /// Follows an edit that replaced lines `start..=old_end` with lines `start..=new_end`:
+    /// regions below move with their text, regions around the edit grow or shrink, and
+    /// regions that began inside the replaced lines are dropped until the next parse.
+    pub(crate) fn apply_edit(&mut self, start: usize, old_end: usize, new_end: usize) {
+        if old_end == new_end {
+            return;
+        }
+        let moved = |line: usize| line - old_end + new_end;
+        let collapsed = std::mem::take(&mut self.collapsed);
+        let mut regions = Vec::with_capacity(self.regions.len());
+        for region in std::mem::take(&mut self.regions) {
+            let was_collapsed = collapsed.contains(&region.start);
+            let region = if region.start > old_end {
+                Some(FoldRegion {
+                    header: if region.header > old_end {
+                        moved(region.header)
+                    } else {
+                        region.header.min(start)
+                    },
+                    start: moved(region.start),
+                    end: moved(region.end),
+                    ..region
+                })
+            } else if region.end < start {
+                Some(region)
+            } else if region.start <= start && region.end > old_end {
+                Some(FoldRegion {
+                    end: moved(region.end),
+                    ..region
+                })
+            } else if region.start < start {
+                Some(FoldRegion {
+                    end: start,
+                    ..region
+                })
+            } else {
+                None
+            };
+            if let Some(region) = region.filter(|region| region.end > region.start) {
+                if was_collapsed {
+                    self.collapsed.insert(region.start);
+                }
+                regions.push(region);
+            }
+        }
+        self.regions = regions;
+        self.recompute();
+    }
+
     pub(crate) fn region_starting(&self, line: usize) -> Option<FoldRegion> {
         self.regions
             .binary_search_by_key(&line, |region| region.start)
@@ -436,7 +1006,9 @@ impl Folds {
     }
 
     pub(crate) fn row_count(&self, line_count: usize) -> usize {
-        line_count - self.hidden.iter().map(std::ops::Range::len).sum::<usize>()
+        line_count
+            .saturating_sub(self.hidden.iter().map(std::ops::Range::len).sum::<usize>())
+            .max(1)
     }
 }
 
@@ -858,5 +1430,212 @@ mod tests {
         assert!((scroll_to_center(11.0, 2, 100) - 0.0).abs() < 1e-9);
         assert!((scroll_to_center(11.0, 99, 100) - 94.0).abs() < 1e-9);
         assert!((scroll_to_center(11.0, 0, 0) - 0.0).abs() < 1e-9);
+    }
+    /// Runs `edit` on `text`, where `|` marks the caret (or `[` and `]` the selection),
+    /// and renders the result the same way.
+    fn edited(text: &str, edit: impl FnOnce(&mut EditorModel)) -> String {
+        let mut model = marked(text);
+        edit(&mut model);
+        render(&model)
+    }
+
+    fn marked(text: &str) -> EditorModel {
+        let plain: String = text.chars().filter(|c| !"|[]".contains(*c)).collect();
+        let mut model = model(&plain);
+        if let Some(caret) = text.find('|') {
+            model.move_to(ByteOffset(caret), false);
+        } else {
+            let start = text.find('[').unwrap();
+            let end = text.find(']').unwrap() - 1;
+            model.select(ByteOffset(start)..ByteOffset(end));
+        }
+        model
+    }
+
+    fn render(model: &EditorModel) -> String {
+        let mut text = model.buffer().to_string();
+        let selection = model.selection();
+        if selection.is_empty() {
+            text.insert(selection.start.get(), '|');
+        } else {
+            text.insert(selection.end.get(), ']');
+            text.insert(selection.start.get(), '[');
+        }
+        text
+    }
+
+    #[test]
+    fn typing_replaces_the_selection() {
+        assert_eq!(edited("a|c", |m| drop(m.insert("b"))), "ab|c");
+        assert_eq!(edited("a[xyz]c", |m| drop(m.insert("b"))), "ab|c");
+        assert_eq!(edited("a|c", |m| drop(m.paste("1\r\n2"))), "a1\n2|c");
+    }
+
+    #[test]
+    fn backspace_and_delete_cross_line_breaks() {
+        assert_eq!(edited("ab|c", |m| drop(m.backspace())), "a|c");
+        assert_eq!(edited("a\n|b", |m| drop(m.backspace())), "a|b");
+        assert_eq!(edited("a\r\n|b", |m| drop(m.backspace())), "a|b");
+        assert_eq!(edited("|a", |m| drop(m.backspace())), "|a");
+        assert_eq!(edited("a|\r\nb", |m| drop(m.delete_forward())), "a|b");
+        assert_eq!(edited("a|é", |m| drop(m.delete_forward())), "a|");
+        assert_eq!(edited("a[bc]d", |m| drop(m.delete_forward())), "a|d");
+    }
+
+    #[test]
+    fn enter_keeps_the_indentation_and_opens_blocks() {
+        assert_eq!(edited("  a|b", |m| drop(m.newline())), "  a\n  |b");
+        assert_eq!(edited("  f {|", |m| drop(m.newline())), "  f {\n      |");
+        assert_eq!(
+            edited("  f {|}", |m| drop(m.newline())),
+            "  f {\n      |\n  }"
+        );
+        assert_eq!(edited("\tx|", |m| drop(m.newline())), "\tx\n\t|");
+    }
+
+    #[test]
+    fn enter_uses_the_files_line_ending() {
+        let mut model = marked("a|");
+        model.set_format(Format {
+            line_ending: LineEnding::CrLf,
+            indent: "\t".to_owned(),
+        });
+        model.newline();
+        model.indent();
+        assert_eq!(render(&model), "a\r\n\t|");
+    }
+
+    #[test]
+    fn tab_indents_to_the_next_stop_or_the_selected_lines() {
+        assert_eq!(edited("a|", |m| drop(m.indent())), "a   |");
+        assert_eq!(
+            edited("[a\n\nb]\nc", |m| drop(m.indent())),
+            "[    a\n\n    b]\nc"
+        );
+        assert_eq!(
+            edited("    a\n  [b\n      c\n]d", |m| drop(m.unindent())),
+            "    a\n[b\n  c\n]d"
+        );
+        assert_eq!(edited("  |a", |m| drop(m.unindent())), "|a");
+    }
+
+    #[test]
+    fn line_actions() {
+        assert_eq!(edited("a\nb|b\nc", |m| drop(m.delete_line())), "a\nc|");
+        assert_eq!(edited("a\nb|b", |m| drop(m.delete_line())), "a|");
+        assert_eq!(edited("a|b", |m| drop(m.delete_line())), "|");
+        assert_eq!(
+            edited("a\nb|b\nc", |m| drop(m.duplicate())),
+            "a\nbb\nb|b\nc"
+        );
+        assert_eq!(edited("a[bc]d", |m| drop(m.duplicate())), "abc[bc]d");
+        assert_eq!(
+            edited("a\nb|b\nc", |m| drop(m.move_lines(true))),
+            "a\nc\nb|b"
+        );
+        assert_eq!(
+            edited("a\nb|b\nc", |m| drop(m.move_lines(false))),
+            "b|b\na\nc"
+        );
+        assert_eq!(edited("a|\nb", |m| drop(m.move_lines(false))), "a|\nb");
+        assert_eq!(
+            edited("a\n[b\nc]c\nd", |m| drop(m.move_lines(true))),
+            "a\nd\n[b\nc]c"
+        );
+    }
+
+    #[test]
+    fn line_comments_toggle() {
+        assert_eq!(
+            edited("  a|\n  b", |m| drop(m.toggle_line_comment("//"))),
+            "  // a\n  b|"
+        );
+        assert_eq!(
+            edited("[  a\n\n    b]", |m| drop(m.toggle_line_comment("//"))),
+            "[  // a\n\n  //   b]"
+        );
+        assert_eq!(
+            edited("[  // a\n  //b]", |m| drop(m.toggle_line_comment("//"))),
+            "[  a\n  b]"
+        );
+    }
+
+    #[test]
+    fn undo_and_redo_restore_text_and_carets() {
+        let mut model = marked("x|");
+        for c in ["a", "b", " ", "c"] {
+            model.insert(c);
+        }
+        model.newline();
+        assert_eq!(render(&model), "xab c\n|");
+        assert!(model.is_modified());
+        model.undo();
+        assert_eq!(render(&model), "xab c|");
+        model.undo();
+        assert_eq!(render(&model), "xab |");
+        model.undo();
+        assert_eq!(render(&model), "x|");
+        assert!(!model.is_modified());
+        assert_eq!(model.undo(), []);
+        model.redo();
+        model.redo();
+        assert_eq!(render(&model), "xab c|");
+        model.mark_saved();
+        assert!(!model.is_modified());
+    }
+
+    #[test]
+    fn moving_the_caret_splits_undo_steps() {
+        let mut model = marked("|");
+        model.insert("a");
+        model.apply_motion(Motion::Left, false);
+        model.apply_motion(Motion::Right, false);
+        model.insert("b");
+        model.undo();
+        assert_eq!(render(&model), "a|");
+    }
+
+    #[test]
+    fn a_grouped_edit_is_one_undo_step() {
+        let mut model = marked("[a\nb]");
+        model.indent();
+        model.undo();
+        assert_eq!(render(&model), "[a\nb]");
+    }
+
+    #[test]
+    fn reload_counts_as_saved_and_can_be_undone() {
+        let mut model = marked("one|");
+        model.reload("three");
+        assert_eq!(render(&model), "thr|ee");
+        assert!(!model.is_modified());
+        model.undo();
+        assert_eq!(render(&model), "one|");
+        assert!(model.is_modified());
+    }
+
+    #[test]
+    fn detects_the_format() {
+        let format = Format::detect(&Buffer::new("a {\r\n  b\r\n    c\r\n}\r\n"));
+        assert_eq!(format.line_ending, LineEnding::CrLf);
+        assert_eq!(format.indent, "  ");
+        assert_eq!(Format::detect(&Buffer::new("a\n\tb\n")).indent, "\t");
+        assert_eq!(Format::detect(&Buffer::new("")), Format::default());
+    }
+
+    #[test]
+    fn folds_follow_edits() {
+        let mut folds = Folds::default();
+        folds.set_regions(vec![region(1, 3), region(5, 8), region(6, 7)]);
+        folds.toggle(5);
+        folds.apply_edit(0, 0, 2);
+        assert!(folds.region_starting(3).is_some());
+        assert!(folds.is_collapsed(7));
+        assert_eq!(folds.row_of(10), 7);
+        folds.apply_edit(8, 9, 8);
+        assert_eq!(folds.region_starting(7).map(|r| r.end), Some(9));
+        assert!(folds.region_starting(8).is_none());
+        folds.apply_edit(0, 20, 0);
+        assert_eq!(folds.row_count(1), 1);
     }
 }

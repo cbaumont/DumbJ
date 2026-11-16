@@ -94,6 +94,46 @@ impl ProjectState {
         self.recent_locations.truncate(MAX_RECENT_LOCATIONS);
     }
 
+    /// Follows an edit of `path` that replaced the zero-based lines `start..=old_end` with
+    /// `start..=new_end`, so bookmarks and recent locations stay on their code. Returns
+    /// whether a bookmark moved.
+    pub fn shift_lines(
+        &mut self,
+        path: &Path,
+        start: usize,
+        old_end: usize,
+        new_end: usize,
+    ) -> bool {
+        if old_end == new_end {
+            return false;
+        }
+        let shift = |line: &mut usize| {
+            let zero_based = line.saturating_sub(1);
+            let moved = if zero_based > old_end {
+                zero_based - old_end + new_end
+            } else if zero_based > start {
+                zero_based.min(new_end)
+            } else {
+                zero_based
+            };
+            let changed = moved != zero_based;
+            *line = moved + 1;
+            changed
+        };
+        for location in &mut self.recent_locations {
+            if location.path == path {
+                shift(&mut location.line);
+            }
+        }
+        let mut moved = false;
+        for bookmark in &mut self.bookmarks {
+            if bookmark.path == path {
+                moved |= shift(&mut bookmark.line);
+            }
+        }
+        moved
+    }
+
     pub fn bookmark_at(&self, path: &Path, line: usize) -> Option<&Bookmark> {
         self.bookmarks
             .iter()
@@ -248,6 +288,31 @@ mod tests {
             state.recent_files,
             [PathBuf::from("a"), PathBuf::from("c"), PathBuf::from("b")]
         );
+    }
+
+    #[test]
+    fn bookmarks_and_locations_follow_edits() {
+        let mut state = ProjectState::default();
+        for line in [2, 5, 9] {
+            state.toggle_bookmark(Path::new("a"), line, "");
+            state.record_location(location("a", line));
+        }
+        state.toggle_bookmark(Path::new("b"), 9, "");
+        assert!(state.shift_lines(Path::new("a"), 2, 2, 4));
+        assert!(state.shift_lines(Path::new("a"), 6, 12, 6));
+        let lines = |state: &ProjectState, path: &str| -> Vec<usize> {
+            state
+                .bookmarks
+                .iter()
+                .filter(|bookmark| bookmark.path == Path::new(path))
+                .map(|bookmark| bookmark.line)
+                .collect()
+        };
+        assert_eq!(lines(&state, "a"), [2, 7, 7]);
+        assert_eq!(lines(&state, "b"), [9]);
+        let recent: Vec<usize> = state.recent_locations.iter().map(|l| l.line).collect();
+        assert_eq!(recent, [7, 7, 2]);
+        assert!(!state.shift_lines(Path::new("a"), 0, 0, 0));
     }
 
     #[test]

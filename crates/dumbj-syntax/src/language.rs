@@ -79,6 +79,19 @@ impl Language {
         )
     }
 
+    /// What starts a comment that runs to the end of the line, if the language has one.
+    #[must_use]
+    pub fn line_comment(self) -> Option<&'static str> {
+        match self {
+            Self::Java | Self::Kotlin | Self::Groovy => Some("//"),
+            Self::Yaml | Self::Properties | Self::Toml | Self::Shell | Self::Dockerfile => {
+                Some("#")
+            }
+            Self::Sql => Some("--"),
+            Self::Xml | Self::Json | Self::Markdown => None,
+        }
+    }
+
     #[must_use]
     pub fn name(self) -> &'static str {
         match self {

@@ -219,7 +219,7 @@ fn a_reparse_after_edits_matches_a_fresh_parse() {
         (ByteOffset(8)..ByteOffset(11), ""),
     ] {
         let edit = buffer.replace(range, replacement).unwrap();
-        tree.edit(&edit);
+        tree.edit(&edit, &buffer);
     }
     let reparsed = reparse(&tree, &buffer, || false).unwrap().unwrap();
     let fresh = parse(language, &buffer, || false).unwrap().unwrap();

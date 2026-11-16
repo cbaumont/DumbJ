@@ -210,7 +210,6 @@ impl Workspace {
                 cx.notify();
             });
         });
-        self.index = None;
         self.indexing = Some(Indexing {
             done,
             cancel,

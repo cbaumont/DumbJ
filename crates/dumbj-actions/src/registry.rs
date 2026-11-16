@@ -100,6 +100,14 @@ pub enum Action {
     Delete,
     Tab,
     Enter,
+    Unindent,
+    Undo,
+    Redo,
+    DuplicateLine,
+    DeleteLine,
+    MoveLineUp,
+    MoveLineDown,
+    ToggleLineComment,
     Escape,
 }
 
@@ -611,6 +619,39 @@ const REGISTRY: &[ActionInfo] = &[
     info(Action::Delete, "text.delete", "Delete", Scope::Text),
     info(Action::Tab, "text.tab", "Tab", Scope::Text),
     info(Action::Enter, "text.enter", "Enter", Scope::Text),
+    info(Action::Unindent, "edit.unindent", "Unindent", Scope::Editor),
+    info(Action::Undo, "edit.undo", "Undo", Scope::Editor),
+    info(Action::Redo, "edit.redo", "Redo", Scope::Editor),
+    info(
+        Action::DuplicateLine,
+        "edit.duplicate-line",
+        "Duplicate Line or Selection",
+        Scope::Editor,
+    ),
+    info(
+        Action::DeleteLine,
+        "edit.delete-line",
+        "Delete Line",
+        Scope::Editor,
+    ),
+    info(
+        Action::MoveLineUp,
+        "edit.move-line-up",
+        "Move Line Up",
+        Scope::Editor,
+    ),
+    info(
+        Action::MoveLineDown,
+        "edit.move-line-down",
+        "Move Line Down",
+        Scope::Editor,
+    ),
+    info(
+        Action::ToggleLineComment,
+        "edit.toggle-line-comment",
+        "Comment with Line Comment",
+        Scope::Editor,
+    ),
     info(Action::Escape, "text.escape", "Escape", Scope::Text),
 ];
 
