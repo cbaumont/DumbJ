@@ -37,7 +37,9 @@
 - [x] Highlight usages at caret
 - [~] Scrollbar — draggable thumb; no marks
 - [ ] Hover popups
-- [ ] Editing — editor is read-only; planned as M1c (see ARCHITECTURE decision)
+- [~] Editing — typing (IME), undo/redo with typing groups, Enter with auto-indent, Tab/Shift+Tab, cut/paste, duplicate/delete/move line, line comments; no multi-caret, column selection, move statement, block comments, bracket auto-close, EditorConfig or encodings other than UTF-8
+- [x] Autosave — atomic; on tab switch, focus loss, close, quit and 15 s idle
+- [~] Files changed on disk — reload when unmodified, reload/keep prompt when modified (mouse-only); no merge
 - [x] Caret movement, selection, copy, mouse selection
 - [x] Find in file with match count
 - [ ] Replace in file
@@ -161,12 +163,12 @@ Selection & editing
 - [ ] EditorCloneCaretAbove
 - [ ] EditorCloneCaretBelow
 - [ ] EditorToggleColumnMode
-- [ ] CommentByLineComment
+- [x] CommentByLineComment
 - [ ] CommentByBlockComment
-- [ ] EditorDuplicate
-- [ ] EditorDeleteLine
+- [x] EditorDuplicate
+- [x] EditorDeleteLine
 - [ ] MoveStatementUp / MoveStatementDown
-- [ ] MoveLineUp / MoveLineDown
+- [x] MoveLineUp / MoveLineDown
 - [x] ExpandRegion / CollapseRegion
 - [x] ExpandAllRegions / CollapseAllRegions
 
@@ -206,4 +208,4 @@ Review (DumbJ only)
 - [ ] Open PR in Browser
 - [ ] Copy Permalink
 
-Also bound (not in §6.2): OpenFile (Open Folder, no default shortcut), caret movement and selection (EditorLeft … EditorNextWordWithSelection), $SelectAll, $Copy, $Cut, $Paste, EditorBackSpace, EditorDelete, EditorEnter, EditorEscape. See `docs/KEYMAP.md`.
+Also bound (not in §6.2): OpenFile (Open Folder, no default shortcut), caret movement and selection (EditorLeft … EditorNextWordWithSelection), $SelectAll, $Copy, $Cut, $Paste, $Undo, $Redo, EditorBackSpace, EditorDelete, EditorEnter, EditorTab, EditorUnindentSelection, EditorEscape. See `docs/KEYMAP.md`.
