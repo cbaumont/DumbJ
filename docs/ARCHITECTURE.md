@@ -1,6 +1,6 @@
 # DumbJ architecture
 
-Status: M0 approved on 2026-11-14, M1a (navigation core) on 2026-11-15. M1b in progress.
+Status: M0 to M2 complete (2026-11-16). M3 in progress.
 
 ## Crate map
 
@@ -19,7 +19,7 @@ All crates live in `crates/`. Only `dumbj-ui` depends on GPUI; everything else i
 | `dumbj-ui` | GPUI front end: workspace window, file tree, tabs, editor view, text input, popups, chooser, Find and Hierarchy tool windows | all of the above |
 | `dumbj-app` | The `dumbj` binary: CLI, logging, starts the UI | ui |
 
-Planned, not created yet: `dumbj-lsp`, `dumbj-review`, `dumbj-platform`.
+Planned, not created yet: `dumbj-lsp`, `dumbj-platform`.
 
 Data that ships in the binary lives at the repo root: `keymaps/` (vendored XML + `action-id-map.toml`), `themes/` (Catppuccin palettes + `roles.toml`), `assets/` (JetBrains Mono, Lucide icons). Each has a NOTICE or LICENSE naming its source and revision.
 
@@ -210,3 +210,11 @@ Blame runs on HEAD's version of the file (`git blame --porcelain HEAD`), not on 
 ### 2026-11-16: GitHub sign-in reuses the gh CLI
 M3 takes the GitHub token from `gh auth token` instead of implementing the device flow or storing tokens. Why: the owner already uses `gh`, it handles hosts, scopes and keyring storage, and it keeps credentials out of DumbJ. BRIEF §4.5's own sign-in (tokens, device flow, several accounts) is deferred.
 
+
+### 2026-11-16: M3 design (GitHub review)
+- **API: GitHub GraphQL over blocking `ureq`**, in a new headless crate `dumbj-review`, with `serde_json` for the payloads. This confirms the 2026-11-14 HTTP decision. Why not `gh api`: review threads, pending reviews and viewed state need many calls, a child process per call is slow and hard to cancel, and BRIEF §10's mock GitHub server needs a client whose endpoint can be pointed at `127.0.0.1`. `gh` stays the source of the token only.
+- **PR refs are a fetch.** Opening a PR runs `git fetch <remote> +refs/pull/<n>/head:refs/dumbj/pr/<n>/head` and fetches the base commit into `refs/dumbj/pr/<n>/base`. This writes refs and objects under `.git`, which the read-only rule allows as a fetch (BRIEF §2.5, §4.5); nothing in the working tree, the index or the user's branches changes. "Prune review refs" deletes `refs/dumbj/pr/`.
+- **A PR is a local review** of `refs/dumbj/pr/<n>/base...refs/dumbj/pr/<n>/head`, plus the PR's number and host in the review state. The M2 review window, diff viewer and viewed marks are reused.
+- **The PR head is indexed from git objects, not checked out.** `dumbj-index` builds a second `Index` for the head commit: files that are identical in the working tree reuse the facts of the working-tree snapshot, the rest are read with `git cat-file --batch` and parsed. Its files carry virtual paths (`<workdir>!<commit>/<path>`, in the manner of the jar paths), which open as read-only revision tabs. Why: the 2026-11-14 decision that reviews never touch the working tree stands, and BRIEF §4.5 wants navigation across the whole head. PR checkout as a branch switch is not offered in M3.
+- **Inline threads are block rows in the editor's display map.** The fold map that turns buffer lines into display rows also carries blocks: a block sits below a buffer line and takes a whole number of rows, which the editor paints itself (author, wrapped body, state). Why whole rows: scrolling, the scrollbar and diff scroll sync all count rows already.
+- **Pending comments live in the project state** next to the local review (`dumbj_settings::Review`), are written before any network call and are removed only when GitHub confirms the submitted review.

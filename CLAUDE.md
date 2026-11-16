@@ -5,22 +5,23 @@ A fast, native, keyboard-first **code reading and code review editor** with Inte
 Full spec: `docs/BRIEF.md`. Where it conflicts with the Decisions in `docs/ARCHITECTURE.md`, the Decisions win. Read the sections relevant to your current task, not the whole file every time.
 
 ## Current milestone
-M3: GitHub review (BRIEF §9, §4.5), **not started**. M2 (git and local review) was completed on 2026-11-16 and its review package posted; M1c was completed on 2026-11-16, M1b approved on 2026-11-15, M1a on 2026-11-15, M0 on 2026-11-14. Decisions are in `docs/ARCHITECTURE.md`. At each milestone end write the review package (summary, run instructions, test status, known gaps, screenshots) and push; the owner asked on 2026-11-15 not to be asked for approval between milestones unless strictly necessary, so then continue with the next one.
+M3: GitHub review (BRIEF §9, §4.5), **phase 1 in progress** (started 2026-11-16). M2 (git and local review) was completed on 2026-11-16 and its review package posted; M1c was completed on 2026-11-16, M1b approved on 2026-11-15, M1a on 2026-11-15, M0 on 2026-11-14. Decisions are in `docs/ARCHITECTURE.md`. At each milestone end write the review package (summary, run instructions, test status, known gaps, screenshots) and push; the owner asked on 2026-11-15 not to be asked for approval between milestones unless strictly necessary, so then continue with the next one.
 
-### M3 handover (2026-11-16)
-Read BRIEF §4.5 and `docs/ARCHITECTURE.md` (the M2 decisions at the end), then split M3 into phases here before coding. Settled with the owner:
+### M3 phases
+Design: "M3 design (GitHub review)" in `docs/ARCHITECTURE.md`. Tick a phase here when it is committed.
+1. [ ] `dumbj-review`: token from `gh auth token`, remote URL → host/owner/repo, GraphQL client on `ureq`, PR list query, mock-server tests.
+2. [ ] PR refs in `dumbj-vcs` (`refs/dumbj/pr/<n>/{head,base}`, prune) and the head-revision index in `dumbj-index` with read-only revision tabs.
+3. [ ] Review tool window: PR list (review requested, assigned, authored, all; search), open a PR as a review, Open PR in Browser.
+4. [ ] Threads: fetch, block rows in the editor, fold/expand, resolved and outdated state, Next/Previous Comment Thread.
+5. [ ] Writing: Add Review Comment (line or range, suggestion block), reply, resolve/unresolve, pending comments in the project state, Start/Submit Review (Comment, Approve, Request changes).
+6. [ ] Viewed sync, PR overview (description, checks, commits, commit-by-commit review), Copy Permalink.
+7. [ ] Docs, FEATURES, screenshots, review package, push.
+
+Settled with the owner:
 - **Auth:** reuse the `gh` CLI's token (`gh auth token`, per host); no device flow or token storage of our own in M3. If `gh` is missing or logged out, say so in the UI and point to `gh auth login`.
-- **Test repository:** `https://github.com/cbaumont/set-the-play-core` (one commit, no PRs). The owner allows creating branches, PRs, comments and reviews there freely; touch no other repository on GitHub.
+- **Test repository:** `https://github.com/cbaumont/set-the-play-core` (public, Kotlin, one commit, no PRs). The owner allows creating branches, PRs, comments and reviews there freely; touch no other repository on GitHub.
 
-Groundwork M2 leaves for M3: a PR is local review mode with `base` = merge base and `head` = the PR head, so `workspace/review.rs`, `diff.rs` and `review_notes.rs` are the starting point; `dumbj_settings::Review` (viewed marks keyed on blob ids, notes with path/side/lines/excerpt) is the model for pending comments, which must survive restarts; `Repository::fetch` and `git::run_raw_env` show how to run network git without prompts; DumbJ-only actions are declared in `keymaps/dumbj-*.xml` and the clash test guards them (Add Review Comment, Start/Submit Review, Next/Previous Comment Thread, Resolve Thread, Open PR in Browser, Copy Permalink are still to declare).
-
-Open questions to settle early (record each as a decision):
-- HTTP client and API: GitHub's GraphQL API covers threads, pending reviews and viewed state; adding a client crate (e.g. `ureq` or `reqwest` blocking) is a new dependency to justify, or shell out to `gh api`.
-- PR refs: BRIEF wants `refs/dumbj/pr/<n>/{head,base}`; that is a fetch, which the read-only rule allows, but say so in the decision.
-- Navigation across the PR head (BRIEF §4.5) needs an index of a revision that is not checked out; `dumbj-index` only reads the working tree today. Options: index from git objects, or offer PR checkout (a branch switch, allowed) and index the working tree. Decide before building the UI.
-- Diff threads: inline comment blocks inside `EditorView` need a way to insert non-text rows between buffer lines; nothing like it exists yet (the diff viewer deliberately has no filler lines).
-
-Housekeeping: `.claude/worktrees/agent-*` hold finished subagent branches whose commits are already on `main` (cherry-picked); they can be removed with `git worktree remove --force` and their `worktree-agent-*` branches deleted.
+Groundwork from M2: `workspace/review.rs`, `diff.rs` and `review_notes.rs`; `dumbj_settings::Review` (viewed marks keyed on blob ids, notes with path/side/lines/excerpt); `Repository::fetch` and `git::run_raw_env` for network git without prompts; DumbJ-only actions are declared in `keymaps/dumbj-*.xml` and the clash test guards them.
 
 M2 holds: `dumbj-vcs` (gix for HEAD blobs, the git CLI for everything else: status, revisions, changed files, content ids, log with refs and filters, blame, checkout, fetch; `imara-diff` hunks and word changes; a lane graph); gutter change markers, Next/Previous Change, Rollback Lines; the diff viewer (`workspace/diff.rs`: two real editors for any base/head pair, word highlights, F7/Shift+F7, Ctrl+Tab, ignore whitespace, scroll sync); local review (`workspace/review.rs`, `review_notes.rs`: `base`, `base..head`, `base...head`, viewed tracking keyed on the head blob id, one-line notes copied as Markdown); the Git tool window (`workspace/git_log.rs`, Alt+9: graph, refs, filter field, commit files, Show History and Show History for Selection); Annotate and the branch popup with checkout and fetch (`workspace/branches.rs`). DumbJ-only actions get their shortcuts from `keymaps/dumbj-linux.xml` and `dumbj-macos.xml`. Its gaps: no unified diff or collapse unchanged; no standalone revision tabs; the review file list is flat and notes are one line; log dates are UTC and capped at 2000 commits; Annotate has no age colours or commit popup; the branch popup cannot compare branches; the ignore-whitespace toggle is mouse-only; F7 is untested in the app (`wtype` cannot send it).
 
