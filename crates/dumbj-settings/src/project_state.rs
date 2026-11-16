@@ -7,6 +7,8 @@ use std::process::{Command, Stdio};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use crate::review::Review;
+
 pub const MAX_RECENT_FILES: usize = 50;
 pub const MAX_RECENT_LOCATIONS: usize = 100;
 
@@ -59,6 +61,9 @@ pub struct ProjectState {
     /// In creation order.
     #[serde(default)]
     pub bookmarks: Vec<Bookmark>,
+    /// The local review in progress.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub review: Option<Review>,
 }
 
 impl ProjectState {
@@ -411,6 +416,20 @@ mod tests {
         state.toggle_bookmark_with_mnemonic(Path::new("/p/B.kt"), 4, '3', "");
         state.save(&dir.join("nested")).unwrap();
         assert_eq!(ProjectState::load(&dir.join("nested")).unwrap(), state);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_review_round_trips_and_old_files_without_one_still_load() {
+        let dir = temp_dir("review");
+        let mut state = ProjectState::default();
+        let mut review = Review::new("main", None);
+        review.set_viewed(Path::new("a"), "f1", true);
+        state.review = Some(review);
+        state.save(&dir).unwrap();
+        assert_eq!(ProjectState::load(&dir).unwrap(), state);
+        std::fs::write(dir.join(STATE_FILE), "recent_files = [\"a\"]\n").unwrap();
+        assert_eq!(ProjectState::load(&dir).unwrap().review, None);
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
