@@ -1419,12 +1419,20 @@ impl Workspace {
                     .join(" › ")
             }),
             (Some(project), Some(tab)) => {
-                let relative = tab.path.strip_prefix(&project.root).unwrap_or(&tab.path);
+                let at_commit = dumbj_vcs::split_revision_path(&tab.path);
+                let relative = match &at_commit {
+                    Some((_, _, relative)) => relative,
+                    None => tab.path.strip_prefix(&project.root).unwrap_or(&tab.path),
+                };
                 let parts = relative
                     .components()
                     .map(|part| part.as_os_str().to_string_lossy());
+                let commit = at_commit
+                    .iter()
+                    .map(|(_, commit, _)| format!("@{}", &commit[..commit.len().min(7)]).into());
                 std::iter::once(project.name.clone().into())
                     .chain(parts)
+                    .chain(commit)
                     .collect::<Vec<_>>()
                     .join(" › ")
             }
