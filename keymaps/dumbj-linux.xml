@@ -56,6 +56,15 @@
   <action id="DumbJ.Review.Send">
     <keyboard-shortcut first-keystroke="control alt shift ENTER"/>
   </action>
+  <action id="DumbJ.Review.Overview">
+    <keyboard-shortcut first-keystroke="control alt shift P" second-keystroke="D"/>
+  </action>
+  <action id="DumbJ.Review.CopyPermalink">
+    <keyboard-shortcut first-keystroke="control alt shift P" second-keystroke="L"/>
+  </action>
+  <action id="DumbJ.Review.PruneRefs">
+    <keyboard-shortcut first-keystroke="control alt shift P" second-keystroke="Z"/>
+  </action>
   <action id="DumbJ.ShowFileHistory">
     <keyboard-shortcut first-keystroke="control alt shift Q"/>
   </action>

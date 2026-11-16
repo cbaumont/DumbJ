@@ -339,6 +339,10 @@ impl EditorView {
         cx.notify();
     }
 
+    pub(crate) fn set_read_only(&mut self, read_only: bool) {
+        self.read_only = read_only;
+    }
+
     pub(crate) fn text(&self) -> String {
         self.model.buffer().to_string()
     }

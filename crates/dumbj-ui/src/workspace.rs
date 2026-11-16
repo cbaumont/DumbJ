@@ -28,6 +28,7 @@ mod head_index;
 mod hierarchy;
 mod library;
 mod navigation;
+mod overview;
 mod pulls;
 mod review;
 mod review_notes;

@@ -58,6 +58,12 @@ pub(super) struct Session {
     pub(super) sending: bool,
 }
 
+impl GitHub {
+    pub(super) fn repo(&self) -> &RepoId {
+        &self.repo
+    }
+}
+
 fn filter_label(filter: PrFilter) -> &'static str {
     match filter {
         PrFilter::ReviewRequested => "Review requested",
@@ -284,12 +290,14 @@ impl Workspace {
                 self.compose_open()
             }
             _ if popup_open => false,
-            Action::PullRequests => self.repository.is_some(),
-            Action::OpenPullRequestInBrowser => self.review_pull().is_some(),
+            Action::PullRequests | Action::PruneReviewRefs => self.repository.is_some(),
+            Action::CopyPermalink => self.repository.is_some() && self.active.is_some(),
+            Action::OpenPullRequestInBrowser
+            | Action::PullRequestOverview
+            | Action::SubmitReview
+            | Action::ApproveReview
+            | Action::RequestChanges => self.review_pull().is_some(),
             Action::AddReviewComment => self.can_comment(),
-            Action::SubmitReview | Action::ApproveReview | Action::RequestChanges => {
-                self.review_pull().is_some()
-            }
             _ => self.has_threads_here(),
         }
     }
@@ -308,6 +316,9 @@ impl Workspace {
                 }
             }
             Action::AddReviewComment => self.compose_comment(window, cx),
+            Action::PullRequestOverview => self.open_overview(window, cx),
+            Action::CopyPermalink => self.copy_permalink(cx),
+            Action::PruneReviewRefs => self.prune_review_refs(cx),
             Action::SubmitReview | Action::ApproveReview | Action::RequestChanges => {
                 self.compose_verdict(action, window, cx);
             }

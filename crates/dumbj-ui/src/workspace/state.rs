@@ -17,7 +17,9 @@ pub(super) enum StateSave {
 /// Library sources and files of a commit open from virtual paths; they are not the
 /// project's files.
 pub(super) fn is_project_file(path: &Path) -> bool {
-    dumbj_jars::split_virtual_path(path).is_none() && dumbj_vcs::split_revision_path(path).is_none()
+    path.is_absolute()
+        && dumbj_jars::split_virtual_path(path).is_none()
+        && dumbj_vcs::split_revision_path(path).is_none()
 }
 
 /// Drops entries whose files are gone, so the lists never offer a file that cannot open.

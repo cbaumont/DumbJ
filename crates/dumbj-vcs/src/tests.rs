@@ -1000,9 +1000,11 @@ fn a_pull_request_is_fetched_into_private_refs_and_pruned() {
     assert_ne!(updated.head, refs.head);
     assert_eq!(updated.base, refs.base);
 
-    assert_eq!(repo.prune_pull_refs().unwrap(), 2);
+    assert_eq!(repo.prune_pull_refs(Some(7)).unwrap(), 0);
+    assert_eq!(repo.pull_refs(7).unwrap(), Some(updated));
+    assert_eq!(repo.prune_pull_refs(Some(70)).unwrap(), 2);
     assert_eq!(repo.pull_refs(7).unwrap(), None);
-    assert_eq!(repo.prune_pull_refs().unwrap(), 0);
+    assert_eq!(repo.prune_pull_refs(None).unwrap(), 0);
 }
 
 #[test]

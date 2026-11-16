@@ -131,6 +131,9 @@ Linux uses the `DumbJ` keymap (IntelliJ's `macOS For All` plus DumbJ's own actio
 | Insert Suggested Change | `review.insert-suggestion` | `DumbJ.Review.InsertSuggestion` | `Ctrl+Alt+Shift+P, G` | `⌃⌥⇧P, G` |
 | Send Comment Now | `review.send-now` | `DumbJ.Review.SendNow` | `Ctrl+Alt+Shift+P, Enter` | `⌃⌥⇧P, Enter` |
 | Send | `review.send` | `DumbJ.Review.Send` | `Ctrl+Alt+Shift+Enter` | `⌃⌥⇧Enter` |
+| Pull Request Overview | `review.overview` | `DumbJ.Review.Overview` | `Ctrl+Alt+Shift+P, D` | `⌃⌥⇧P, D` |
+| Copy GitHub Permalink | `review.copy-permalink` | `DumbJ.Review.CopyPermalink` | `Ctrl+Alt+Shift+P, L` | `⌃⌥⇧P, L` |
+| Prune Review Refs | `review.prune-refs` | `DumbJ.Review.PruneRefs` | `Ctrl+Alt+Shift+P, Z` | `⌃⌥⇧P, Z` |
 | Git | `tool-window.git` | `ActivateVersionControlToolWindow` | `Alt+9` | `⌘9` |
 | Show History | `vcs.file-history` | `DumbJ.ShowFileHistory`, `Vcs.ShowTabbedFileHistory` | `Ctrl+Alt+Shift+Q` | `⌃⌥⇧Q` |
 | Show History for Selection | `vcs.selection-history` | `DumbJ.ShowHistoryForSelection`, `Vcs.ShowHistoryForBlock` | `Ctrl+Alt+Shift+Z` | `⌃⌥⇧Z` |

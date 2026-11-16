@@ -1,6 +1,6 @@
 # DumbJ architecture
 
-Status: M0 to M2 complete (2026-11-16). M3 in progress.
+Status: M0 to M3 complete (2026-11-16).
 
 ## Crate map
 
@@ -14,7 +14,7 @@ All crates live in `crates/`. Only `dumbj-ui` depends on GPUI; everything else i
 | `dumbj-jars` | Library sources, headless: finds source jars in the Gradle and Maven caches and the JDK's `src.zip`, indexes them by class (`JarIndex`), reads entries in place through virtual paths (`lib.jar!/pkg/Class.java`) and locates a class or member in a source | syntax, text; `ignore`, `zip` |
 | `dumbj-search` | Find in Files, headless: a parallel, cancellable line search (literal or regex, case, whole word, file mask) that honours `.gitignore` and skips binary and huge files | `ignore`, `regex`, `globset` |
 | `dumbj-vcs` | Git, headless: repository discovery, branch, HEAD id and a file's HEAD text through `gix`; changed and untracked files through `git status --porcelain=v2`; line hunks between two texts (`diff`, on `imara-diff`) | `gix`, `imara-diff` |
-| `dumbj-review` | GitHub review, headless: `RepoId` from remote URLs, the `gh` token, a blocking GraphQL `Client` (`ureq`, system certificate store) and the pull-request search | `ureq`, `serde_json` |
+| `dumbj-review` | GitHub review, headless: `RepoId` from remote URLs, the `gh` token, a blocking GraphQL `Client` (`ureq`, system certificate store): pull-request search and details (checks, commits), review threads, replies, resolve, pending reviews and submit, viewed files, and `post_comments`, which sends drafts in order. Tests run against a mock server on `127.0.0.1`; `examples/pulls` and `examples/threads` check the real API | `ureq`, `rustls`, `serde_json` |
 | `dumbj-actions` | Action registry, IntelliJ keymap XML loader, action ID map, key dispatcher, `KEYMAP.md` generator | none |
 | `dumbj-settings` | Themes as data (palette + role mapping); per-project state (`ProjectState`: recent files, recent locations, bookmarks) and its directory; user settings later | syntax |
 | `dumbj-ui` | GPUI front end: workspace window, file tree, tabs, editor view, text input, popups, chooser, Find and Hierarchy tool windows | all of the above |
@@ -44,6 +44,7 @@ Inside `dumbj-ui`, logic that needs no GPUI types sits in plain modules (`editor
 - **Saving.** `EditorView::save` snapshots the rope and writes it in the background with `disk::write_atomic` (temporary file, fsync, rename, directory fsync). The workspace calls it when the tab or the window loses focus and when a tab closes; the editor calls it 15 s after the last edit; quitting saves on the main thread. Only modified files are written. Each editor keeps the file's stamp (mtime and length) from its last read or write: a save that finds another stamp on disk does not write, and a check on tab or window activation reloads an unmodified file and raises the conflict bar for a modified one.
 - **Index refresh.** After a save, a reload, or the window regaining focus, the workspace reruns the indexer 300 ms later. Unchanged files come from the SQLite cache, so the run costs a directory walk plus the changed files; the old snapshot stays in use until the new one replaces it.
 - **Git status.** Opening a project, regaining window focus and every save make the workspace rediscover the repository in the background: the branch goes to the status bar, `statuses` colours the Project tree, and each open editor receives its file's HEAD text. The editor diffs its buffer against that text in the background (200 ms after typing stops) and paints the hunks as gutter change markers; Next/Previous Change and Rollback Lines work on those hunks.
+- **Pull requests.** The Pull Requests popup asks `dumbj-review` for the open pull requests of the first remote on a GitHub host (`origin` preferred), signed in with `gh auth token`. Opening one runs `Repository::fetch_pull` (refs under `refs/dumbj/pr/<n>/`) and starts a review of `base...head` that carries the pull request. The workspace then indexes the head commit from git objects (`workspace/head_index.rs`, `dumbj_index::index_revision`): the head side of each diff and the tabs reached from it open from revision paths (`<workdir>!<commit>/<path>`) and resolve against that index. Threads, details and viewed files are read in one background task (`workspace/threads.rs`); each thread becomes a block of rows below its line (`editor/blocks.rs`). Comments are written in a scratch editor (`workspace/compose.rs`), saved as drafts in the project state and sent by `Client::post_comments`; every change on GitHub is followed by reading the threads again.
 - **Search.** The find field emits `TextChanged` → the editor searches a rope snapshot in the background → matches are painted and the status shows `current/total`.
 
 ## Threading model

@@ -135,6 +135,9 @@ pub enum Action {
     InsertSuggestion,
     SendCommentNow,
     SendComment,
+    PullRequestOverview,
+    CopyPermalink,
+    PruneReviewRefs,
     ActivateGitToolWindow,
     ShowFileHistory,
     ShowHistoryForSelection,
@@ -842,6 +845,24 @@ const REGISTRY: &[ActionInfo] = &[
     ),
     info(Action::SendComment, "review.send", "Send", Scope::Window),
     info(
+        Action::PullRequestOverview,
+        "review.overview",
+        "Pull Request Overview",
+        Scope::Window,
+    ),
+    info(
+        Action::CopyPermalink,
+        "review.copy-permalink",
+        "Copy GitHub Permalink",
+        Scope::Window,
+    ),
+    info(
+        Action::PruneReviewRefs,
+        "review.prune-refs",
+        "Prune Review Refs",
+        Scope::Window,
+    ),
+    info(
         Action::ActivateGitToolWindow,
         "tool-window.git",
         "Git",
@@ -895,6 +916,9 @@ impl Action {
                     | Self::InsertSuggestion
                     | Self::SendCommentNow
                     | Self::SendComment
+                    | Self::PullRequestOverview
+                    | Self::CopyPermalink
+                    | Self::PruneReviewRefs
             )
     }
 

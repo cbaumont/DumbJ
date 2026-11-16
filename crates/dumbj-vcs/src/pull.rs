@@ -111,15 +111,19 @@ impl Repository {
         Ok(base.zip(head).map(|(base, head)| PullRefs { base, head }))
     }
 
-    /// Deletes every ref under `refs/dumbj/pr/` and returns how many there were. The
-    /// objects go with git's next garbage collection.
-    pub fn prune_pull_refs(&self) -> Result<usize, VcsError> {
+    /// Deletes every ref under `refs/dumbj/pr/`, except those of pull request `keep`, and
+    /// returns how many were deleted. The objects go with git's next garbage collection.
+    pub fn prune_pull_refs(&self, keep: Option<u64>) -> Result<usize, VcsError> {
+        let kept = keep.map(|number| format!("{NAMESPACE}{number}/"));
         let never = git::never();
         let args = ["for-each-ref", "--format=%(refname)", NAMESPACE];
         let out = git::run(&self.workdir, &args, &never)?.unwrap_or_default();
         let text = String::from_utf8_lossy(&out);
         let mut pruned = 0;
-        for name in text.lines().filter(|name| name.starts_with(NAMESPACE)) {
+        let pruned_refs = text.lines().filter(|name| {
+            name.starts_with(NAMESPACE) && !kept.as_ref().is_some_and(|kept| name.starts_with(kept))
+        });
+        for name in pruned_refs {
             git::run(&self.workdir, &["update-ref", "-d", name], &never)?;
             pruned += 1;
         }

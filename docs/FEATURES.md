@@ -87,13 +87,13 @@
 
 ## 4.5 Remote code review
 - [~] Sign in — the `gh` CLI's token; no own sign-in
-- [~] PR list — popup (review requested, assigned, mine, all; search), open PRs only
-- [~] Open PR into private refs — navigation across the head; no Prune action yet
+- [~] PR list — popup (review requested, assigned, mine, all; search), open PRs only, first 50
+- [x] Open PR into private refs — navigation across the whole head from git objects; Prune Review Refs
 - [~] Inline threads — folded/expanded blocks in the diff, resolved/outdated/pending state, next/previous; Markdown not rendered
 - [x] Comments, pending review, suggestions — line or range, reply, resolve/unresolve, suggestion block from the selected lines
 - [x] Submit review — comment, approve, request changes, with a summary
-- [ ] Viewed sync
-- [ ] Description, timeline, checks, commits
+- [x] Viewed sync
+- [~] Description, timeline, checks, commits — overview page (state, checks, commits, description as Markdown source); no timeline, no commit-by-commit review (Start Review takes `sha^..sha`)
 - [x] Pending comments survive restart — drafts in the project state until GitHub confirms; then GitHub's pending review holds them
 
 ## 4.6 Settings and keymap
@@ -201,13 +201,14 @@ VCS & diff
 - [ ] CopyReference
 
 Review (DumbJ only)
-- [~] Add Review Comment — local notes only (Add Review Note)
-- [ ] Start / Submit Review
-- [ ] Next / Previous Comment Thread
-- [ ] Resolve Thread
+- [x] Add Review Comment — and Reply, Insert Suggested Change, Send, Send Comment Now; local notes stay (Add Review Note)
+- [x] Start / Submit Review — the first comment starts it; Submit Review, Approve, Request Changes
+- [x] Next / Previous Comment Thread — and Expand or Collapse Comment Thread
+- [x] Resolve Thread
 - [x] Toggle File Viewed
 - [x] Next Unviewed File
-- [ ] Open PR in Browser
-- [ ] Copy Permalink
+- [x] Open PR in Browser
+- [x] Copy Permalink
+- [x] Pull Requests, Pull Request Overview, Prune Review Refs
 
 Also bound (not in §6.2): OpenFile (Open Folder, no default shortcut), caret movement and selection (EditorLeft … EditorNextWordWithSelection), $SelectAll, $Copy, $Cut, $Paste, $Undo, $Redo, EditorBackSpace, EditorDelete, EditorEnter, EditorTab, EditorUnindentSelection, EditorEscape. See `docs/KEYMAP.md`.
