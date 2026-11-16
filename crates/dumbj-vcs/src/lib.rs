@@ -1,6 +1,7 @@
 mod changes;
 pub mod diff;
 mod git;
+mod log;
 mod revision;
 mod status;
 
@@ -8,6 +9,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
 
 pub use changes::Change;
+pub use log::{Commit, LogOptions};
 pub use revision::Branch;
 pub use status::FileStatus;
 
