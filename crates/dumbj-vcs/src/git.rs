@@ -1,4 +1,4 @@
-use std::io::Read;
+use std::io::{Read, Write};
 use std::path::Path;
 use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -35,17 +35,52 @@ pub(crate) fn run_raw_env(
     env: &[(&str, &str)],
     cancelled: &AtomicBool,
 ) -> Result<Option<Output>, VcsError> {
+    run_child(workdir, args, env, None, cancelled)
+}
+
+/// `run`, with `input` written to the child's stdin.
+pub(crate) fn run_input(
+    workdir: &Path,
+    args: &[&str],
+    input: Vec<u8>,
+    cancelled: &AtomicBool,
+) -> Result<Option<Vec<u8>>, VcsError> {
+    match run_child(workdir, args, &[], Some(input), cancelled)? {
+        None => Ok(None),
+        Some(out) if out.success => Ok(Some(out.stdout)),
+        Some(out) => Err(VcsError::Git(
+            String::from_utf8_lossy(&out.stderr).trim().to_owned(),
+        )),
+    }
+}
+
+fn run_child(
+    workdir: &Path,
+    args: &[&str],
+    env: &[(&str, &str)],
+    input: Option<Vec<u8>>,
+    cancelled: &AtomicBool,
+) -> Result<Option<Output>, VcsError> {
     let mut child = Command::new("git")
         .args(["--no-optional-locks", "-c", "log.showSignature=false"])
         .args(args)
         .envs(env.iter().copied())
         .current_dir(workdir)
-        .stdin(Stdio::null())
+        .stdin(if input.is_some() {
+            Stdio::piped()
+        } else {
+            Stdio::null()
+        })
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()?;
     let out = drain(child.stdout.take());
     let err = drain(child.stderr.take());
+    if let (Some(input), Some(mut stdin)) = (input, child.stdin.take()) {
+        thread::spawn(move || {
+            let _ = stdin.write_all(&input);
+        });
+    }
     let status = loop {
         if cancelled.load(Ordering::Relaxed) {
             let _ = child.kill();

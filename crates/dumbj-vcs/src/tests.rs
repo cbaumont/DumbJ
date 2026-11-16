@@ -875,3 +875,53 @@ fn fetch_brings_in_commits_and_prunes_deleted_branches() {
     let cancelled = AtomicBool::new(true);
     assert_eq!(repo.fetch(&cancelled).unwrap(), None);
 }
+
+#[test]
+fn files_and_blobs_of_a_revision() {
+    let t = TempRepo::new();
+    t.file("a.txt", "one\n");
+    t.file("dir/b.bin", [0u8, 159, 146, 150]);
+    std::os::unix::fs::symlink("a.txt", t.0.join("link")).unwrap();
+    t.commit_all();
+    t.file("a.txt", "changed\n");
+    let repo = t.repo();
+    let files = repo.files_at("HEAD", &git::never()).unwrap().unwrap();
+    let paths: Vec<_> = files.iter().map(|file| file.path.clone()).collect();
+    assert_eq!(paths, [PathBuf::from("a.txt"), PathBuf::from("dir/b.bin")]);
+    assert_eq!(files[0].id, rev_parse(&t, "HEAD:a.txt"));
+
+    let tree = rev_parse(&t, "HEAD^{tree}");
+    let missing = "0".repeat(40);
+    let ids = [files[1].id.as_str(), &missing, &tree, files[0].id.as_str()];
+    let blobs = repo.blobs(&ids, &git::never()).unwrap().unwrap();
+    assert_eq!(
+        blobs,
+        [
+            Some(vec![0u8, 159, 146, 150]),
+            None,
+            None,
+            Some(b"one\n".to_vec())
+        ]
+    );
+    assert_eq!(repo.blobs(&[], &git::never()).unwrap().unwrap(), []);
+    assert!(repo.blobs(&["--help"], &git::never()).is_err());
+    assert!(repo.files_at("-x", &git::never()).is_err());
+}
+
+#[test]
+fn many_blobs_in_one_batch() {
+    let t = TempRepo::new();
+    let big = "x".repeat(200_000);
+    for i in 0..40 {
+        t.file(&format!("f{i:02}.txt"), format!("{i}\n{big}"));
+    }
+    t.commit_all();
+    let repo = t.repo();
+    let files = repo.files_at("HEAD", &git::never()).unwrap().unwrap();
+    let ids: Vec<&str> = files.iter().map(|file| file.id.as_str()).collect();
+    let blobs = repo.blobs(&ids, &git::never()).unwrap().unwrap();
+    assert_eq!(blobs.len(), 40);
+    for (i, blob) in blobs.iter().enumerate() {
+        assert_eq!(blob.as_deref(), Some(format!("{i}\n{big}").as_bytes()));
+    }
+}

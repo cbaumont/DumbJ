@@ -7,6 +7,7 @@ mod log;
 mod remote;
 mod revision;
 mod status;
+mod tree;
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
@@ -16,6 +17,7 @@ pub use changes::Change;
 pub use log::{Commit, LogOptions};
 pub use revision::Branch;
 pub use status::FileStatus;
+pub use tree::{TreeFile, revision_path, split_revision_path};
 
 #[derive(Debug, thiserror::Error)]
 pub enum VcsError {
