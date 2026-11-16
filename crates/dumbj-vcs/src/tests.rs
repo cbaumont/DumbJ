@@ -279,3 +279,84 @@ fn branches_with_remote_tracking_refs() {
 fn branches_of_an_empty_repository() {
     assert_eq!(TempRepo::new().repo().branches().unwrap(), []);
 }
+
+fn change(path: &str, old: Option<&str>, status: FileStatus) -> Change {
+    Change {
+        path: path.into(),
+        old_path: old.map(Into::into),
+        status,
+    }
+}
+
+#[test]
+fn changed_files_between_commits() {
+    let t = TempRepo::new();
+    t.file("keep.txt", "keep\n");
+    t.file("edit.txt", "one\n");
+    t.file("remove.txt", "bye\n");
+    t.file(
+        "old.txt",
+        "some content that is long enough to be detected as a rename\n",
+    );
+    t.commit_msg("base");
+    let base = t.rev("HEAD");
+    t.file("edit.txt", "two\n");
+    fs::remove_file(t.0.join("remove.txt")).unwrap();
+    fs::create_dir(t.0.join("dir")).unwrap();
+    t.git(&["mv", "old.txt", "dir/moved.txt"]);
+    t.file("added.txt", "new\n");
+    t.commit_msg("change");
+    let repo = t.repo();
+    let never = AtomicBool::new(false);
+    let got = repo
+        .changed_files(&base, Some("HEAD"), &never)
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        got,
+        [
+            change("added.txt", None, FileStatus::Added),
+            change("dir/moved.txt", Some("old.txt"), FileStatus::Renamed),
+            change("edit.txt", None, FileStatus::Modified),
+            change("remove.txt", None, FileStatus::Deleted),
+        ]
+    );
+    assert_eq!(
+        repo.changed_files("HEAD", Some("HEAD"), &never)
+            .unwrap()
+            .unwrap(),
+        []
+    );
+    assert!(repo.changed_files("nope", Some("HEAD"), &never).is_err());
+    assert!(repo.changed_files("--oops", None, &never).is_err());
+    assert!(
+        repo.changed_files(&base, Some("HEAD"), &AtomicBool::new(true))
+            .unwrap()
+            .is_none()
+    );
+}
+
+#[test]
+fn changed_files_against_the_working_tree() {
+    let t = TempRepo::new();
+    t.file("edit.txt", "one\n");
+    t.file("staged.txt", "s\n");
+    t.commit_msg("base");
+    t.file("edit.txt", "two\n");
+    t.file("staged.txt", "s2\n");
+    t.git(&["add", "staged.txt"]);
+    t.file("fresh.txt", "u\n");
+    let got = t
+        .repo()
+        .changed_files("HEAD", None, &AtomicBool::new(false))
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        got,
+        [
+            change("edit.txt", None, FileStatus::Modified),
+            change("fresh.txt", None, FileStatus::Untracked),
+            change("staged.txt", None, FileStatus::Modified),
+        ]
+    );
+}
