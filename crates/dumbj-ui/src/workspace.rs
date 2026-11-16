@@ -18,6 +18,7 @@ use crate::text_input::{TextChanged, TextInput};
 use crate::theme;
 
 mod bookmarks;
+mod branches;
 mod diff;
 mod editing;
 mod find_in_files;
@@ -33,6 +34,7 @@ mod usages;
 mod vcs;
 
 use bookmarks::MnemonicPrompt;
+use branches::BranchPopup;
 use diff::{DiffSides, DiffTab};
 use dumbj_index::SearchScope;
 use dumbj_settings::ProjectState;
@@ -107,6 +109,7 @@ enum FocusArea {
     FindInFiles,
     ReviewPrompt,
     NotePrompt,
+    BranchPopup,
     GotoLine,
     Find,
     Review,
@@ -131,6 +134,8 @@ pub(crate) struct Workspace {
     review_prompt: Option<ReviewPrompt>,
     review_input: Entity<TextInput>,
     note_prompt: Option<NotePrompt>,
+    branch_popup: Option<BranchPopup>,
+    branch_input: Entity<TextInput>,
     note_input: Entity<TextInput>,
     find: Entity<TextInput>,
     find_open: bool,
@@ -242,6 +247,10 @@ impl Workspace {
         let on_review_changed = cx.subscribe(&review_input, |this, _, _: &TextChanged, cx| {
             this.review_query_changed(cx);
         });
+        let branch_input = cx.new(|cx| TextInput::new("Branch", cx));
+        let on_branch_changed = cx.subscribe(&branch_input, |this, _, _: &TextChanged, cx| {
+            this.branch_query_changed(cx);
+        });
         let find_query = cx.new(|cx| TextInput::new("Text to find", cx));
         let find_mask = cx.new(|cx| TextInput::new("*.java, *.kt, !*.test.kt", cx));
         let on_find_in_files_changed = [&find_query, &find_mask].map(|input| {
@@ -270,6 +279,8 @@ impl Workspace {
             review_prompt: None,
             review_input,
             note_prompt: None,
+            branch_popup: None,
+            branch_input,
             note_input: cx.new(|cx| TextInput::new("Note", cx)),
             find,
             find_open: false,
@@ -305,10 +316,15 @@ impl Workspace {
             usages_cancel: std::sync::Arc::default(),
             pending_focus: None,
             status_message: None,
-            subscriptions: [on_find_changed, on_search_changed, on_review_changed]
-                .into_iter()
-                .chain(on_find_in_files_changed)
-                .collect(),
+            subscriptions: [
+                on_find_changed,
+                on_search_changed,
+                on_review_changed,
+                on_branch_changed,
+            ]
+            .into_iter()
+            .chain(on_find_in_files_changed)
+            .collect(),
         }
     }
 
@@ -347,6 +363,8 @@ impl Workspace {
             FocusArea::ReviewPrompt
         } else if self.note_prompt.is_some() {
             FocusArea::NotePrompt
+        } else if self.branch_popup.is_some() {
+            FocusArea::BranchPopup
         } else if self.goto_line_open && self.goto_line.read(cx).focus_handle().is_focused(window) {
             FocusArea::GotoLine
         } else if self.find_open && self.find.read(cx).focus_handle().is_focused(window) {
@@ -605,6 +623,11 @@ impl Workspace {
     /// Whether `action` can run right now. The dispatcher skips disabled actions, so a
     /// shortcut shared by several actions reaches the one that applies, and an unusable
     /// shortcut falls through to text input.
+    /// Whether one of the git popups (review range, note, branches) is open.
+    fn vcs_popup_open(&self) -> bool {
+        self.review_prompt.is_some() || self.note_prompt.is_some() || self.branch_popup.is_some()
+    }
+
     fn is_enabled(&self, action: Action, window: &Window, cx: &App) -> bool {
         let has_editor = self.active.is_some();
         // The search actions stay available while the search popup is open, so that
@@ -613,8 +636,7 @@ impl Workspace {
             || self.chooser.is_some()
             || self.find_in_files.is_some()
             || self.mnemonic_prompt.is_some()
-            || self.review_prompt.is_some()
-            || self.note_prompt.is_some();
+            || self.vcs_popup_open();
         let popup_open = other_popup || self.search.is_some();
         match action {
             Action::OpenFolder => !popup_open,
@@ -633,8 +655,7 @@ impl Workspace {
                     && !(self.goto_line_open
                         || self.chooser.is_some()
                         || self.find_in_files.is_some()
-                        || self.review_prompt.is_some()
-                        || self.note_prompt.is_some())
+                        || self.vcs_popup_open())
             }
             Action::FindInPath => {
                 self.project.is_some()
@@ -642,8 +663,7 @@ impl Workspace {
                         || self.chooser.is_some()
                         || self.search.is_some()
                         || self.mnemonic_prompt.is_some()
-                        || self.review_prompt.is_some()
-                        || self.note_prompt.is_some())
+                        || self.vcs_popup_open())
             }
             Action::ToggleBookmark | Action::ToggleBookmarkWithMnemonic => {
                 has_editor && self.project.is_some() && !popup_open
@@ -678,7 +698,7 @@ impl Workspace {
             Action::NextDiff | Action::PreviousDiff | Action::FocusOppositeDiffPane => {
                 self.active_diff().is_some() && !popup_open
             }
-            Action::StartReview | Action::ActivateGitToolWindow => {
+            Action::StartReview | Action::ActivateGitToolWindow | Action::GitBranches => {
                 self.repository.is_some() && !popup_open
             }
             Action::ActivateReviewToolWindow | Action::NextUnviewedFile => {
@@ -689,7 +709,7 @@ impl Workspace {
             Action::ExportReviewNotes => self.has_review_notes() && !popup_open,
             Action::ActivateFindToolWindow => self.find_window.is_some() && !popup_open,
             Action::ActivateHierarchyToolWindow => self.hierarchy_window.is_some() && !popup_open,
-            Action::ShowFileHistory | Action::ShowHistoryForSelection => {
+            Action::ShowFileHistory | Action::ShowHistoryForSelection | Action::Annotate => {
                 !popup_open
                     && self.repository.is_some()
                     && self.active_tab().is_some_and(Tab::shows_working_file)
@@ -764,6 +784,8 @@ impl Workspace {
             Action::CallHierarchy => self.call_hierarchy(cx),
             Action::ActivateHierarchyToolWindow => self.toggle_hierarchy_window(window, cx),
             Action::ActivateGitToolWindow => self.toggle_git_window(window, cx),
+            Action::GitBranches => self.open_branch_popup(window, cx),
+            Action::Annotate => self.toggle_annotate(cx),
             Action::ShowFileHistory | Action::ShowHistoryForSelection => {
                 self.show_file_history(action == Action::ShowHistoryForSelection, window, cx);
             }
@@ -914,6 +936,7 @@ impl Workspace {
             FocusArea::FindInFiles => self.find_in_files_action(action, window, cx),
             FocusArea::ReviewPrompt => self.review_prompt_action(action, window, cx),
             FocusArea::NotePrompt => self.note_prompt_action(action, window, cx),
+            FocusArea::BranchPopup => self.branch_popup_action(action, window, cx),
             FocusArea::Review => self.review_window_action(action, window, cx),
             FocusArea::GotoLine => match action {
                 Action::Enter => self.submit_goto_line(window, cx),
@@ -1532,6 +1555,8 @@ impl Workspace {
             Some(self.render_review_prompt(prompt, cx).into_any_element())
         } else if let Some(prompt) = &self.note_prompt {
             Some(self.render_note_prompt(prompt, cx).into_any_element())
+        } else if let Some(popup) = &self.branch_popup {
+            Some(self.render_branch_popup(popup, cx).into_any_element())
         } else {
             self.goto_line_open
                 .then(|| self.render_goto_line_popup(cx).into_any_element())

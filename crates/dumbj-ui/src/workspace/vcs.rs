@@ -45,9 +45,10 @@ impl Workspace {
                 this.repository = repository;
                 this.branch = branch;
                 if let Some(project) = &this.project {
-                    project
-                        .tree
-                        .update(cx, |tree, cx| tree.set_statuses(statuses, cx));
+                    project.tree.update(cx, |tree, cx| {
+                        tree.set_statuses(statuses, cx);
+                        tree.reload(cx);
+                    });
                 }
                 let open: Vec<(Entity<EditorView>, PathBuf)> = this
                     .tabs
@@ -57,6 +58,9 @@ impl Workspace {
                     .collect();
                 for (editor, path) in open {
                     this.refresh_base_text(&editor, &path, cx);
+                    if editor.read(cx).is_annotated() {
+                        this.load_annotations(&editor, path, cx);
+                    }
                 }
                 this.refresh_review(cx);
                 cx.notify();

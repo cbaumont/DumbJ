@@ -62,6 +62,20 @@ fn hunk_at(hunks: &[Hunk], line: usize, line_count: usize) -> Option<&Hunk> {
     })
 }
 
+fn head_line(hunks: &[Hunk], line: usize) -> Option<usize> {
+    let (mut old_end, mut new_end) = (0, 0);
+    for hunk in hunks {
+        if line < hunk.new.start {
+            break;
+        }
+        if line < hunk.new.end {
+            return None;
+        }
+        (old_end, new_end) = (hunk.old.end, hunk.new.end);
+    }
+    Some(old_end + (line - new_end))
+}
+
 fn neighbour(hunks: &[Hunk], line: usize, forward: bool) -> Option<usize> {
     if forward {
         hunks
@@ -124,6 +138,12 @@ impl EditorView {
     /// Recomputes the markers once the file has loaded, if a base arrived before it.
     pub(super) fn changes_loaded(&mut self, cx: &mut Context<Self>) {
         self.refresh_changes(Duration::ZERO, cx);
+    }
+
+    /// The line of the HEAD text that `line` is, unless it was added or modified since.
+    pub(super) fn head_line(&self, line: usize) -> Option<usize> {
+        self.changes.base.as_ref()?;
+        head_line(&self.changes.hunks, line)
     }
 
     pub(super) fn change_mark(&self, line: usize) -> Option<ChangeMark> {
@@ -228,6 +248,18 @@ mod tests {
         assert_eq!(neighbour(&hunks, 9, false), Some(6));
         assert_eq!(neighbour(&hunks, 7, false), Some(6));
         assert_eq!(neighbour(&hunks, 1, false), None);
+    }
+
+    #[test]
+    fn working_lines_map_back_to_head_lines() {
+        let hunks = hunks();
+        assert_eq!(head_line(&hunks, 0), Some(0));
+        assert_eq!(head_line(&hunks, 1), None);
+        assert_eq!(head_line(&hunks, 3), Some(1));
+        assert_eq!(head_line(&hunks, 6), Some(6));
+        assert_eq!(head_line(&hunks, 8), None);
+        assert_eq!(head_line(&hunks, 10), Some(9));
+        assert_eq!(head_line(&hunks, 12), Some(13));
     }
 
     #[test]

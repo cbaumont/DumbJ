@@ -74,7 +74,7 @@ fn shows_graph(options: &LogOptions) -> bool {
 }
 
 /// `2026-11-16 07:10` for seconds since the Unix epoch, in UTC.
-fn format_time(seconds: i64) -> String {
+pub(super) fn format_time(seconds: i64) -> String {
     let days = seconds.div_euclid(86_400);
     let of_day = seconds.rem_euclid(86_400);
     let z = days + 719_468;
@@ -219,6 +219,12 @@ impl Workspace {
         let focus = self.git_focus.clone();
         window.focus(&focus, cx);
         self.reload_log(cx);
+    }
+
+    pub(super) fn reload_log_if_open(&mut self, cx: &mut Context<Self>) {
+        if self.git_window.is_some() {
+            self.reload_log(cx);
+        }
     }
 
     fn reload_log(&mut self, cx: &mut Context<Self>) {

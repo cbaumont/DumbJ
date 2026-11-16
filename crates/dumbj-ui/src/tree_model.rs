@@ -61,6 +61,19 @@ impl TreeModel {
             .collect();
     }
 
+    /// The expanded directories, parents before their children.
+    pub(crate) fn expanded_dirs(&self) -> Vec<PathBuf> {
+        self.rows
+            .iter()
+            .filter(|row| row.expanded)
+            .map(|row| row.entry.path.clone())
+            .collect()
+    }
+
+    pub(crate) fn position(&self, path: &Path) -> Option<usize> {
+        self.index_of(path)
+    }
+
     fn index_of(&self, path: &Path) -> Option<usize> {
         self.rows.iter().position(|row| row.entry.path == path)
     }
@@ -194,6 +207,18 @@ mod tests {
             vec![entry("/p/README.md/x", false)],
         );
         assert_eq!(shown(&model), ["> src", "README.md"]);
+    }
+
+    #[test]
+    fn expanded_directories_are_listed_parents_first() {
+        let mut model = model();
+        assert_eq!(
+            model.expanded_dirs(),
+            [PathBuf::from("/p/src"), PathBuf::from("/p/src/main")]
+        );
+        assert_eq!(model.position(Path::new("/p/src/main/App.java")), Some(2));
+        model.collapse(1);
+        assert_eq!(model.expanded_dirs(), [PathBuf::from("/p/src")]);
     }
 
     #[test]

@@ -96,6 +96,42 @@ impl FileTree {
         .detach();
     }
 
+    /// Lists the root and every expanded folder again, keeping what is expanded and
+    /// selected; for when files changed on disk.
+    pub(crate) fn reload(&mut self, cx: &mut Context<Self>) {
+        let dirs = self.model.expanded_dirs();
+        let selected = self
+            .selected
+            .and_then(|index| self.model.rows().get(index))
+            .map(|row| row.entry.path.clone());
+        let root = self.root.clone();
+        cx.spawn(async move |this, cx| {
+            let listings = cx
+                .background_spawn(async move {
+                    let root = read_dir_sorted(&root).ok()?;
+                    let dirs: Vec<_> = dirs
+                        .into_iter()
+                        .filter_map(|dir| Some((read_dir_sorted(&dir).ok()?, dir)))
+                        .collect();
+                    Some((root, dirs))
+                })
+                .await;
+            let _ = this.update(cx, |this, cx| {
+                let Some((root, dirs)) = listings else { return };
+                this.model.set_root_children(root);
+                for (children, dir) in dirs {
+                    this.model.expand(&dir, children);
+                }
+                let last = this.model.rows().len().checked_sub(1);
+                this.selected = selected
+                    .and_then(|path| this.model.position(&path))
+                    .or_else(|| this.selected.zip(last).map(|(index, last)| index.min(last)));
+                cx.notify();
+            });
+        })
+        .detach();
+    }
+
     fn select(&mut self, index: usize, cx: &mut Context<Self>) {
         let last = self.model.rows().len().saturating_sub(1);
         self.selected = (!self.model.rows().is_empty()).then_some(index.min(last));

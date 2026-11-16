@@ -28,6 +28,7 @@ use crate::editor_model::{
 use crate::keys::modifiers_from_gpui;
 use crate::theme;
 
+mod annotate;
 mod changes;
 mod diff_marks;
 mod editing;
@@ -240,6 +241,7 @@ pub(crate) struct EditorView {
     changes: changes::Changes,
     diff_marks: DiffMarks,
     note_lines: Vec<(usize, usize)>,
+    annotations: Option<Arc<Vec<String>>>,
     read_only: bool,
     /// What the file looked like on disk when it was last read or written.
     stamp: Option<FileStamp>,
@@ -347,6 +349,7 @@ impl EditorView {
             changes: changes::Changes::default(),
             diff_marks: DiffMarks::default(),
             note_lines: Vec::new(),
+            annotations: None,
             read_only: true,
             stamp: None,
             conflict: None,
@@ -982,11 +985,14 @@ impl EditorView {
         let line_count = self.model.buffer().line_count();
         let digits = line_count.to_string().len().max(2);
         let digit_width = shape(window, "0".to_owned(), &[run(1, text_color)]).width;
+        let annotation_chars = self.annotation_width();
         #[expect(
             clippy::cast_precision_loss,
             reason = "a line number has at most 20 digits"
         )]
-        let gutter_width = GUTTER_PADDING_LEFT + digit_width * digits as f32 + GUTTER_PADDING_RIGHT;
+        let gutter_width = GUTTER_PADDING_LEFT
+            + digit_width * (digits + annotation_chars) as f32
+            + GUTTER_PADDING_RIGHT;
         let text_left = bounds.left() + gutter_width + TEXT_PADDING_LEFT;
 
         let layout_started = Instant::now();
@@ -1223,6 +1229,11 @@ impl EditorView {
             let number = shape(window, number.clone(), &[run(number.len(), color)]);
             let number_x = bounds.left() + gutter_width - GUTTER_PADDING_RIGHT - number.width;
             numbers.push((point(number_x, top), number));
+            if let Some(label) = self.annotation(line) {
+                let label: String = label.chars().take(annotate::ANNOTATION_CHARS).collect();
+                let label = shape(window, label.clone(), &[run(label.len(), number_color)]);
+                numbers.push((point(bounds.left() + GUTTER_PADDING_LEFT, top), label));
+            }
             let number = line_index.display_number();
             if self
                 .note_lines
