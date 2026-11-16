@@ -19,7 +19,7 @@ use crate::frame::{read_frame, write_frame};
 const METHOD_NOT_FOUND: i64 = -32601;
 const CHILD_POLL: Duration = Duration::from_millis(25);
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ServerCommand {
     pub program: PathBuf,
     pub args: Vec<String>,
