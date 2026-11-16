@@ -73,8 +73,8 @@
 - [x] Gradle version catalog — `libs.x.y` accessors jump to `libs.versions.toml`
 - [x] Dumb Find Usages
 - [x] Dumb implementations / hierarchy
-- [~] Exact / best-guess labelling — chooser headed "best guess", usages marked "maybe"; no label on a direct jump
-- [ ] Language-server lifecycle
+- [~] Exact / best-guess labelling — chooser headed "best guess", usages marked "maybe"; no label on a direct jump; status bar shows dumb / smart (indexing…) / smart
+- [~] Language-server lifecycle — start on first file of the language, restart with backoff, per-project off switch; real servers not exercised yet
 - [x] Accuracy benchmark — 287 cases, nightly in CI
 
 ## 4.4 Version control and local review

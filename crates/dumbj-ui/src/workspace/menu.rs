@@ -58,6 +58,7 @@ const VIEW: Entries = &[
     Some(Action::ActivateHierarchyToolWindow),
     Some(Action::ActivateGitToolWindow),
     Some(Action::HideAllToolWindows),
+    Some(Action::ToggleSmartMode),
     None,
     Some(Action::CollapseRegion),
     Some(Action::ExpandRegion),

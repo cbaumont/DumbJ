@@ -138,6 +138,7 @@ pub enum Action {
     PullRequestOverview,
     CopyPermalink,
     PruneReviewRefs,
+    ToggleSmartMode,
     ActivateGitToolWindow,
     ShowFileHistory,
     ShowHistoryForSelection,
@@ -862,6 +863,12 @@ const REGISTRY: &[ActionInfo] = &[
         Action::PruneReviewRefs,
         "review.prune-refs",
         "Prune Review Refs",
+        Scope::Window,
+    ),
+    info(
+        Action::ToggleSmartMode,
+        "smart.toggle",
+        "Toggle Smart Mode",
         Scope::Window,
     ),
     info(

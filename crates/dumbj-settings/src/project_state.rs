@@ -64,6 +64,9 @@ pub struct ProjectState {
     /// The local review in progress.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub review: Option<Review>,
+    /// Language servers are not started for this project.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub smart_off: bool,
 }
 
 impl ProjectState {

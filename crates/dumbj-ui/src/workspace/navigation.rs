@@ -241,7 +241,7 @@ impl Workspace {
                 "Indexing… {} files",
                 indexing.done.load(Ordering::Relaxed)
             )),
-            (None, Some(_)) => Some("dumb".to_owned()),
+            (None, Some(_)) => Some(self.smart_label()),
             (None, None) => None,
         }
     }

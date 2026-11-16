@@ -134,6 +134,7 @@ Linux uses the `DumbJ` keymap (IntelliJ's `macOS For All` plus DumbJ's own actio
 | Pull Request Overview | `review.overview` | `DumbJ.Review.Overview` | `Ctrl+Alt+Shift+P, D` | `⌃⌥⇧P, D` |
 | Copy GitHub Permalink | `review.copy-permalink` | `DumbJ.Review.CopyPermalink` | `Ctrl+Alt+Shift+P, L` | `⌃⌥⇧P, L` |
 | Prune Review Refs | `review.prune-refs` | `DumbJ.Review.PruneRefs` | `Ctrl+Alt+Shift+P, Z` | `⌃⌥⇧P, Z` |
+| Toggle Smart Mode | `smart.toggle` | `DumbJ.ToggleSmartMode` | `Ctrl+Alt+Shift+P, M` | `⌃⌥⇧P, M` |
 | Git | `tool-window.git` | `ActivateVersionControlToolWindow` | `Alt+9` | `⌘9` |
 | Show History | `vcs.file-history` | `DumbJ.ShowFileHistory`, `Vcs.ShowTabbedFileHistory` | `Ctrl+Alt+Shift+Q` | `⌃⌥⇧Q` |
 | Show History for Selection | `vcs.selection-history` | `DumbJ.ShowHistoryForSelection`, `Vcs.ShowHistoryForBlock` | `Ctrl+Alt+Shift+Z` | `⌃⌥⇧Z` |

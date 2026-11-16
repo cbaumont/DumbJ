@@ -35,6 +35,7 @@ mod review;
 mod review_notes;
 mod review_tree;
 mod search_popup;
+mod smart;
 mod state;
 mod threads;
 mod usages;
@@ -161,6 +162,7 @@ pub(crate) struct Workspace {
     head_index: Option<head_index::HeadIndex>,
     jars: Option<std::sync::Arc<dumbj_jars::JarIndex>>,
     indexing: Option<Indexing>,
+    smart: smart::Smart,
     index_refresh: Option<Task<()>>,
     repository: Option<dumbj_vcs::Repository>,
     branch: Option<String>,
@@ -253,9 +255,8 @@ pub(crate) fn open_window(
 
 impl Workspace {
     fn new(bindings: Bindings, shortcut_style: ShortcutStyle, cx: &mut Context<Self>) -> Self {
-        let find = cx.new(|cx| TextInput::new("Search", cx));
-        let goto_line = cx.new(|cx| TextInput::new("Line:Column", cx));
-        let search_input = cx.new(|cx| TextInput::new("Search", cx));
+        let [find, goto_line, search_input] = ["Search", "Line:Column", "Search"]
+            .map(|placeholder| cx.new(|cx| TextInput::new(placeholder, cx)));
         let on_search_changed = cx.subscribe(&search_input, |this, _, _: &TextChanged, cx| {
             this.run_search(cx);
         });
@@ -271,8 +272,8 @@ impl Workspace {
         let on_pull_changed = cx.subscribe(&pull_input, |this, _, _: &TextChanged, cx| {
             this.load_pulls(true, cx);
         });
-        let find_query = cx.new(|cx| TextInput::new("Text to find", cx));
-        let find_mask = cx.new(|cx| TextInput::new("*.java, *.kt, !*.test.kt", cx));
+        let [find_query, find_mask] = ["Text to find", "*.java, *.kt, !*.test.kt"]
+            .map(|placeholder| cx.new(|cx| TextInput::new(placeholder, cx)));
         let on_find_in_files_changed = [&find_query, &find_mask].map(|input| {
             cx.subscribe(input, |this, _, _: &TextChanged, cx| {
                 this.schedule_find_in_files(cx);
@@ -316,6 +317,7 @@ impl Workspace {
             head_index: None,
             jars: None,
             indexing: None,
+            smart: smart::Smart::default(),
             index_refresh: None,
             repository: None,
             branch: None,
@@ -449,6 +451,7 @@ impl Workspace {
         self.index = None;
         self.head_index = None;
         self.session = pulls::Session::default();
+        self.reset_smart();
         self.start_indexing(root.clone(), cx);
         self.load_project_state(root.clone(), cx);
         self.start_jar_indexing(cx);
@@ -486,6 +489,7 @@ impl Workspace {
         self.activate_tab(index, window, cx);
         self.record_recent_file(&opened, cx);
         self.refresh_bookmark_marks(cx);
+        self.schedule_smart_sync(cx);
     }
 
     /// The editor of `path`: the one a tab already shows, or a new one.
@@ -577,6 +581,7 @@ impl Workspace {
         }
         let closed = self.tabs.remove(index);
         closed.editor.update(cx, EditorView::save);
+        self.smart_tab_closed(&closed.path);
         let active = self.active.unwrap_or(0);
         let next = if index < active { active - 1 } else { active };
         if self.tabs.is_empty() {
@@ -693,9 +698,10 @@ impl Workspace {
             }
             Action::CloseTab => has_editor && !popup_open,
             Action::NextTab | Action::PreviousTab => self.tabs.len() > 1 && !popup_open,
-            Action::ActivateProjectToolWindow | Action::HideAllToolWindows => {
-                self.project.is_some() && !popup_open
-            }
+            Action::ActivateProjectToolWindow
+            | Action::HideAllToolWindows
+            | Action::ShowBookmarks
+            | Action::ToggleSmartMode => self.project.is_some() && !popup_open,
             Action::SearchEverywhere
             | Action::GotoClass
             | Action::GotoFile
@@ -719,7 +725,6 @@ impl Workspace {
             Action::ToggleBookmark | Action::ToggleBookmarkWithMnemonic => {
                 has_editor && self.project.is_some() && !popup_open
             }
-            Action::ShowBookmarks => self.project.is_some() && !popup_open,
             _ if action.toggle_bookmark_digit().is_some() => {
                 has_editor && self.project.is_some() && !popup_open
             }
@@ -818,6 +823,7 @@ impl Workspace {
             Action::RecentLocations => {
                 self.open_search(SearchMode::Recent(RecentKind::Locations), window, cx);
             }
+            Action::ToggleSmartMode => self.toggle_smart_mode(cx),
             Action::FindUsages => self.find_usages(false, cx),
             Action::ShowUsages => self.find_usages(true, cx),
             Action::ActivateFindToolWindow => self.toggle_find_window(window, cx),

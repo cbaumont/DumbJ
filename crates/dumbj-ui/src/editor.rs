@@ -361,6 +361,11 @@ impl EditorView {
         self.read_only = read_only;
     }
 
+    /// The buffer's version once the file is loaded.
+    pub(crate) fn document_version(&self) -> Option<u64> {
+        matches!(self.state, LoadState::Ready).then(|| self.model.buffer().version())
+    }
+
     pub(crate) fn text(&self) -> String {
         self.model.buffer().to_string()
     }

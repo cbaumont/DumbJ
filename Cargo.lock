@@ -1406,6 +1406,7 @@ dependencies = [
  "dumbj-actions",
  "dumbj-index",
  "dumbj-jars",
+ "dumbj-lsp",
  "dumbj-review",
  "dumbj-search",
  "dumbj-settings",

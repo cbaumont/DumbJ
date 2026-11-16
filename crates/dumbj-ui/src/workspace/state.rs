@@ -77,6 +77,7 @@ impl Workspace {
         }
         self.refresh_bookmark_marks(cx);
         self.save_project_state(cx);
+        self.smart_state_loaded(cx);
     }
 
     /// Writes the state in the background, one save at a time so that an older snapshot

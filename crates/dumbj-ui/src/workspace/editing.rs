@@ -18,6 +18,7 @@ impl Workspace {
         event: &EditorEvent,
         cx: &mut Context<Self>,
     ) {
+        self.schedule_smart_sync(cx);
         match event {
             EditorEvent::Edited(changes) => {
                 let Some(path) = self
