@@ -4,6 +4,9 @@
 # gives the IntelliJ action on the left. IntelliJ actions that are not listed here are
 # ignored and show up in the loader's debug report.
 #
+# IDs that start with `DumbJ.` are DumbJ's own actions; their default shortcuts are in
+# dumbj-linux.xml and dumbj-macos.xml, which extend the vendored keymaps.
+#
 # Notes on IDs:
 # - OpenFile is IntelliJ's "Open..." action. It has no shortcut in any vendored keymap,
 #   so Open Folder is unbound by default.
@@ -114,4 +117,10 @@ VcsShowPrevChangeMarker = "vcs.previous-change"
 NextDiff = "diff.next-difference"
 PreviousDiff = "diff.previous-difference"
 "Diff.FocusOppositePane" = "diff.focus-opposite-pane"
+"DumbJ.ActivateReviewToolWindow" = "tool-window.review"
+"DumbJ.Review.Start" = "review.start"
+"DumbJ.Review.ToggleFileViewed" = "review.toggle-viewed"
+"DumbJ.Review.NextUnviewedFile" = "review.next-unviewed"
+"DumbJ.Review.AddNote" = "review.add-note"
+"DumbJ.Review.ExportNotes" = "review.export-notes"
 EditorEscape = "text.escape"

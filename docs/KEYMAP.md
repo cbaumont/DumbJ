@@ -2,7 +2,7 @@
 
 <!-- Generated from keymaps/ by dumbj-actions. Do not edit by hand. -->
 
-Linux uses the `macOS For All` keymap and macOS uses IntelliJ's `Mac OS X 10.5+` keymap.
+Linux uses the `DumbJ` keymap (IntelliJ's `macOS For All` plus DumbJ's own actions) and macOS uses `DumbJ macOS` (IntelliJ's `Mac OS X 10.5+` plus the same actions).
 
 | Action | DumbJ ID | IntelliJ ID | Linux | macOS |
 |---|---|---|---|---|
@@ -111,4 +111,10 @@ Linux uses the `macOS For All` keymap and macOS uses IntelliJ's `Mac OS X 10.5+`
 | Next Difference | `diff.next-difference` | `NextDiff` | `F7` | `F7` |
 | Previous Difference | `diff.previous-difference` | `PreviousDiff` | `Shift+F7` | `⇧F7` |
 | Go to Opposite Diff Pane | `diff.focus-opposite-pane` | `Diff.FocusOppositePane` | `Ctrl+Tab` | `⌃⇧Tab` |
+| Review | `tool-window.review` | `DumbJ.ActivateReviewToolWindow` | `Ctrl+Alt+Shift+Y` | `⌃⌥⇧Y` |
+| Start Review | `review.start` | `DumbJ.Review.Start` | `Ctrl+Alt+Shift+K` | `⌃⌥⇧K` |
+| Toggle File Viewed | `review.toggle-viewed` | `DumbJ.Review.ToggleFileViewed` | `Ctrl+Alt+Shift+U` | `⌃⌥⇧U` |
+| Next Unviewed File | `review.next-unviewed` | `DumbJ.Review.NextUnviewedFile` | `Ctrl+Alt+Shift+X` | `⌃⌥⇧X` |
+| Add Review Note | `review.add-note` | `DumbJ.Review.AddNote` | `Ctrl+Alt+Shift+M` | `⌃⌥⇧M` |
+| Copy Review Notes as Markdown | `review.export-notes` | `DumbJ.Review.ExportNotes` | — | — |
 | Escape | `text.escape` | `EditorEscape` | `Esc` | `Esc` |

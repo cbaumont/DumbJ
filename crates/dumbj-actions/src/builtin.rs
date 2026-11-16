@@ -7,10 +7,16 @@ use crate::keystroke::ShortcutStyle;
 const IDEA_DEFAULT_XML: &str = include_str!("../../../keymaps/idea-default.xml");
 const IDEA_MACOS_XML: &str = include_str!("../../../keymaps/idea-macos.xml");
 const MACOS_FOR_ALL_XML: &str = include_str!("../../../keymaps/macos-for-all.xml");
+const DUMBJ_LINUX_XML: &str = include_str!("../../../keymaps/dumbj-linux.xml");
+const DUMBJ_MACOS_XML: &str = include_str!("../../../keymaps/dumbj-macos.xml");
 const ACTION_ID_MAP_TOML: &str = include_str!("../../../keymaps/action-id-map.toml");
 
+/// The default keymap on Linux: "macOS For All" plus the shortcuts of DumbJ's own actions.
+pub const DUMBJ_LINUX: &str = "DumbJ";
+/// The default keymap on macOS: IntelliJ's "macOS" keymap plus DumbJ's own actions.
+pub const DUMBJ_MACOS: &str = "DumbJ macOS";
 pub const MACOS_FOR_ALL: &str = "macOS For All";
-/// The default keymap on macOS: IntelliJ's "macOS" keymap, under its internal name.
+/// IntelliJ's "macOS" keymap, under its internal name.
 pub const IDEA_MACOS: &str = "Mac OS X 10.5+";
 /// IntelliJ's root keymap, the parent of the other two.
 pub const IDEA_DEFAULT: &str = "$default";
@@ -43,8 +49,8 @@ impl Platform {
     #[must_use]
     pub fn default_keymap(self) -> &'static str {
         match self {
-            Self::Linux => MACOS_FOR_ALL,
-            Self::MacOs => IDEA_MACOS,
+            Self::Linux => DUMBJ_LINUX,
+            Self::MacOs => DUMBJ_MACOS,
         }
     }
 
@@ -59,7 +65,13 @@ impl Platform {
 
 pub fn library() -> Result<KeymapLibrary, KeymapError> {
     let mut library = KeymapLibrary::new();
-    for xml in [IDEA_DEFAULT_XML, IDEA_MACOS_XML, MACOS_FOR_ALL_XML] {
+    for xml in [
+        IDEA_DEFAULT_XML,
+        IDEA_MACOS_XML,
+        MACOS_FOR_ALL_XML,
+        DUMBJ_LINUX_XML,
+        DUMBJ_MACOS_XML,
+    ] {
         library.add_xml(xml)?;
     }
     Ok(library)

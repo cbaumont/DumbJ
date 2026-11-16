@@ -1,0 +1,17 @@
+<keymap name="DumbJ" parent="macOS For All" version="1">
+  <action id="DumbJ.ActivateReviewToolWindow">
+    <keyboard-shortcut first-keystroke="control alt shift Y"/>
+  </action>
+  <action id="DumbJ.Review.Start">
+    <keyboard-shortcut first-keystroke="control alt shift K"/>
+  </action>
+  <action id="DumbJ.Review.ToggleFileViewed">
+    <keyboard-shortcut first-keystroke="control alt shift U"/>
+  </action>
+  <action id="DumbJ.Review.NextUnviewedFile">
+    <keyboard-shortcut first-keystroke="control alt shift X"/>
+  </action>
+  <action id="DumbJ.Review.AddNote">
+    <keyboard-shortcut first-keystroke="control alt shift M"/>
+  </action>
+</keymap>

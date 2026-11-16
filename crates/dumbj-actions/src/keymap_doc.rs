@@ -26,7 +26,8 @@ pub fn render_keymap_markdown(linux: &Bindings, macos: &Bindings, map: &ActionId
     );
     let _ = writeln!(
         out,
-        "Linux uses the `{}` keymap and macOS uses IntelliJ's `{}` keymap.\n",
+        "Linux uses the `{}` keymap (IntelliJ's `macOS For All` plus DumbJ's own actions) and \
+         macOS uses `{}` (IntelliJ's `Mac OS X 10.5+` plus the same actions).\n",
         linux.keymap_name(),
         macos.keymap_name()
     );

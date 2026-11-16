@@ -74,6 +74,8 @@ fn every_vendored_keymap_parses_cleanly() {
         builtin::IDEA_DEFAULT,
         builtin::IDEA_MACOS,
         builtin::MACOS_FOR_ALL,
+        builtin::DUMBJ_LINUX,
+        builtin::DUMBJ_MACOS,
     ] {
         let file = library.get(name).unwrap();
         assert_eq!(file.warnings(), [] as [String; 0], "warnings in `{name}`");
@@ -101,7 +103,11 @@ fn every_action_with_an_intellij_shortcut_is_bound_on_both_platforms() {
                 .shortcuts(action)
                 .iter()
                 .any(|shortcut| !matches!(shortcut, Shortcut::Unsupported(_)));
-            let unbound_in_intellij = [Action::OpenFolder, Action::ActivateHierarchyToolWindow];
+            let unbound_in_intellij = [
+                Action::OpenFolder,
+                Action::ActivateHierarchyToolWindow,
+                Action::ExportReviewNotes,
+            ];
             assert_eq!(
                 bound,
                 !unbound_in_intellij.contains(&action),
@@ -109,6 +115,29 @@ fn every_action_with_an_intellij_shortcut_is_bound_on_both_platforms() {
             );
         }
         assert_ne!(bindings.unmapped_intellij_actions(), [] as [String; 0]);
+    }
+}
+
+#[test]
+fn dumbj_shortcuts_do_not_clash_with_the_intellij_keymaps() {
+    let library = builtin::library().unwrap();
+    for platform in [Platform::Linux, Platform::MacOs] {
+        let keymap = library.resolve(platform.default_keymap()).unwrap();
+        let own: Vec<_> = keymap
+            .iter()
+            .filter(|(id, _)| id.starts_with("DumbJ."))
+            .collect();
+        assert_ne!(own.len(), 0);
+        for (id, shortcuts) in &own {
+            for (other, taken) in keymap.iter().filter(|(other, _)| other != id) {
+                for shortcut in *shortcuts {
+                    assert!(
+                        !taken.contains(shortcut),
+                        "{id} and {other} share {shortcut:?} on {platform:?}"
+                    );
+                }
+            }
+        }
     }
 }
 
