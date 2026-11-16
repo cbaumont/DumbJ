@@ -461,6 +461,7 @@ impl Workspace {
             head: review.spec.head.clone(),
         };
         self.show_diff(sides, window, cx);
+        self.refresh_note_marks(cx);
     }
 
     /// From a diff that belongs to the review, opens the diff of the next (or previous)
@@ -488,11 +489,20 @@ impl Workspace {
         (target < review.changes.len()).then_some(target)
     }
 
+    pub(super) fn diff_in_review(&self, diff: &super::diff::DiffTab) -> bool {
+        self.review
+            .as_ref()
+            .is_some_and(|review| diff.compares(&review.base, review.spec.head.as_deref()))
+    }
+
+    pub(super) fn review_file_path(&self, index: usize) -> Option<PathBuf> {
+        Some(self.review.as_ref()?.changes.get(index)?.path.clone())
+    }
+
     /// The review file whose diff is the active tab.
-    fn active_review_file(&self) -> Option<usize> {
+    pub(super) fn active_review_file(&self) -> Option<usize> {
         let (review, tab) = (self.review.as_ref()?, self.active_tab()?);
-        let diff = tab.diff.as_ref()?;
-        if !diff.compares(&review.base, review.spec.head.as_deref()) {
+        if !self.diff_in_review(tab.diff.as_ref()?) {
             return None;
         }
         let relative: PathBuf = tab
@@ -649,6 +659,18 @@ impl Workspace {
                     .child(review.title.clone()),
             )
             .child(div().flex_1())
+            .children(self.has_review_notes().then(|| {
+                div()
+                    .id("review-copy-notes")
+                    .flex_none()
+                    .px(px(6.))
+                    .rounded(px(4.))
+                    .text_size(px(12.))
+                    .hover(|style| style.bg(theme::ui(cx, UiRole::Hover)))
+                    .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                    .on_click(cx.listener(|this, _, _, cx| this.export_review_notes(cx)))
+                    .child("Copy notes")
+            }))
             .child(
                 div()
                     .flex_none()

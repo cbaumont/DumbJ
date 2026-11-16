@@ -239,6 +239,7 @@ pub(crate) struct EditorView {
     bookmarks: Vec<BookmarkMark>,
     changes: changes::Changes,
     diff_marks: DiffMarks,
+    note_lines: Vec<(usize, usize)>,
     read_only: bool,
     /// What the file looked like on disk when it was last read or written.
     stamp: Option<FileStamp>,
@@ -345,6 +346,7 @@ impl EditorView {
             bookmarks: Vec::new(),
             changes: changes::Changes::default(),
             diff_marks: DiffMarks::default(),
+            note_lines: Vec::new(),
             read_only: true,
             stamp: None,
             conflict: None,
@@ -1221,6 +1223,20 @@ impl EditorView {
             let number = shape(window, number.clone(), &[run(number.len(), color)]);
             let number_x = bounds.left() + gutter_width - GUTTER_PADDING_RIGHT - number.width;
             numbers.push((point(number_x, top), number));
+            let number = line_index.display_number();
+            if self
+                .note_lines
+                .iter()
+                .any(|(first, last)| (*first..=*last).contains(&number))
+            {
+                change_marks.push(fill(
+                    Bounds::new(
+                        point(bounds.left() + px(2.), top),
+                        size(px(3.), LINE_HEIGHT),
+                    ),
+                    theme::ui(cx, UiRole::Warning),
+                ));
+            }
             if let Some(mark) = self.change_mark(line) {
                 let (offset, height) = match mark {
                     changes::ChangeMark::DeletedAbove => (px(-1.5), px(3.)),

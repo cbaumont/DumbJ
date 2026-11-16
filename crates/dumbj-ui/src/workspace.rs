@@ -25,6 +25,7 @@ mod hierarchy;
 mod library;
 mod navigation;
 mod review;
+mod review_notes;
 mod search_popup;
 mod state;
 mod usages;
@@ -38,6 +39,7 @@ use find_in_files::FindInFiles;
 use hierarchy::HierarchyWindow;
 use navigation::{Chooser, Indexing, NavigationHistory};
 use review::{ReviewPrompt, ReviewWindow};
+use review_notes::NotePrompt;
 use search_popup::{RecentKind, SearchMode, SearchPopup};
 use state::StateSave;
 use usages::FindWindow;
@@ -100,6 +102,7 @@ enum FocusArea {
     Search,
     FindInFiles,
     ReviewPrompt,
+    NotePrompt,
     GotoLine,
     Find,
     Review,
@@ -123,6 +126,8 @@ pub(crate) struct Workspace {
     review_focus: FocusHandle,
     review_prompt: Option<ReviewPrompt>,
     review_input: Entity<TextInput>,
+    note_prompt: Option<NotePrompt>,
+    note_input: Entity<TextInput>,
     find: Entity<TextInput>,
     find_open: bool,
     goto_line: Entity<TextInput>,
@@ -257,6 +262,8 @@ impl Workspace {
             review_focus: cx.focus_handle(),
             review_prompt: None,
             review_input,
+            note_prompt: None,
+            note_input: cx.new(|cx| TextInput::new("Note", cx)),
             find,
             find_open: false,
             goto_line,
@@ -326,6 +333,8 @@ impl Workspace {
             FocusArea::FindInFiles
         } else if self.review_prompt.is_some() {
             FocusArea::ReviewPrompt
+        } else if self.note_prompt.is_some() {
+            FocusArea::NotePrompt
         } else if self.goto_line_open && self.goto_line.read(cx).focus_handle().is_focused(window) {
             FocusArea::GotoLine
         } else if self.find_open && self.find.read(cx).focus_handle().is_focused(window) {
@@ -588,7 +597,8 @@ impl Workspace {
             || self.chooser.is_some()
             || self.find_in_files.is_some()
             || self.mnemonic_prompt.is_some()
-            || self.review_prompt.is_some();
+            || self.review_prompt.is_some()
+            || self.note_prompt.is_some();
         let popup_open = other_popup || self.search.is_some();
         match action {
             Action::OpenFolder => !popup_open,
@@ -607,7 +617,8 @@ impl Workspace {
                     && !(self.goto_line_open
                         || self.chooser.is_some()
                         || self.find_in_files.is_some()
-                        || self.review_prompt.is_some())
+                        || self.review_prompt.is_some()
+                        || self.note_prompt.is_some())
             }
             Action::FindInPath => {
                 self.project.is_some()
@@ -615,7 +626,8 @@ impl Workspace {
                         || self.chooser.is_some()
                         || self.search.is_some()
                         || self.mnemonic_prompt.is_some()
-                        || self.review_prompt.is_some())
+                        || self.review_prompt.is_some()
+                        || self.note_prompt.is_some())
             }
             Action::ToggleBookmark | Action::ToggleBookmarkWithMnemonic => {
                 has_editor && self.project.is_some() && !popup_open
@@ -655,7 +667,8 @@ impl Workspace {
                 self.review.is_some() && !popup_open
             }
             Action::ToggleFileViewed => self.can_mark_viewed(window) && !popup_open,
-            Action::AddReviewNote | Action::ExportReviewNotes => false,
+            Action::AddReviewNote => self.can_add_note() && !popup_open,
+            Action::ExportReviewNotes => self.has_review_notes() && !popup_open,
             Action::ActivateFindToolWindow => self.find_window.is_some() && !popup_open,
             Action::ActivateHierarchyToolWindow => self.hierarchy_window.is_some() && !popup_open,
             Action::Back => self.history.can_go_back() && !popup_open,
@@ -738,6 +751,8 @@ impl Workspace {
             Action::StartReview => self.open_review_prompt(window, cx),
             Action::ActivateReviewToolWindow => self.toggle_review_window(window, cx),
             Action::ToggleFileViewed => self.toggle_file_viewed(window, cx),
+            Action::AddReviewNote => self.open_note_prompt(window, cx),
+            Action::ExportReviewNotes => self.export_review_notes(cx),
             Action::NextUnviewedFile => self.next_unviewed_file(window, cx),
             Action::FocusOppositeDiffPane => self.focus_opposite_diff_pane(window, cx),
             Action::Back => self.go_back(window, cx),
@@ -861,6 +876,7 @@ impl Workspace {
             FocusArea::Search => self.search_action(action, window, cx),
             FocusArea::FindInFiles => self.find_in_files_action(action, window, cx),
             FocusArea::ReviewPrompt => self.review_prompt_action(action, window, cx),
+            FocusArea::NotePrompt => self.note_prompt_action(action, window, cx),
             FocusArea::Review => self.review_window_action(action, window, cx),
             FocusArea::GotoLine => match action {
                 Action::Enter => self.submit_goto_line(window, cx),
@@ -1353,6 +1369,7 @@ impl Workspace {
             right.push("Waiting for second key…".to_owned());
         }
         right.extend(self.status_message.clone());
+        right.extend(self.note_at_caret(cx));
         right.extend(self.index_status());
         right.extend(self.branch.clone());
         if let Some(editor) = self.active_editor() {
@@ -1438,6 +1455,31 @@ impl Workspace {
     }
 }
 
+impl Workspace {
+    /// The open popup; when several are, the one that takes the keys.
+    fn render_popup(&self, window: &Window, cx: &mut Context<Self>) -> Option<AnyElement> {
+        if let Some(chooser) = &self.chooser {
+            Some(Self::render_chooser(chooser, cx).into_any_element())
+        } else if let Some(search) = &self.search {
+            Some(self.render_search(search, cx).into_any_element())
+        } else if let Some(open) = &self.find_in_files {
+            Some(
+                self.render_find_in_files(open, window, cx)
+                    .into_any_element(),
+            )
+        } else if let Some(prompt) = &self.mnemonic_prompt {
+            Some(self.render_mnemonic_prompt(prompt, cx).into_any_element())
+        } else if let Some(prompt) = &self.review_prompt {
+            Some(self.render_review_prompt(prompt, cx).into_any_element())
+        } else if let Some(prompt) = &self.note_prompt {
+            Some(self.render_note_prompt(prompt, cx).into_any_element())
+        } else {
+            self.goto_line_open
+                .then(|| self.render_goto_line_popup(cx).into_any_element())
+        }
+    }
+}
+
 fn resize_edge(position: Point<Pixels>, window_size: Size<Pixels>) -> Option<ResizeEdge> {
     let (left, top) = (position.x < RESIZE_BORDER, position.y < RESIZE_BORDER);
     let right = position.x > window_size.width - RESIZE_BORDER;
@@ -1511,23 +1553,7 @@ impl Render for Workspace {
                 .children(hierarchy_window)
                 .children(find_window),
         );
-        let popup = match (&self.chooser, &self.search, &self.find_in_files) {
-            (Some(chooser), ..) => Some(Self::render_chooser(chooser, cx).into_any_element()),
-            (None, Some(search), _) => Some(self.render_search(search, cx).into_any_element()),
-            (None, None, Some(open)) => Some(
-                self.render_find_in_files(open, window, cx)
-                    .into_any_element(),
-            ),
-            (None, None, None) => match &self.mnemonic_prompt {
-                Some(prompt) => Some(self.render_mnemonic_prompt(prompt, cx).into_any_element()),
-                None => match &self.review_prompt {
-                    Some(prompt) => Some(self.render_review_prompt(prompt, cx).into_any_element()),
-                    None => self
-                        .goto_line_open
-                        .then(|| self.render_goto_line_popup(cx).into_any_element()),
-                },
-            },
-        };
+        let popup = self.render_popup(window, cx);
         div()
             .id("workspace")
             .track_focus(&self.focus)

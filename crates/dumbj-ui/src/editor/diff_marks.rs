@@ -50,6 +50,38 @@ impl EditorView {
         }
     }
 
+    /// The one-based lines review notes are written on, marked in the gutter.
+    pub(crate) fn set_note_lines(&mut self, lines: Vec<(usize, usize)>, cx: &mut Context<Self>) {
+        if self.note_lines != lines {
+            self.note_lines = lines;
+            cx.notify();
+        }
+    }
+
+    /// The first and last line the selection touches, one-based; the caret's line without
+    /// a selection.
+    pub(crate) fn selected_lines(&self) -> (usize, usize) {
+        let (buffer, selection) = (self.model.buffer(), self.model.selection());
+        let first = buffer.point_at(selection.start).line.get();
+        let end = buffer.point_at(selection.end);
+        let last = if end.line.get() > first && end.column == 0 {
+            end.line.get() - 1
+        } else {
+            end.line.get()
+        };
+        (first + 1, last + 1)
+    }
+
+    /// The text of the one-based lines `first..=last`, without the last line break.
+    pub(crate) fn lines_text(&self, first: usize, last: usize) -> String {
+        let buffer = self.model.buffer();
+        let count = buffer.line_count();
+        (first.max(1)..=last.min(count))
+            .map(|line| buffer.line(dumbj_text::LineIndex(line - 1)).into_owned())
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
     /// The buffer line at the top of the view; fractional while it is partly scrolled off.
     pub(crate) fn top_line(&self) -> f64 {
         #[expect(

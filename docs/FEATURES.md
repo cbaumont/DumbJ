@@ -81,7 +81,7 @@
 - [ ] Git log tool window
 - [ ] Branch popup
 - [~] Diff viewer — side by side against HEAD from the Project tree, word-level highlighting, next/previous difference, ignore whitespace (mouse-only), synchronised scrolling, editable right side, any two revisions through a review, next/previous file within a review; no unified view or collapse unchanged
-- [~] Local review mode — Start Review takes `base`, `base..head` or `base...head` (merge base) with branch suggestions; changed-file list on the left, diff on the right; F7/Shift+F7 continue into the next/previous file; no viewed tracking or notes yet
+- [~] Local review mode — Start Review takes `base`, `base..head` or `base...head` (merge base) with branch suggestions; changed-file list on the left, diff on the right; F7/Shift+F7 continue into the next/previous file; viewed tracking that resets when a file's head content changes; single-line notes on a line or selection of either side, marked in the gutter, shown in the status bar and copied as Markdown; the file list is flat, not a tree, and one review is remembered per project
 - [ ] File history
 - [ ] Checkout / fetch
 
@@ -201,12 +201,12 @@ VCS & diff
 - [ ] CopyReference
 
 Review (DumbJ only)
-- [ ] Add Review Comment
+- [~] Add Review Comment — local notes only (Add Review Note)
 - [ ] Start / Submit Review
 - [ ] Next / Previous Comment Thread
 - [ ] Resolve Thread
-- [ ] Toggle File Viewed
-- [ ] Next Unviewed File
+- [x] Toggle File Viewed
+- [x] Next Unviewed File
 - [ ] Open PR in Browser
 - [ ] Copy Permalink
 

@@ -194,3 +194,10 @@ Typing, undo/redo, autosave, the reload prompt and index refresh on change (M1b 
 
 ### 2026-11-16: The diff viewer is two real editors
 A diff tab shows two `EditorView`s side by side, the revision on the left (read-only) and the working file on the right, without filler lines, as IDEA does. The workspace computes the hunks in the background from both buffers, gives each editor its `DiffMarks` (line bands, changed words, gap lines) and keeps the scroll positions level by mapping the top line through the hunks. Why: navigation, search, folding and selection work on both sides for free, and the right side stays editable. The right editor is the same entity as the file's own tab, so unsaved text and undo history are shared; the cost is that the two tabs also share a scroll position. Ctrl+D (`Compare.SameVersion`) opens the diff from the Project tree only, because the same shortcut is Duplicate Line in the editor.
+
+### 2026-11-16: DumbJ's own actions live in keymaps that extend the vendored ones
+`keymaps/dumbj-linux.xml` ("DumbJ", parent "macOS For All") and `keymaps/dumbj-macos.xml` ("DumbJ macOS", parent IntelliJ's macOS keymap) are the default keymaps. They bind actions IntelliJ does not have, under `DumbJ.*` ids, in the same XML format, so one loader, one id map and one remapping mechanism serve both kinds. A test fails if one of their shortcuts is taken by any action of the parent keymap, mapped or not.
+
+### 2026-11-16: Local review state
+A review is a range in git's syntax (`base`, `base..head`, `base...head`); the working tree is the head when none is given. Viewed marks and notes are kept in the project state (`dumbj_settings::Review`), outside the repository, one review per project: starting a review of another range replaces it. A viewed mark stores the blob id of the file's head side (`Repository::content_ids`, which hashes working files without writing objects), so the file is unviewed again once that content changes. Notes are exported by copying Markdown to the clipboard. Why: DumbJ never writes inside the repository (BRIEF §2.5).
+
