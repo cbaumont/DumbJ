@@ -30,6 +30,7 @@ mod library;
 mod menu;
 mod navigation;
 mod overview;
+mod peek;
 mod pulls;
 mod review;
 mod review_notes;
@@ -115,6 +116,7 @@ enum FocusArea {
     Git,
     GitFilter,
     Chooser,
+    Peek,
     Search,
     FindInFiles,
     ReviewPrompt,
@@ -255,6 +257,23 @@ pub(crate) fn open_window(
     }
 }
 
+/// Actions on the symbol at the caret, which need an editor and the index.
+fn starts_at_the_caret_symbol(action: Action) -> bool {
+    matches!(
+        action,
+        Action::FindUsages
+            | Action::ShowUsages
+            | Action::GotoDeclaration
+            | Action::GotoImplementation
+            | Action::GotoTypeDeclaration
+            | Action::QuickDocumentation
+            | Action::QuickDefinition
+            | Action::GotoSuperMethod
+            | Action::TypeHierarchy
+            | Action::CallHierarchy
+    )
+}
+
 impl Workspace {
     fn new(bindings: Bindings, shortcut_style: ShortcutStyle, cx: &mut Context<Self>) -> Self {
         let [find, goto_line, search_input] = ["Search", "Line:Column", "Search"]
@@ -385,7 +404,9 @@ impl Workspace {
             focused(&tab.editor) || tab.diff.as_ref().is_some_and(|diff| focused(diff.left()))
         });
         let find_window_shown = self.find_window.as_ref().is_some_and(|find| find.visible);
-        if self.chooser.is_some() {
+        if self.peek_open() {
+            FocusArea::Peek
+        } else if self.chooser.is_some() {
             FocusArea::Chooser
         } else if self.search.is_some() {
             FocusArea::Search
@@ -689,6 +710,7 @@ impl Workspace {
         // pressing another one switches its scope.
         let other_popup = self.goto_line_open
             || self.chooser.is_some()
+            || self.peek_open()
             || self.find_in_files.is_some()
             || self.mnemonic_prompt.is_some()
             || self.vcs_popup_open();
@@ -737,14 +759,9 @@ impl Workspace {
                         .goto_bookmark_digit()
                         .is_some_and(|digit| self.state.bookmark_with_mnemonic(digit).is_some())
             }
-            Action::FindUsages
-            | Action::ShowUsages
-            | Action::GotoDeclaration
-            | Action::GotoImplementation
-            | Action::GotoTypeDeclaration
-            | Action::GotoSuperMethod
-            | Action::TypeHierarchy
-            | Action::CallHierarchy => has_editor && self.index.is_some() && !popup_open,
+            _ if starts_at_the_caret_symbol(action) => {
+                has_editor && self.index.is_some() && !popup_open
+            }
             Action::ShowDiff => {
                 !popup_open
                     && self.focus_area(window, cx) == FocusArea::Tree
@@ -832,6 +849,8 @@ impl Workspace {
             Action::ActivateFindToolWindow => self.toggle_find_window(window, cx),
             Action::GotoImplementation => self.goto_implementation_with(true, window, cx),
             Action::GotoTypeDeclaration => self.goto_type_declaration(window, cx),
+            Action::QuickDocumentation => self.quick_peek(peek::PeekKind::Documentation, cx),
+            Action::QuickDefinition => self.quick_peek(peek::PeekKind::Definition, cx),
             Action::GotoSuperMethod => self.goto_super_method(window, cx),
             Action::TypeHierarchy => self.type_hierarchy(cx),
             Action::CallHierarchy => self.call_hierarchy(cx),
@@ -988,6 +1007,7 @@ impl Workspace {
             FocusArea::Git => self.git_window_action(action, window, cx),
             FocusArea::GitFilter => self.git_filter_action(action, window, cx),
             FocusArea::Chooser => self.chooser_action(action, window, cx),
+            FocusArea::Peek => self.peek_action(action, window, cx),
             FocusArea::Search => self.search_action(action, window, cx),
             FocusArea::FindInFiles => self.find_in_files_action(action, window, cx),
             FocusArea::ReviewPrompt => self.review_prompt_action(action, window, cx),
@@ -1643,6 +1663,8 @@ impl Workspace {
     fn render_popup(&self, window: &Window, cx: &mut Context<Self>) -> Option<AnyElement> {
         if let Some(menu) = &self.menus.open {
             Some(self.render_menu(menu, cx).into_any_element())
+        } else if let Some(peek) = &self.smart.peek {
+            Some(Self::render_peek(peek, cx).into_any_element())
         } else if let Some(chooser) = &self.chooser {
             Some(Self::render_chooser(chooser, cx).into_any_element())
         } else if let Some(search) = &self.search {

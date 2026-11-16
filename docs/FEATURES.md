@@ -54,7 +54,7 @@
 - [~] Go to Implementation — project sources only, from supertypes in the index (best guess); no implementations inside libraries
 - [~] Library sources — Go to Declaration opens classes from Gradle/Maven source jars and the JDK `src.zip`, read in place; no navigation inside library files, no decompiler
 - [x] Find Usages / Show Usages
-- [ ] Quick Definition / Quick Documentation
+- [~] Quick Definition / Quick Documentation — plain-text popup; hover in smart mode, else the comment above the best-guess target
 - [x] File Structure popup
 - [~] Call Hierarchy / Type Hierarchy — callers only, no callees
 - [x] Navigate Back / Forward
@@ -128,8 +128,8 @@ Code navigation
 - [x] FindUsages
 - [x] ShowUsages
 - [ ] HighlightUsagesInFile
-- [ ] QuickImplementations
-- [ ] QuickJavaDoc
+- [~] QuickImplementations — Quick Definition, plain text
+- [~] QuickJavaDoc — plain text
 - [ ] ParameterInfo
 - [x] FileStructurePopup
 - [x] TypeHierarchy

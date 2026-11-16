@@ -27,6 +27,9 @@ pub(super) struct Smart {
     poll: Option<Task<()>>,
     pub(super) nav: Option<super::smart_nav::SmartNav>,
     pub(super) generation: u64,
+    pub(super) peek: Option<super::peek::Peek>,
+    /// The generation of the peek the user closed, so a late exact answer stays away.
+    pub(super) peek_closed: u64,
     /// Where the last navigation went; the caret gets there only once the file has loaded.
     pub(super) last_jump: Option<super::navigation::Location>,
 }
@@ -87,7 +90,10 @@ impl Workspace {
         for session in self.smart.sessions.values() {
             session.stop();
         }
-        self.smart = Smart::default();
+        self.smart = Smart {
+            generation: self.smart.generation,
+            ..Smart::default()
+        };
     }
 
     pub(super) fn toggle_smart_mode(&mut self, cx: &mut Context<Self>) {
