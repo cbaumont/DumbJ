@@ -5,9 +5,17 @@ A fast, native, keyboard-first **code reading and code review editor** with Inte
 Full spec: `docs/BRIEF.md`. Where it conflicts with the Decisions in `docs/ARCHITECTURE.md`, the Decisions win. Read the sections relevant to your current task, not the whole file every time.
 
 ## Current milestone
-M2: Git and local review (BRIEF §9), **not started**. M1c (editing) was completed on 2026-11-16 and its review package posted; M1b was approved on 2026-11-15, M1a on 2026-11-15, M0 on 2026-11-14. Decisions are in `docs/ARCHITECTURE.md`. At each milestone end write the review package (summary, run instructions, test status, known gaps, screenshots) and push; the owner asked on 2026-11-15 not to be asked for approval between milestones unless strictly necessary, so then continue with the next one.
+M2: Git and local review (BRIEF §9, §4.4), **in progress** (started 2026-11-16). M1c (editing) was completed on 2026-11-16 and its review package posted; M1b was approved on 2026-11-15, M1a on 2026-11-15, M0 on 2026-11-14. Decisions are in `docs/ARCHITECTURE.md`. At each milestone end write the review package (summary, run instructions, test status, known gaps, screenshots) and push; the owner asked on 2026-11-15 not to be asked for approval between milestones unless strictly necessary, so then continue with the next one.
 
-Start M2 by reading BRIEF §4.4 and the decisions "Other revisions are read from git objects" and "Per-project state in XDG dirs", then split it into phases here (gutter change markers first: they need only `git` plumbing and the editor gutter).
+### M2 plan
+1. `dumbj-vcs` (headless): repository discovery, branch, HEAD text of a file (`gix`), statuses, line hunks (`imara-diff`). *Delegated to a subagent in a worktree; review and merge its branch when it reports.*
+2. Gutter change markers against HEAD, refreshed on edits and saves; Next/Previous Change (`VcsShowNextChangeMarker`, `VcsShowPrevChangeMarker`); Rollback Changed Lines (`Vcs.RollbackChangedLines`); branch in the status bar; git status colours in the Project tree.
+3. Revision filesystem: read-only tabs for a file at a revision, with a revision badge.
+4. Diff viewer: side-by-side and unified, word-level highlighting, next/previous difference and file, collapse unchanged, ignore whitespace; navigation inside both sides.
+5. Local review mode: base and head pickers, changes tree, viewed tracking (reset when a file changes), local notes exported as Markdown.
+6. Git log tool window (graph, filters, commit details, changed files) and file history, including history for a selection.
+7. Annotate (blame) in the gutter; branch popup with checkout and fetch (the only operations that change git state).
+
 
 M1c holds: typing through the input method handler, undo/redo with typing groups (`dumbj_text::History`), Enter with auto-indent, Tab/Shift+Tab, cut/paste, duplicate/delete/move line, line comments, incremental reparse, atomic autosave (tab switch, focus loss, close, quit, 15 s idle), reload or a reload/keep bar for files changed on disk, read-only library and non-UTF-8 files, index refresh after saves and on window focus. Its gaps: no multi-caret, column selection, move statement, block comments, bracket auto-close, EditorConfig or other encodings; the conflict bar is mouse-only and has no merge; the edited file's index entry is as old as its last save; the editing commit (`c07a78e`) is larger than the commit rule allows.
 
