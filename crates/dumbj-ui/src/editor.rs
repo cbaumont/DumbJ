@@ -366,6 +366,12 @@ impl EditorView {
         matches!(self.state, LoadState::Ready).then(|| self.model.buffer().version())
     }
 
+    /// The caret as a language server counts it, once the file is loaded.
+    pub(crate) fn lsp_caret(&self) -> Option<lsp_types::Position> {
+        matches!(self.state, LoadState::Ready)
+            .then(|| dumbj_lsp::to_lsp(self.model.buffer(), self.caret_offset()))
+    }
+
     pub(crate) fn text(&self) -> String {
         self.model.buffer().to_string()
     }

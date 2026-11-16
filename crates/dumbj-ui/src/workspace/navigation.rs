@@ -131,6 +131,14 @@ impl Chooser {
         }
     }
 
+    /// A list of language-server results.
+    pub(super) fn smart(title: String, items: Vec<ChooserItem>) -> Self {
+        Self {
+            badge: Some("exact"),
+            ..Self::new(title, items)
+        }
+    }
+
     /// A list the user made, such as bookmarks.
     pub(super) fn exact(title: String, items: Vec<ChooserItem>) -> Self {
         Self {
@@ -272,6 +280,7 @@ impl Workspace {
         if let Some(from) = self.current_location(cx) {
             self.history.record_jump(from, to.clone());
         }
+        self.smart.last_jump = Some(to.clone());
         self.show_location(to, window, cx);
     }
 
@@ -313,7 +322,13 @@ impl Workspace {
         ChooserItem::new(label, detail, location)
     }
 
-    pub(super) fn goto_declaration(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    /// `smart` asks the language server first, when the file has one.
+    pub(super) fn goto_declaration_with(
+        &mut self,
+        smart: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let (Some(index), Some(editor)) = (self.active_index(cx), self.active_editor()) else {
             return;
         };
@@ -329,6 +344,9 @@ impl Workspace {
         if reference.role == dumbj_syntax::ReferenceRole::Declaration {
             // On a declaration there is nowhere to go, so show where it is used (as IDEA does).
             self.find_usages(true, cx);
+            return;
+        }
+        if smart && self.smart_goto(dumbj_lsp::GotoKind::Definition, window, cx) {
             return;
         }
         match (decision, targets.first()) {

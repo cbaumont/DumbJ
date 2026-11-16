@@ -50,7 +50,7 @@
 - [x] Go to File / Class / Symbol
 - [x] Go to Line:Column
 - [ ] Find Action
-- [~] Go to Declaration / Type Declaration / Implementation / Super Method / Test — no Type Declaration or Test
+- [~] Go to Declaration / Type Declaration / Implementation / Super Method / Test — Type Declaration in smart mode only; no Test
 - [~] Go to Implementation — project sources only, from supertypes in the index (best guess); no implementations inside libraries
 - [~] Library sources — Go to Declaration opens classes from Gradle/Maven source jars and the JDK `src.zip`, read in place; no navigation inside library files, no decompiler
 - [x] Find Usages / Show Usages
@@ -73,7 +73,7 @@
 - [x] Gradle version catalog — `libs.x.y` accessors jump to `libs.versions.toml`
 - [x] Dumb Find Usages
 - [x] Dumb implementations / hierarchy
-- [~] Exact / best-guess labelling — chooser headed "best guess", usages marked "maybe"; no label on a direct jump; status bar shows dumb / smart (indexing…) / smart
+- [~] Exact / best-guess labelling — chooser headed "best guess", usages marked "maybe"; direct jumps say exact / best guess in the status bar while a server is used; status bar shows dumb / smart (indexing…) / smart
 - [~] Language-server lifecycle — start on first file of the language, restart with backoff, per-project off switch; real servers not exercised yet
 - [x] Accuracy benchmark — 287 cases, nightly in CI
 
@@ -121,7 +121,7 @@ Search & go to
 
 Code navigation
 - [x] GotoDeclaration
-- [ ] GotoTypeDeclaration
+- [~] GotoTypeDeclaration — smart mode only
 - [x] GotoImplementation
 - [x] GotoSuperMethod
 - [ ] GotoTest

@@ -36,6 +36,7 @@ mod review_notes;
 mod review_tree;
 mod search_popup;
 mod smart;
+mod smart_nav;
 mod state;
 mod threads;
 mod usages;
@@ -739,6 +740,7 @@ impl Workspace {
             | Action::ShowUsages
             | Action::GotoDeclaration
             | Action::GotoImplementation
+            | Action::GotoTypeDeclaration
             | Action::GotoSuperMethod
             | Action::TypeHierarchy
             | Action::CallHierarchy => has_editor && self.index.is_some() && !popup_open,
@@ -827,7 +829,8 @@ impl Workspace {
             Action::FindUsages => self.find_usages(false, cx),
             Action::ShowUsages => self.find_usages(true, cx),
             Action::ActivateFindToolWindow => self.toggle_find_window(window, cx),
-            Action::GotoImplementation => self.goto_implementation(window, cx),
+            Action::GotoImplementation => self.goto_implementation_with(true, window, cx),
+            Action::GotoTypeDeclaration => self.goto_type_declaration(window, cx),
             Action::GotoSuperMethod => self.goto_super_method(window, cx),
             Action::TypeHierarchy => self.type_hierarchy(cx),
             Action::CallHierarchy => self.call_hierarchy(cx),
@@ -842,7 +845,7 @@ impl Workspace {
             Action::Find if self.focus_area(window, cx) == FocusArea::Git => {
                 self.focus_git_filter(window, cx);
             }
-            Action::GotoDeclaration => self.goto_declaration(window, cx),
+            Action::GotoDeclaration => self.goto_declaration_with(true, window, cx),
             Action::ShowDiff => {
                 if let Some(path) = self.diff_target(cx) {
                     self.show_diff(DiffSides::with_head_commit(path), window, cx);

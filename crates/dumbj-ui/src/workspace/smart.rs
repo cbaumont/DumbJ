@@ -25,6 +25,10 @@ pub(super) struct Smart {
     changed: Arc<AtomicBool>,
     sync: Option<Task<()>>,
     poll: Option<Task<()>>,
+    pub(super) nav: Option<super::smart_nav::SmartNav>,
+    pub(super) generation: u64,
+    /// Where the last navigation went; the caret gets there only once the file has loaded.
+    pub(super) last_jump: Option<super::navigation::Location>,
 }
 
 fn label(kind: ServerKind, state: &SessionState) -> String {
@@ -72,7 +76,6 @@ impl Workspace {
 
     /// The server that can answer for `path` right now: none while it starts, indexes or
     /// is down, and none for revisions, library sources and files outside the project.
-    #[allow(dead_code, reason = "used from phase 4c on")]
     pub(super) fn smart_server(&self, path: &Path) -> Option<Server> {
         let session = self.smart.sessions.get(&self.smart_kind(path)?)?;
         (session.state() == SessionState::Ready)

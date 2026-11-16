@@ -38,6 +38,7 @@ pub enum Action {
     ShowUsages,
     ActivateFindToolWindow,
     GotoImplementation,
+    GotoTypeDeclaration,
     GotoSuperMethod,
     TypeHierarchy,
     CallHierarchy,
@@ -318,6 +319,12 @@ const REGISTRY: &[ActionInfo] = &[
         Action::GotoImplementation,
         "navigate.goto-implementation",
         "Go to Implementation(s)",
+        Scope::Editor,
+    ),
+    info(
+        Action::GotoTypeDeclaration,
+        "navigate.goto-type-declaration",
+        "Go to Type Declaration",
         Scope::Editor,
     ),
     info(

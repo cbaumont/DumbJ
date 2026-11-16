@@ -34,6 +34,7 @@ Linux uses the `DumbJ` keymap (IntelliJ's `macOS For All` plus DumbJ's own actio
 | Show Usages | `navigate.show-usages` | `ShowUsages` | `Ctrl+Alt+F7` | `⌥⌘F7` |
 | Find Tool Window | `tool-window.find` | `ActivateFindToolWindow` | `Alt+3` | `⌘3` |
 | Go to Implementation(s) | `navigate.goto-implementation` | `GotoImplementation` | `Ctrl+Alt+B` / `Ctrl+Alt+Click` | `⌥⌘B` / `⌥⌘Click` |
+| Go to Type Declaration | `navigate.goto-type-declaration` | `GotoTypeDeclaration` | `Ctrl+Shift+B` / `Ctrl+Shift+Click` | `⇧⌘B` / `⌃⇧B` / `⇧⌘Click` |
 | Go to Super Method | `navigate.goto-super-method` | `GotoSuperMethod` | `Ctrl+U` | `⌘U` |
 | Type Hierarchy | `navigate.type-hierarchy` | `TypeHierarchy` | `Ctrl+H` | `⌃H` |
 | Call Hierarchy | `navigate.call-hierarchy` | `CallHierarchy` | `Ctrl+Alt+H` | `⌃⌥H` |

@@ -78,6 +78,7 @@ const NAVIGATE: Entries = &[
     Some(Action::FileStructure),
     None,
     Some(Action::GotoDeclaration),
+    Some(Action::GotoTypeDeclaration),
     Some(Action::GotoImplementation),
     Some(Action::GotoSuperMethod),
     Some(Action::FindUsages),
@@ -146,6 +147,7 @@ const BAR: [(&str, Entries); BAR_MENUS] = [
 
 const CONTEXT: Entries = &[
     Some(Action::GotoDeclaration),
+    Some(Action::GotoTypeDeclaration),
     Some(Action::GotoImplementation),
     Some(Action::GotoSuperMethod),
     Some(Action::FindUsages),

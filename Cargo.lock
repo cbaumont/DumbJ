@@ -1415,6 +1415,7 @@ dependencies = [
  "dumbj-vcs",
  "gpui",
  "gpui_platform",
+ "lsp-types",
  "thiserror 2.0.21",
  "tracing",
 ]

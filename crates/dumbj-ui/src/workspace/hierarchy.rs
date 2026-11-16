@@ -281,7 +281,15 @@ impl Workspace {
         cx.notify();
     }
 
-    pub(super) fn goto_implementation(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    pub(super) fn goto_implementation_with(
+        &mut self,
+        smart: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if smart && self.smart_goto(dumbj_lsp::GotoKind::Implementation, window, cx) {
+            return;
+        }
         let Some((index, id)) = self.symbol_at_caret(cx) else {
             return;
         };
