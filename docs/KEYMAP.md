@@ -117,4 +117,7 @@ Linux uses the `DumbJ` keymap (IntelliJ's `macOS For All` plus DumbJ's own actio
 | Next Unviewed File | `review.next-unviewed` | `DumbJ.Review.NextUnviewedFile` | `Ctrl+Alt+Shift+X` | `⌃⌥⇧X` |
 | Add Review Note | `review.add-note` | `DumbJ.Review.AddNote` | `Ctrl+Alt+Shift+M` | `⌃⌥⇧M` |
 | Copy Review Notes as Markdown | `review.export-notes` | `DumbJ.Review.ExportNotes` | — | — |
+| Git | `tool-window.git` | `ActivateVersionControlToolWindow` | `Alt+9` | `⌘9` |
+| Show History | `vcs.file-history` | `DumbJ.ShowFileHistory`, `Vcs.ShowTabbedFileHistory` | `Ctrl+Alt+Shift+Q` | `⌃⌥⇧Q` |
+| Show History for Selection | `vcs.selection-history` | `DumbJ.ShowHistoryForSelection`, `Vcs.ShowHistoryForBlock` | `Ctrl+Alt+Shift+Z` | `⌃⌥⇧Z` |
 | Escape | `text.escape` | `EditorEscape` | `Esc` | `Esc` |

@@ -121,6 +121,9 @@ pub enum Action {
     NextUnviewedFile,
     AddReviewNote,
     ExportReviewNotes,
+    ActivateGitToolWindow,
+    ShowFileHistory,
+    ShowHistoryForSelection,
     Escape,
 }
 
@@ -741,6 +744,24 @@ const REGISTRY: &[ActionInfo] = &[
         Action::ExportReviewNotes,
         "review.export-notes",
         "Copy Review Notes as Markdown",
+        Scope::Window,
+    ),
+    info(
+        Action::ActivateGitToolWindow,
+        "tool-window.git",
+        "Git",
+        Scope::Window,
+    ),
+    info(
+        Action::ShowFileHistory,
+        "vcs.file-history",
+        "Show History",
+        Scope::Window,
+    ),
+    info(
+        Action::ShowHistoryForSelection,
+        "vcs.selection-history",
+        "Show History for Selection",
         Scope::Window,
     ),
     info(Action::Escape, "text.escape", "Escape", Scope::Text),

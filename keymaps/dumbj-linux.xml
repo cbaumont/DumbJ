@@ -14,4 +14,10 @@
   <action id="DumbJ.Review.AddNote">
     <keyboard-shortcut first-keystroke="control alt shift M"/>
   </action>
+  <action id="DumbJ.ShowFileHistory">
+    <keyboard-shortcut first-keystroke="control alt shift Q"/>
+  </action>
+  <action id="DumbJ.ShowHistoryForSelection">
+    <keyboard-shortcut first-keystroke="control alt shift Z"/>
+  </action>
 </keymap>
