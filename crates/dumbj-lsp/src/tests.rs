@@ -286,3 +286,56 @@ fn dropping_the_server_kills_the_child() {
     }
     assert!(!proc.exists());
 }
+
+#[test]
+fn goto_reads_every_response_shape() {
+    use crate::{GotoKind, goto};
+    let (server, mut mock, _events) = connect();
+    let link = json!([{"targetUri": "file:///c.kt", "targetRange": location(1)["range"], "targetSelectionRange": location(9)["range"]}]);
+    let cases = [
+        (
+            GotoKind::Definition,
+            "textDocument/definition",
+            location(3),
+            vec![3],
+        ),
+        (
+            GotoKind::TypeDefinition,
+            "textDocument/typeDefinition",
+            json!([location(4), location(5)]),
+            vec![4, 5],
+        ),
+        (
+            GotoKind::Implementation,
+            "textDocument/implementation",
+            link,
+            vec![9],
+        ),
+        (
+            GotoKind::Definition,
+            "textDocument/definition",
+            Value::Null,
+            vec![],
+        ),
+    ];
+    for (kind, method, result, lines) in cases {
+        let asked = server.clone();
+        let call = std::thread::spawn(move || {
+            goto(
+                &asked,
+                kind,
+                std::path::Path::new("/a b.kt"),
+                Position::new(2, 4),
+                WAIT,
+            )
+        });
+        let request = mock.recv();
+        assert_eq!(request["method"], method);
+        assert_eq!(request["params"]["textDocument"]["uri"], "file:///a%20b.kt");
+        assert_eq!(request["params"]["position"]["character"], 4);
+        mock.reply(&request["id"], &result);
+        let places = call.join().unwrap().unwrap();
+        let found: Vec<u32> = places.iter().map(|place| place.range.start.line).collect();
+        assert_eq!(found, lines);
+    }
+}
