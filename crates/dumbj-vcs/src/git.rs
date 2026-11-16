@@ -25,9 +25,20 @@ pub(crate) fn run_raw(
     args: &[&str],
     cancelled: &AtomicBool,
 ) -> Result<Option<Output>, VcsError> {
+    run_raw_env(workdir, args, &[], cancelled)
+}
+
+/// `run_raw` with extra environment variables for the child.
+pub(crate) fn run_raw_env(
+    workdir: &Path,
+    args: &[&str],
+    env: &[(&str, &str)],
+    cancelled: &AtomicBool,
+) -> Result<Option<Output>, VcsError> {
     let mut child = Command::new("git")
         .args(["--no-optional-locks", "-c", "log.showSignature=false"])
         .args(args)
+        .envs(env.iter().copied())
         .current_dir(workdir)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())

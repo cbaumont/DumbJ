@@ -776,3 +776,102 @@ fn blame_is_empty_for_a_missing_file_or_revision() {
             .is_err()
     );
 }
+
+fn branch_named(repo: &Repository, name: &str) -> Branch {
+    repo.branches()
+        .unwrap()
+        .into_iter()
+        .find(|b| b.name == name)
+        .unwrap()
+}
+
+#[test]
+fn checkout_switches_local_branches() {
+    let t = TempRepo::new();
+    t.file("a.txt", "1\n");
+    t.commit_msg("one");
+    t.git(&["branch", "other"]);
+    let repo = t.repo();
+    repo.checkout(&branch_named(&repo, "other")).unwrap();
+    assert_eq!(repo.branch().unwrap().as_deref(), Some("other"));
+}
+
+#[test]
+fn checkout_refuses_to_overwrite_local_changes() {
+    let t = TempRepo::new();
+    t.file("a.txt", "1\n");
+    t.commit_msg("one");
+    t.git(&["branch", "other"]);
+    t.git(&["checkout", "-q", "other"]);
+    t.file("a.txt", "2\n");
+    t.commit_msg("two");
+    t.git(&["checkout", "-q", "main"]);
+    t.file("a.txt", "dirty\n");
+    let repo = t.repo();
+    let err = repo.checkout(&branch_named(&repo, "other")).unwrap_err();
+    assert!(matches!(err, VcsError::Git(m) if !m.is_empty()));
+    assert_eq!(repo.branch().unwrap().as_deref(), Some("main"));
+    assert_eq!(fs::read_to_string(t.0.join("a.txt")).unwrap(), "dirty\n");
+}
+
+fn clone_of(origin: &TempRepo) -> TempRepo {
+    let t = TempRepo::new();
+    fs::remove_dir_all(&t.0).unwrap();
+    let out = Command::new("git")
+        .args(["clone", "-q"])
+        .arg(&origin.0)
+        .arg(&t.0)
+        .env("GIT_CONFIG_GLOBAL", "/dev/null")
+        .env("GIT_CONFIG_SYSTEM", "/dev/null")
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    t
+}
+
+#[test]
+fn checkout_of_a_remote_branch_creates_a_tracking_branch() {
+    let origin = TempRepo::new();
+    origin.file("a.txt", "1\n");
+    origin.commit_msg("one");
+    origin.git(&["branch", "topic"]);
+    let t = clone_of(&origin);
+    let repo = t.repo();
+    assert!(!repo.branches().unwrap().iter().any(|b| b.name == "topic"));
+    repo.checkout(&branch_named(&repo, "origin/topic")).unwrap();
+    assert_eq!(repo.branch().unwrap().as_deref(), Some("topic"));
+    repo.checkout(&branch_named(&repo, "main")).unwrap();
+    repo.checkout(&branch_named(&repo, "origin/topic")).unwrap();
+    assert_eq!(repo.branch().unwrap().as_deref(), Some("topic"));
+}
+
+#[test]
+fn fetch_brings_in_commits_and_prunes_deleted_branches() {
+    let origin = TempRepo::new();
+    origin.file("a.txt", "1\n");
+    origin.commit_msg("one");
+    origin.git(&["branch", "gone"]);
+    let t = clone_of(&origin);
+    let repo = t.repo();
+    assert!(
+        repo.branches()
+            .unwrap()
+            .iter()
+            .any(|b| b.name == "origin/gone")
+    );
+    origin.file("a.txt", "2\n");
+    origin.commit_msg("two");
+    origin.git(&["branch", "-D", "gone"]);
+    assert_eq!(repo.fetch(&git::never()).unwrap(), Some(()));
+    let main = branch_named(&repo, "origin/main");
+    assert_eq!(main.tip, origin.rev("HEAD"));
+    assert!(
+        !repo
+            .branches()
+            .unwrap()
+            .iter()
+            .any(|b| b.name == "origin/gone")
+    );
+    let cancelled = AtomicBool::new(true);
+    assert_eq!(repo.fetch(&cancelled).unwrap(), None);
+}

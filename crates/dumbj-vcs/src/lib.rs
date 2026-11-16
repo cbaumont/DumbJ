@@ -4,6 +4,7 @@ pub mod diff;
 mod git;
 pub mod graph;
 mod log;
+mod remote;
 mod revision;
 mod status;
 
