@@ -390,3 +390,103 @@ fn hover_is_flattened_to_markdown() {
         assert_eq!(call.join().unwrap().unwrap().as_deref(), expected);
     }
 }
+
+fn hierarchy_item(name: &str) -> Value {
+    let range = location(3)["range"].clone();
+    json!({"name": name, "kind": 5, "detail": "demo", "uri": "file:///b.kt", "range": range, "selectionRange": range, "data": {"k": 1}})
+}
+
+#[test]
+fn type_hierarchy_requests() {
+    use crate::{subtypes, supertypes, type_hierarchy_prepare};
+    let (server, mut mock, _events) = connect();
+    let asked = server.clone();
+    let call = std::thread::spawn(move || {
+        type_hierarchy_prepare(
+            &asked,
+            std::path::Path::new("/a b.kt"),
+            Position::new(2, 4),
+            WAIT,
+        )
+    });
+    let request = mock.recv();
+    assert_eq!(request["method"], "textDocument/prepareTypeHierarchy");
+    assert_eq!(request["params"]["textDocument"]["uri"], "file:///a%20b.kt");
+    assert_eq!(request["params"]["position"]["character"], 4);
+    mock.reply(&request["id"], &json!([hierarchy_item("A")]));
+    let items = call.join().unwrap().unwrap();
+    assert_eq!(items[0].name, "A");
+
+    for (method, null) in [
+        ("typeHierarchy/supertypes", false),
+        ("typeHierarchy/subtypes", true),
+    ] {
+        let asked = server.clone();
+        let item = items[0].clone();
+        let call = std::thread::spawn(move || {
+            if method.ends_with("supertypes") {
+                supertypes(&asked, item, WAIT)
+            } else {
+                subtypes(&asked, item, WAIT)
+            }
+        });
+        let request = mock.recv();
+        assert_eq!(request["method"], method);
+        assert_eq!(request["params"]["item"]["name"], "A");
+        assert_eq!(request["params"]["item"]["data"]["k"], 1);
+        let result = if null {
+            Value::Null
+        } else {
+            json!([hierarchy_item("B"), hierarchy_item("C")])
+        };
+        mock.reply(&request["id"], &result);
+        let found = call.join().unwrap().unwrap();
+        assert_eq!(found.len(), if null { 0 } else { 2 });
+    }
+}
+
+#[test]
+fn call_hierarchy_requests() {
+    use crate::{call_hierarchy_prepare, incoming_calls, outgoing_calls};
+    let (server, mut mock, _events) = connect();
+    let asked = server.clone();
+    let call = std::thread::spawn(move || {
+        call_hierarchy_prepare(
+            &asked,
+            std::path::Path::new("/a.kt"),
+            Position::new(2, 4),
+            WAIT,
+        )
+    });
+    let request = mock.recv();
+    assert_eq!(request["method"], "textDocument/prepareCallHierarchy");
+    assert_eq!(request["params"]["position"]["line"], 2);
+    mock.reply(&request["id"], &Value::Null);
+    assert_eq!(call.join().unwrap().unwrap().len(), 0);
+
+    let item: lsp_types::CallHierarchyItem = serde_json::from_value(hierarchy_item("f")).unwrap();
+    let ranges = json!([location(1)["range"]]);
+    for (method, key) in [
+        ("callHierarchy/incomingCalls", "from"),
+        ("callHierarchy/outgoingCalls", "to"),
+    ] {
+        let asked = server.clone();
+        let item = item.clone();
+        let call = std::thread::spawn(move || {
+            if method.contains("incoming") {
+                incoming_calls(&asked, item, WAIT)
+            } else {
+                outgoing_calls(&asked, item, WAIT)
+            }
+        });
+        let request = mock.recv();
+        assert_eq!(request["method"], method);
+        assert_eq!(request["params"]["item"]["name"], "f");
+        mock.reply(
+            &request["id"],
+            &json!([{key: hierarchy_item("g"), "fromRanges": ranges}]),
+        );
+        let found = call.join().unwrap().unwrap();
+        assert_eq!(found[0].name, "g");
+    }
+}
