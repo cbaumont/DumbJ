@@ -39,6 +39,26 @@ impl ReviewNote {
     }
 }
 
+/// A comment written for a pull request that GitHub has not confirmed yet.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DraftComment {
+    pub id: u64,
+    /// Relative to the repository root.
+    pub path: PathBuf,
+    pub side: NoteSide,
+    /// One-based, inclusive.
+    pub first_line: usize,
+    /// One-based, inclusive, not before `first_line`.
+    pub last_line: usize,
+    pub body: String,
+    /// The thread this replies to; `None` starts a thread.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub thread: Option<String>,
+    /// Posted on its own instead of joining the pending review.
+    #[serde(default)]
+    pub single: bool,
+}
+
 /// The pull request a review is of.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PullRequestRef {
@@ -62,6 +82,8 @@ pub struct Review {
     viewed: Vec<ViewedFile>,
     #[serde(default)]
     notes: Vec<ReviewNote>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    drafts: Vec<DraftComment>,
 }
 
 impl Review {
@@ -73,6 +95,7 @@ impl Review {
             pull: None,
             viewed: Vec::new(),
             notes: Vec::new(),
+            drafts: Vec::new(),
         }
     }
 
@@ -143,6 +166,26 @@ impl Review {
         self.notes
             .iter()
             .find(|note| note.contains(path, side, line))
+    }
+
+    /// In the order they were written.
+    #[must_use]
+    pub fn drafts(&self) -> &[DraftComment] {
+        &self.drafts
+    }
+
+    /// Keeps `draft` under a new id, which is returned.
+    pub fn add_draft(&mut self, mut draft: DraftComment) -> u64 {
+        draft.id = self.drafts.iter().map(|draft| draft.id).max().unwrap_or(0) + 1;
+        draft.last_line = draft.last_line.max(draft.first_line);
+        let id = draft.id;
+        self.drafts.push(draft);
+        id
+    }
+
+    pub fn remove_draft(&mut self, id: u64) -> Option<DraftComment> {
+        let index = self.drafts.iter().position(|draft| draft.id == id)?;
+        Some(self.drafts.remove(index))
     }
 
     #[must_use]
@@ -242,6 +285,59 @@ mod tests {
         assert_eq!(review.notes()[0].text, "wider");
         review.set_note(note("a", NoteSide::Head, 9, 9, " "));
         assert_eq!(review.notes().len(), 1);
+    }
+
+    fn draft(body: &str) -> DraftComment {
+        DraftComment {
+            id: 0,
+            path: PathBuf::from("a"),
+            side: NoteSide::Head,
+            first_line: 5,
+            last_line: 2,
+            body: body.to_owned(),
+            thread: None,
+            single: false,
+        }
+    }
+
+    #[test]
+    fn drafts_get_ids_keep_their_order_and_are_removed_by_id() {
+        let mut review = Review::new("base", Some("head"));
+        let first = review.add_draft(draft("one"));
+        let second = review.add_draft(draft("two"));
+        assert_eq!((first, second), (1, 2));
+        assert_eq!(review.drafts()[0].last_line, 5);
+        assert_eq!(
+            review.remove_draft(first).map(|d| d.body),
+            Some("one".to_owned())
+        );
+        assert_eq!(review.remove_draft(first), None);
+        let third = review.add_draft(draft("three"));
+        assert_eq!(third, 3);
+        let bodies: Vec<_> = review.drafts().iter().map(|d| d.body.as_str()).collect();
+        assert_eq!(bodies, ["two", "three"]);
+    }
+
+    #[test]
+    fn drafts_and_the_pull_request_survive_a_round_trip() {
+        let mut review = Review::new("base", Some("head"));
+        review.pull = Some(PullRequestRef {
+            host: "github.com".to_owned(),
+            owner: "o".to_owned(),
+            name: "r".to_owned(),
+            number: 7,
+            title: "T".to_owned(),
+            url: "https://github.com/o/r/pull/7".to_owned(),
+        });
+        let mut reply = draft("reply");
+        reply.thread = Some("T_1".to_owned());
+        review.add_draft(reply);
+        let text = toml::to_string(&review).unwrap();
+        let back: Review = toml::from_str(&text).unwrap();
+        assert_eq!(back, review);
+        let plain = Review::new("main", None);
+        let text = toml::to_string(&plain).unwrap();
+        assert!(!text.contains("drafts") && !text.contains("pull"));
     }
 
     #[test]
