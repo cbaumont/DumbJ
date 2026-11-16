@@ -11,7 +11,7 @@ use gpui::{
 };
 
 use super::{Tab, Workspace};
-use crate::editor::{DiffMarks, EditorView, MousePressed};
+use crate::editor::{BlockClicked, DiffMarks, EditorView, MousePressed};
 use crate::theme;
 
 const HEADER_HEIGHT: gpui::Pixels = px(26.);
@@ -362,6 +362,10 @@ impl Workspace {
                 this.on_editor_mouse(*stroke, window, cx);
             },
         ));
+        self.subscriptions
+            .push(cx.subscribe(editor, |this, _, BlockClicked(id), cx| {
+                this.toggle_thread(*id, cx);
+            }));
         self.subscriptions
             .push(cx.observe(editor, |_, _, cx| cx.notify()));
     }

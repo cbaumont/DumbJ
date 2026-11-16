@@ -32,6 +32,7 @@ mod review;
 mod review_notes;
 mod search_popup;
 mod state;
+mod threads;
 mod usages;
 mod vcs;
 
@@ -141,6 +142,7 @@ pub(crate) struct Workspace {
     pull_popup: Option<pulls::PullPopup>,
     pull_input: Entity<TextInput>,
     github: Option<std::sync::Arc<pulls::GitHub>>,
+    pull_threads: Option<threads::PullThreads>,
     note_input: Entity<TextInput>,
     find: Entity<TextInput>,
     find_open: bool,
@@ -294,6 +296,7 @@ impl Workspace {
             pull_popup: None,
             pull_input,
             github: None,
+            pull_threads: None,
             note_input: cx.new(|cx| TextInput::new("Note", cx)),
             find,
             find_open: false,
@@ -434,6 +437,7 @@ impl Workspace {
         self.index = None;
         self.head_index = None;
         self.github = None;
+        self.pull_threads = None;
         self.start_indexing(root.clone(), cx);
         self.load_project_state(root.clone(), cx);
         self.start_jar_indexing(cx);
@@ -729,6 +733,7 @@ impl Workspace {
             | Action::GitBranches
             | Action::PullRequests => self.repository.is_some() && !popup_open,
             Action::OpenPullRequestInBrowser => self.review_pull().is_some() && !popup_open,
+            _ if action.is_thread_action() => self.has_threads_here() && !popup_open,
             Action::ActivateReviewToolWindow | Action::NextUnviewedFile => {
                 self.review.is_some() && !popup_open
             }
@@ -805,9 +810,11 @@ impl Workspace {
             Action::ActivateHierarchyToolWindow => self.toggle_hierarchy_window(window, cx),
             Action::ActivateGitToolWindow => self.toggle_git_window(window, cx),
             Action::GitBranches => self.open_branch_popup(window, cx),
-            Action::PullRequests | Action::OpenPullRequestInBrowser => {
-                self.pull_action(action, window, cx);
-            }
+            Action::PullRequests
+            | Action::OpenPullRequestInBrowser
+            | Action::NextThread
+            | Action::PreviousThread
+            | Action::ToggleThread => self.pull_action(action, window, cx),
             Action::Annotate => self.toggle_annotate(cx),
             Action::ShowFileHistory | Action::ShowHistoryForSelection => {
                 self.show_file_history(action == Action::ShowHistoryForSelection, window, cx);

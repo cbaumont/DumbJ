@@ -89,7 +89,7 @@
 - [~] Sign in — the `gh` CLI's token; no own sign-in
 - [~] PR list — popup (review requested, assigned, mine, all; search), open PRs only
 - [~] Open PR into private refs — navigation across the head; no Prune action yet
-- [ ] Inline threads
+- [~] Inline threads — folded/expanded blocks in the diff, resolved/outdated/pending state, next/previous; Markdown not rendered
 - [ ] Comments, pending review, suggestions
 - [ ] Submit review
 - [ ] Viewed sync

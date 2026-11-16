@@ -90,7 +90,10 @@ impl EditorView {
             clippy::cast_precision_loss,
             reason = "scroll_top is a small non-negative row number"
         )]
-        let line = self.model.folds.line_of(self.scroll_top.floor() as usize) as f64;
+        let line = {
+            let row = self.block_rows().text_row(self.scroll_top.floor() as usize);
+            self.model.folds.line_of(row) as f64
+        };
         line + self.scroll_top.fract()
     }
 
@@ -101,7 +104,10 @@ impl EditorView {
             clippy::cast_precision_loss,
             reason = "a line number"
         )]
-        let row = self.model.folds.row_of(line.max(0.0).floor() as usize) as f64;
+        let row = self
+            .block_rows()
+            .visual_of(self.model.folds.row_of(line.max(0.0).floor() as usize))
+            as f64;
         let top = (row + line.max(0.0).fract()).clamp(0.0, self.max_scroll_top());
         if (top - self.scroll_top).abs() > f64::EPSILON {
             self.scroll_top = top;

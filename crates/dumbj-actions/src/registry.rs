@@ -123,6 +123,9 @@ pub enum Action {
     ExportReviewNotes,
     PullRequests,
     OpenPullRequestInBrowser,
+    NextThread,
+    PreviousThread,
+    ToggleThread,
     ActivateGitToolWindow,
     ShowFileHistory,
     ShowHistoryForSelection,
@@ -763,6 +766,24 @@ const REGISTRY: &[ActionInfo] = &[
         Scope::Window,
     ),
     info(
+        Action::NextThread,
+        "review.next-thread",
+        "Next Comment Thread",
+        Scope::Window,
+    ),
+    info(
+        Action::PreviousThread,
+        "review.previous-thread",
+        "Previous Comment Thread",
+        Scope::Window,
+    ),
+    info(
+        Action::ToggleThread,
+        "review.toggle-thread",
+        "Expand or Collapse Comment Thread",
+        Scope::Window,
+    ),
+    info(
         Action::ActivateGitToolWindow,
         "tool-window.git",
         "Git",
@@ -799,6 +820,15 @@ impl Action {
     /// Every action, in the order menus and documentation list them.
     pub fn all() -> impl Iterator<Item = Self> {
         REGISTRY.iter().map(|info| info.action)
+    }
+
+    /// Whether the action works on the review thread at the caret.
+    #[must_use]
+    pub fn is_thread_action(self) -> bool {
+        matches!(
+            self,
+            Self::NextThread | Self::PreviousThread | Self::ToggleThread
+        )
     }
 
     fn info(self) -> &'static ActionInfo {

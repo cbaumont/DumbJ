@@ -29,9 +29,13 @@ use crate::keys::modifiers_from_gpui;
 use crate::theme;
 
 mod annotate;
+mod blocks;
 mod changes;
 mod diff_marks;
 mod editing;
+
+use blocks::Slot;
+pub(crate) use blocks::{Block, BlockRow, BlockTone};
 
 pub(crate) use diff_marks::DiffMarks;
 
@@ -171,6 +175,8 @@ struct PaintedLines {
     first_line_top: Pixels,
     /// The buffer line shown in each painted row.
     rows: Vec<usize>,
+    /// For each painted row that belongs to a block, the block's id.
+    blocks: Vec<Option<usize>>,
     gutter_right: Pixels,
     visible_lines: f64,
     scroll_x: Pixels,
@@ -215,6 +221,9 @@ pub(crate) struct GutterIcon {
 
 pub(crate) struct GutterIconClicked(pub(crate) GutterIcon);
 
+/// A click on the block with this id.
+pub(crate) struct BlockClicked(pub(crate) usize);
+
 /// A bookmark marker beside a line number.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct BookmarkMark {
@@ -243,6 +252,7 @@ pub(crate) struct EditorView {
     benchmark: Option<ScrollBenchmark>,
     gutter_icons: Vec<GutterIcon>,
     index: Option<Arc<Index>>,
+    blocks: Vec<Block>,
     usages: Arc<Vec<UsageHighlight>>,
     usages_at: Option<ByteOffset>,
     usages_task: Option<Task<()>>,
@@ -269,6 +279,7 @@ impl EventEmitter<EditorEvent> for EditorView {}
 
 impl EventEmitter<MousePressed> for EditorView {}
 impl EventEmitter<GutterIconClicked> for EditorView {}
+impl EventEmitter<BlockClicked> for EditorView {}
 
 impl Drop for EditorView {
     fn drop(&mut self) {
@@ -351,6 +362,7 @@ impl EditorView {
             benchmark: None,
             gutter_icons: Vec::new(),
             index: None,
+            blocks: Vec::new(),
             usages: Arc::new(Vec::new()),
             usages_at: None,
             usages_task: None,
@@ -788,16 +800,38 @@ impl EditorView {
             reason = "rows is a small non-negative number of lines"
         )]
         let row = (rows as usize).min(painted.lines.len().checked_sub(1)?);
+        let line = LineIndex(*painted.rows.get(row)?);
+        if painted.blocks.get(row).is_some_and(Option::is_some) {
+            return Some(self.model.buffer().line_start(line));
+        }
         let (display, shaped) = painted.lines.get(row)?;
         let x = position.x - painted.text_left + painted.scroll_x;
         let column = display.to_buffer(shaped.closest_index_for_x(x.max(px(0.))));
-        let line = LineIndex(*painted.rows.get(row)?);
         Some(self.model.buffer().offset_at(TextPoint { line, column }))
+    }
+
+    /// The id of the block painted under a window position.
+    fn block_at(&self, position: Point<Pixels>) -> Option<usize> {
+        let painted = self.painted.as_ref()?;
+        let rows = ((position.y - painted.first_line_top) / LINE_HEIGHT).floor();
+        if rows < 0.0 || position.x < painted.gutter_right {
+            return None;
+        }
+        #[expect(
+            clippy::cast_possible_truncation,
+            clippy::cast_sign_loss,
+            reason = "rows is a small non-negative number of lines"
+        )]
+        let block = painted.blocks.get(rows as usize)?;
+        *block
     }
 
     fn max_scroll_top(&self) -> f64 {
         #[expect(clippy::cast_precision_loss, reason = "line counts are far below 2^52")]
-        let lines = self.model.folds.row_count(self.model.buffer().line_count()) as f64;
+        let lines = self
+            .block_rows()
+            .count(self.model.folds.row_count(self.model.buffer().line_count()))
+            as f64;
         (lines - 1.0).max(0.0)
     }
 
@@ -857,6 +891,10 @@ impl EditorView {
                 cx.notify();
                 return;
             }
+        }
+        if let Some(block) = self.block_at(event.position) {
+            cx.emit(BlockClicked(block));
+            return;
         }
         let Some(offset) = self.offset_at(event.position) else {
             return;
@@ -1012,8 +1050,9 @@ impl EditorView {
         self.step_scroll_benchmark(window, cx);
         let visible_lines = f64::from(bounds.size.height / LINE_HEIGHT);
         let caret_point = self.model.caret_point();
-        let row_count = self.model.folds.row_count(line_count);
-        let caret_row = self.model.folds.row_of(caret_point.line.get());
+        let block_rows = self.block_rows();
+        let row_count = block_rows.count(self.model.folds.row_count(line_count));
+        let caret_row = block_rows.visual_of(self.model.folds.row_of(caret_point.line.get()));
         let revealed = self.reveal.is_some();
         match self.reveal.take() {
             Some(Reveal::Minimal) => {
@@ -1054,8 +1093,9 @@ impl EditorView {
             reason = "a viewport holds a small positive number of lines"
         )]
         let last_row = (first_row + visible_lines.ceil() as usize + 1).min(row_count);
-        let first_line = self.model.folds.line_of(first_row);
-        let last_line = (self.model.folds.line_of(last_row.saturating_sub(1)) + 1).min(line_count);
+        let first_line = self.model.folds.line_of(block_rows.text_row(first_row));
+        let last_text_row = block_rows.text_row(last_row.saturating_sub(1));
+        let last_line = (self.model.folds.line_of(last_text_row) + 1).min(line_count);
 
         // Collect per-line highlight runs before shaping, since both need `self`.
         let spans = self.highlights_for(first_line..last_line).to_vec();
@@ -1085,19 +1125,54 @@ impl EditorView {
         let mut placeholders = Vec::new();
         let mut change_marks = Vec::new();
         let mut painted_rows = Vec::with_capacity(last_row - first_row);
+        let mut painted_blocks = Vec::with_capacity(last_row - first_row);
+        let block_background = theme::ui(cx, UiRole::PanelBackground);
         let mut caret = None;
         let mut max_width = px(0.);
         let folds = &self.model.folds;
         let fold_color = theme::ui(cx, UiRole::TextFaint);
-        for row in first_row..last_row {
-            let line = folds.line_of(row);
-            painted_rows.push(line);
-            let line_index = LineIndex(line);
+        for visual in first_row..last_row {
             #[expect(
                 clippy::cast_precision_loss,
                 reason = "at most a few hundred visible lines"
             )]
-            let top = first_line_top + LINE_HEIGHT * (row - first_row) as f32;
+            let top = first_line_top + LINE_HEIGHT * (visual - first_row) as f32;
+            let row = match block_rows.slot(visual) {
+                Slot::Text(row) => row,
+                Slot::Block { block, row } => {
+                    let block = self.blocks.get(block);
+                    let content = block.and_then(|block| block.rows.get(row));
+                    let (text, tone) = content.map_or(("", BlockTone::Text), |content| {
+                        (content.text.as_str(), content.tone)
+                    });
+                    let role = match tone {
+                        BlockTone::Title => UiRole::Accent,
+                        BlockTone::Text => UiRole::Text,
+                        BlockTone::Faint => UiRole::TextMuted,
+                    };
+                    let display = DisplayLine::new(text, MAX_LINE_BYTES);
+                    let shaped = shape(
+                        window,
+                        display.text.clone(),
+                        &[run(display.text.len(), theme::ui(cx, role))],
+                    );
+                    backgrounds.push(fill(
+                        Bounds::from_corners(
+                            point(bounds.left() + gutter_width, top),
+                            point(bounds.right() - SCROLLBAR_WIDTH, top + LINE_HEIGHT),
+                        ),
+                        block_background,
+                    ));
+                    lines.push((display, shaped));
+                    painted_rows.push(block.map_or(0, |block| block.line));
+                    painted_blocks.push(Some(block.map_or(0, |block| block.id)));
+                    continue;
+                }
+            };
+            let line = folds.line_of(row);
+            painted_rows.push(line);
+            painted_blocks.push(None);
+            let line_index = LineIndex(line);
             let (line_start, line_end) =
                 (buffer.line_start(line_index), buffer.line_end(line_index));
             while spans
@@ -1312,7 +1387,7 @@ impl EditorView {
                 if covered_row >= row_count {
                     break;
                 }
-                let covered = self.model.folds.line_of(covered_row);
+                let covered = self.model.folds.line_of(block_rows.text_row(covered_row));
                 let scopes: Vec<usize> = tree
                     .sticky_scopes(buffer, buffer.line_start(LineIndex(covered)))
                     .into_iter()
@@ -1415,6 +1490,7 @@ impl EditorView {
             text_left,
             first_line_top,
             rows: painted_rows,
+            blocks: painted_blocks,
             gutter_right: bounds.left() + gutter_width,
             visible_lines,
             scroll_x: self.scroll_x,

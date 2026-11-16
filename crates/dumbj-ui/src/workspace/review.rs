@@ -341,6 +341,8 @@ impl Workspace {
             saved.pull = pull;
             self.save_project_state(cx);
         }
+        self.pull_threads = None;
+        self.load_pull_threads(cx);
         self.left_tool = LeftTool::Review;
         self.project_window = ToolWindowState::Visible;
         let focus = self.review_focus.clone();
@@ -495,6 +497,7 @@ impl Workspace {
         };
         self.show_diff(sides, window, cx);
         self.refresh_note_marks(cx);
+        self.apply_thread_blocks(cx);
     }
 
     /// From a diff that belongs to the review, opens the diff of the next (or previous)

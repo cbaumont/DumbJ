@@ -20,6 +20,15 @@
   <action id="DumbJ.Review.OpenInBrowser">
     <keyboard-shortcut first-keystroke="control alt shift P" second-keystroke="O"/>
   </action>
+  <action id="DumbJ.Review.NextThread">
+    <keyboard-shortcut first-keystroke="control alt shift P" second-keystroke="N"/>
+  </action>
+  <action id="DumbJ.Review.PreviousThread">
+    <keyboard-shortcut first-keystroke="control alt shift P" second-keystroke="B"/>
+  </action>
+  <action id="DumbJ.Review.ToggleThread">
+    <keyboard-shortcut first-keystroke="control alt shift P" second-keystroke="T"/>
+  </action>
   <action id="DumbJ.ShowFileHistory">
     <keyboard-shortcut first-keystroke="control alt shift Q"/>
   </action>

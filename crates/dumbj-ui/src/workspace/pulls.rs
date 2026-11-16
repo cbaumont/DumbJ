@@ -30,10 +30,10 @@ const FILTERS: [PrFilter; 4] = [
 pub(super) struct GitHub {
     remote: String,
     repo: RepoId,
-    client: Client,
+    pub(super) client: Client,
 }
 
-fn connect(repository: &Repository) -> Result<GitHub, String> {
+pub(super) fn connect(repository: &Repository) -> Result<GitHub, String> {
     let mut remotes = repository.remotes().map_err(|error| error.to_string())?;
     remotes.sort_by_key(|remote| remote.name != "origin");
     let (remote, repo) = remotes
@@ -277,7 +277,8 @@ impl Workspace {
         match (action, self.review_pull()) {
             (Action::PullRequests, _) => self.open_pull_popup(window, cx),
             (Action::OpenPullRequestInBrowser, Some(pull)) => cx.open_url(&pull.url),
-            _ => {}
+            (Action::OpenPullRequestInBrowser, None) => {}
+            _ => self.thread_action(action, cx),
         }
     }
 
