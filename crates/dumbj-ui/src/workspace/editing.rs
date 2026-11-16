@@ -76,6 +76,7 @@ impl Workspace {
             if self.project.is_some() && self.index.is_some() {
                 self.schedule_index_refresh(cx);
             }
+            self.refresh_repository(cx);
         } else {
             self.save_all(cx);
         }

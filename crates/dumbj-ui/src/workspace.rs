@@ -26,6 +26,7 @@ mod navigation;
 mod search_popup;
 mod state;
 mod usages;
+mod vcs;
 
 use bookmarks::MnemonicPrompt;
 use dumbj_index::SearchScope;
@@ -102,6 +103,8 @@ pub(crate) struct Workspace {
     jars: Option<std::sync::Arc<dumbj_jars::JarIndex>>,
     indexing: Option<Indexing>,
     index_refresh: Option<Task<()>>,
+    repository: Option<dumbj_vcs::Repository>,
+    branch: Option<String>,
     history: NavigationHistory,
     chooser: Option<Chooser>,
     search_input: Entity<TextInput>,
@@ -224,6 +227,8 @@ impl Workspace {
             jars: None,
             indexing: None,
             index_refresh: None,
+            repository: None,
+            branch: None,
             history: NavigationHistory::default(),
             chooser: None,
             search_input,
@@ -325,6 +330,7 @@ impl Workspace {
         self.load_project_state(root.clone(), cx);
         self.start_jar_indexing(cx);
         self.project = Some(Project { root, name, tree });
+        self.refresh_repository(cx);
         self.project_window = ToolWindowState::Visible;
         self.update_title(window);
         cx.notify();
@@ -363,6 +369,7 @@ impl Workspace {
                 self.subscriptions
                     .push(cx.observe(&editor, |_, _, cx| cx.notify()));
                 self.refresh_gutter_icons(&editor, &path, cx);
+                self.refresh_base_text(&editor, &path, cx);
                 self.tabs.push(Tab {
                     path,
                     title,
@@ -1217,6 +1224,7 @@ impl Workspace {
         }
         right.extend(self.status_message.clone());
         right.extend(self.index_status());
+        right.extend(self.branch.clone());
         if let Some(tab) = tab {
             let editor = tab.editor.read(cx);
             let (line, column) = editor.caret_line_column();

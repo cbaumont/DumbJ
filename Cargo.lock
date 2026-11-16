@@ -1370,6 +1370,7 @@ dependencies = [
  "dumbj-settings",
  "dumbj-syntax",
  "dumbj-text",
+ "dumbj-vcs",
  "gpui",
  "gpui_platform",
  "thiserror 2.0.21",

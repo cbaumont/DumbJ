@@ -104,4 +104,7 @@ Linux uses the `macOS For All` keymap and macOS uses IntelliJ's `Mac OS X 10.5+`
 | Move Line Up | `edit.move-line-up` | `MoveLineUp` | `Alt+Shift+Up` | `⌥⇧Up` |
 | Move Line Down | `edit.move-line-down` | `MoveLineDown` | `Alt+Shift+Down` | `⌥⇧Down` |
 | Comment with Line Comment | `edit.toggle-line-comment` | `CommentByLineComment` | `Ctrl+/` / `Ctrl+Num/` | `⌘/` / `⌘Num/` |
+| Next Change | `vcs.next-change` | `VcsShowNextChangeMarker` | `Ctrl+Alt+Shift+Down` | `⌃⌥⇧Down` |
+| Previous Change | `vcs.previous-change` | `VcsShowPrevChangeMarker` | `Ctrl+Alt+Shift+Up` | `⌃⌥⇧Up` |
+| Rollback Lines | `vcs.rollback-lines` | `Vcs.RollbackChangedLines` | `Ctrl+Alt+Z` | `⌥⌘Z` |
 | Escape | `text.escape` | `EditorEscape` | `Esc` | `Esc` |

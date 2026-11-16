@@ -16,6 +16,7 @@ dumbj-search.workspace = true
 dumbj-settings.workspace = true
 dumbj-syntax.workspace = true
 dumbj-text.workspace = true
+dumbj-vcs.workspace = true
 gpui.workspace = true
 gpui_platform.workspace = true
 thiserror.workspace = true

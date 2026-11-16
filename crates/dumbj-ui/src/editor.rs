@@ -28,6 +28,7 @@ use crate::editor_model::{
 use crate::keys::modifiers_from_gpui;
 use crate::theme;
 
+mod changes;
 mod editing;
 
 pub(crate) use editing::EditorEvent;
@@ -222,6 +223,7 @@ pub(crate) struct EditorView {
     usages_at: Option<ByteOffset>,
     usages_task: Option<Task<()>>,
     bookmarks: Vec<BookmarkMark>,
+    changes: changes::Changes,
     read_only: bool,
     /// What the file looked like on disk when it was last read or written.
     stamp: Option<FileStamp>,
@@ -269,6 +271,7 @@ impl EditorView {
                         this.model.folds.collapse_all(Some(FoldKind::Imports));
                         this.syntax = loaded.syntax;
                         this.state = LoadState::Ready;
+                        this.changes_loaded(cx);
                         if let Some(offset) = this.pending_offset.take() {
                             this.go_to_offset(offset, cx);
                         }
@@ -304,6 +307,7 @@ impl EditorView {
             usages_at: None,
             usages_task: None,
             bookmarks: Vec::new(),
+            changes: changes::Changes::default(),
             read_only: true,
             stamp: None,
             conflict: None,
@@ -489,6 +493,13 @@ impl EditorView {
             }
             Action::CollapseAllRegions => self.model.folds.collapse_all(None),
             Action::ExpandAllRegions => self.model.folds.expand_all(),
+            Action::NextChange => self.go_to_change(true, cx),
+            Action::PreviousChange => self.go_to_change(false, cx),
+            Action::RollbackChangedLines => {
+                if !self.read_only {
+                    self.rollback_change(cx);
+                }
+            }
             Action::Copy => {
                 let selected = self.model.selected_text();
                 if !selected.is_empty() {
@@ -1008,6 +1019,7 @@ impl EditorView {
         let mut lines = Vec::with_capacity(last_row - first_row);
         let mut numbers = Vec::with_capacity(last_row - first_row);
         let mut placeholders = Vec::new();
+        let mut change_marks = Vec::new();
         let mut painted_rows = Vec::with_capacity(last_row - first_row);
         let mut caret = None;
         let mut max_width = px(0.);
@@ -1149,6 +1161,22 @@ impl EditorView {
             let number = shape(window, number.clone(), &[run(number.len(), color)]);
             let number_x = bounds.left() + gutter_width - GUTTER_PADDING_RIGHT - number.width;
             numbers.push((point(number_x, top), number));
+            if let Some(mark) = self.change_mark(line) {
+                let (offset, height) = match mark {
+                    changes::ChangeMark::DeletedAbove => (px(-1.5), px(3.)),
+                    changes::ChangeMark::DeletedBelow => (LINE_HEIGHT - px(1.5), px(3.)),
+                    _ => (px(0.), LINE_HEIGHT),
+                };
+                let (width, left) = if height < LINE_HEIGHT {
+                    (px(7.), bounds.left() + gutter_width - px(8.))
+                } else {
+                    (px(3.), bounds.left() + gutter_width - px(4.))
+                };
+                change_marks.push(fill(
+                    Bounds::new(point(left, top + offset), size(width, height)),
+                    theme::ui(cx, mark.role()),
+                ));
+            }
             if folds.region_starting(line).is_some() {
                 let collapsed = folds.is_collapsed(line);
                 let marker = if collapsed { "▸" } else { "▾" };
@@ -1302,6 +1330,7 @@ impl EditorView {
             text_origin: point(text_left - self.scroll_x, first_line_top),
             lines,
             numbers,
+            change_marks,
             backgrounds,
             caret,
             placeholders,
@@ -1366,6 +1395,7 @@ struct EditorLayout {
     text_origin: Point<Pixels>,
     lines: Arc<Vec<(DisplayLine, ShapedLine)>>,
     numbers: Vec<(Point<Pixels>, ShapedLine)>,
+    change_marks: Vec<PaintQuad>,
     backgrounds: Vec<PaintQuad>,
     caret: Option<PaintQuad>,
     placeholders: Vec<(Point<Pixels>, ShapedLine)>,
@@ -1436,6 +1466,9 @@ impl Element for EditorElement {
         window.with_content_mask(Some(ContentMask { bounds }), |window| {
             for (origin, number) in &layout.numbers {
                 paint_line(number, *origin, window, cx);
+            }
+            for mark in layout.change_marks.drain(..) {
+                window.paint_quad(mark);
             }
             window.with_content_mask(
                 Some(ContentMask {

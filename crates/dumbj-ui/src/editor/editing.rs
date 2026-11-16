@@ -121,7 +121,7 @@ impl EditorView {
     }
 
     /// Brings everything derived from the text back in line after `edits`.
-    fn edited(&mut self, edits: &[Edit], cx: &mut Context<Self>) {
+    pub(super) fn edited(&mut self, edits: &[Edit], cx: &mut Context<Self>) {
         self.reveal = Some(Reveal::Minimal);
         cx.notify();
         if edits.is_empty() {
@@ -147,6 +147,7 @@ impl EditorView {
         let query = std::mem::take(&mut self.search.query);
         self.set_search_query(&query, cx);
         self.start_reparse(cx);
+        self.changes_edited(cx);
         self.schedule_idle_save(cx);
         cx.emit(EditorEvent::Edited(
             edits

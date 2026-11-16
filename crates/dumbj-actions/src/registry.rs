@@ -108,6 +108,9 @@ pub enum Action {
     MoveLineUp,
     MoveLineDown,
     ToggleLineComment,
+    NextChange,
+    PreviousChange,
+    RollbackChangedLines,
     Escape,
 }
 
@@ -650,6 +653,24 @@ const REGISTRY: &[ActionInfo] = &[
         Action::ToggleLineComment,
         "edit.toggle-line-comment",
         "Comment with Line Comment",
+        Scope::Editor,
+    ),
+    info(
+        Action::NextChange,
+        "vcs.next-change",
+        "Next Change",
+        Scope::Editor,
+    ),
+    info(
+        Action::PreviousChange,
+        "vcs.previous-change",
+        "Previous Change",
+        Scope::Editor,
+    ),
+    info(
+        Action::RollbackChangedLines,
+        "vcs.rollback-lines",
+        "Rollback Lines",
         Scope::Editor,
     ),
     info(Action::Escape, "text.escape", "Escape", Scope::Text),
