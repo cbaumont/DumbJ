@@ -23,7 +23,9 @@ const RETYPE_DELAY: Duration = Duration::from_millis(150);
 /// working file, is the right half.
 pub(super) struct DiffTab {
     left: Entity<EditorView>,
-    revision: String,
+    base: String,
+    /// `None` when the right side is the working file.
+    head: Option<String>,
     left_active: bool,
     options: DiffOptions,
     hunks: Arc<Vec<Hunk>>,
@@ -48,6 +50,39 @@ impl DiffTab {
 
     pub(super) fn right_marks(&self) -> DiffMarks {
         self.right_marks.clone()
+    }
+
+    pub(super) fn shows_working_file(&self) -> bool {
+        self.head.is_none()
+    }
+
+    fn revision_editors(
+        &self,
+        right: &Entity<EditorView>,
+    ) -> impl Iterator<Item = Entity<EditorView>> {
+        let right = self.head.is_some().then(|| right.clone());
+        std::iter::once(self.left.clone()).chain(right)
+    }
+}
+
+/// What a diff tab compares.
+pub(super) struct DiffSides {
+    pub(super) path: PathBuf,
+    /// The file's path in the base revision, when it was renamed since.
+    pub(super) old_path: Option<PathBuf>,
+    pub(super) base: String,
+    /// `None` compares with the working file.
+    pub(super) head: Option<String>,
+}
+
+impl DiffSides {
+    pub(super) fn with_head_commit(path: PathBuf) -> Self {
+        Self {
+            path,
+            old_path: None,
+            base: "HEAD".to_owned(),
+            head: None,
+        }
     }
 }
 
@@ -194,7 +229,8 @@ impl Workspace {
 
     /// Whether the caret that actions act on is in a revision, not in the working file.
     pub(super) fn in_revision(&self) -> bool {
-        self.active_diff().is_some_and(|diff| diff.left_active)
+        self.active_diff()
+            .is_some_and(|diff| diff.left_active || diff.head.is_some())
     }
 
     pub(super) fn diff_target(&self, cx: &gpui::App) -> Option<PathBuf> {
@@ -203,39 +239,53 @@ impl Workspace {
         project.tree.read(cx).selected_file().map(Path::to_path_buf)
     }
 
-    /// Opens a tab comparing `path` in the HEAD commit (left) with the working file (right).
-    pub(super) fn show_diff(&mut self, path: PathBuf, window: &mut Window, cx: &mut Context<Self>) {
+    /// Opens a tab comparing `sides.path` at the base revision (left) with the head revision
+    /// or the working file (right).
+    pub(super) fn show_diff(
+        &mut self,
+        sides: DiffSides,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let Some(repository) = self.repository.clone() else {
             return;
         };
-        if let Some(index) = self
-            .tabs
-            .iter()
-            .position(|tab| tab.diff.is_some() && tab.path == path)
-        {
+        if let Some(index) = self.tabs.iter().position(|tab| {
+            tab.path == sides.path
+                && tab
+                    .diff
+                    .as_ref()
+                    .is_some_and(|diff| diff.base == sides.base && diff.head == sides.head)
+        }) {
             self.activate_tab(index, window, cx);
             return;
         }
-        let revision = "HEAD".to_owned();
-        let right = self.editor_for(&path, window, cx);
-        let left =
-            cx.new(|cx| EditorView::open_revision(path.clone(), repository, revision.clone(), cx));
-        if let Some(index) = self.index.clone() {
-            left.update(cx, |editor, cx| editor.set_index(index, cx));
-        }
+        let DiffSides {
+            path,
+            old_path,
+            base,
+            head,
+        } = sides;
+        let right = match &head {
+            Some(head) => {
+                let (path, repository, head) = (path.clone(), repository.clone(), head.clone());
+                let right = cx.new(|cx| EditorView::open_revision(path, repository, head, cx));
+                self.subscribe_revision_editor(&right, window, cx);
+                right
+            }
+            None => self.editor_for(&path, window, cx),
+        };
+        let left = cx.new(|cx| {
+            let path = old_path.unwrap_or_else(|| path.clone());
+            EditorView::open_revision(path, repository, base.clone(), cx)
+        });
+        self.subscribe_revision_editor(&left, window, cx);
         let id = left.entity_id();
         let (left_focus, right_focus) = (
             left.read(cx).focus_handle().clone(),
             right.read(cx).focus_handle().clone(),
         );
         let subscriptions = vec![
-            cx.subscribe_in(
-                &left,
-                window,
-                |this, _, MousePressed(stroke), window, cx| {
-                    this.on_editor_mouse(*stroke, window, cx);
-                },
-            ),
             cx.observe(&left, move |this, _, cx| this.diff_changed(id, cx)),
             cx.observe(&right, move |this, _, cx| this.diff_changed(id, cx)),
             cx.on_focus(&left_focus, window, move |this, _, cx| {
@@ -245,13 +295,18 @@ impl Workspace {
                 this.set_diff_side(id, false, cx);
             }),
         ];
+        let title = match &head {
+            Some(head) => format!("{} ({base} → {head})", file_name(&path)),
+            None => format!("{} ({base})", file_name(&path)),
+        };
         self.tabs.push(Tab {
-            title: format!("{} ({revision})", file_name(&path)),
+            title,
             path,
             editor: right,
             diff: Some(DiffTab {
                 left,
-                revision,
+                base,
+                head,
                 left_active: false,
                 options: DiffOptions::default(),
                 hunks: Arc::default(),
@@ -266,12 +321,37 @@ impl Workspace {
         self.activate_tab(self.tabs.len() - 1, window, cx);
     }
 
+    fn subscribe_revision_editor(
+        &mut self,
+        editor: &Entity<EditorView>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(index) = self.index.clone() {
+            editor.update(cx, |editor, cx| editor.set_index(index, cx));
+        }
+        self.subscriptions.push(cx.subscribe_in(
+            editor,
+            window,
+            |this, _, MousePressed(stroke), window, cx| {
+                this.on_editor_mouse(*stroke, window, cx);
+            },
+        ));
+        self.subscriptions
+            .push(cx.observe(editor, |_, _, cx| cx.notify()));
+    }
+
     pub(super) fn index_revision_editors(&self, cx: &mut Context<Self>) {
         let Some(index) = &self.index else { return };
-        for diff in self.tabs.iter().filter_map(|tab| tab.diff.as_ref()) {
+        let editors: Vec<_> = self
+            .tabs
+            .iter()
+            .filter_map(|tab| Some(tab.diff.as_ref()?.revision_editors(&tab.editor)))
+            .flatten()
+            .collect();
+        for editor in editors {
             let index = index.clone();
-            diff.left
-                .update(cx, |editor, cx| editor.set_index(index, cx));
+            editor.update(cx, |editor, cx| editor.set_index(index, cx));
         }
     }
 
@@ -301,8 +381,8 @@ impl Workspace {
             return;
         };
         let snapshots = (
-            diff.left.read(cx).buffer_snapshot(),
-            right.read(cx).buffer_snapshot(),
+            diff.left.read(cx).diff_snapshot(),
+            right.read(cx).diff_snapshot(),
         );
         let (Some(old), Some(new)) = snapshots else {
             return;
@@ -483,18 +563,23 @@ impl Workspace {
         let left = pane()
             .border_r_1()
             .border_color(theme::ui(cx, UiRole::Border))
-            .child(header(diff.revision.clone(), diff.left_active))
+            .child(header(diff.base.clone(), diff.left_active))
             .child(div().flex_1().min_h_0().child(diff.left.clone()));
         let right = pane()
             .child(
-                header("Working tree".to_owned(), !diff.left_active)
-                    .child(div().flex_1())
-                    .child(
-                        div()
-                            .text_color(theme::ui(cx, UiRole::TextMuted))
-                            .child(summary),
-                    )
-                    .child(toggle),
+                header(
+                    diff.head
+                        .clone()
+                        .unwrap_or_else(|| "Working tree".to_owned()),
+                    !diff.left_active,
+                )
+                .child(div().flex_1())
+                .child(
+                    div()
+                        .text_color(theme::ui(cx, UiRole::TextMuted))
+                        .child(summary),
+                )
+                .child(toggle),
             )
             .child(div().flex_1().min_h_0().child(tab.editor.clone()));
         div().size_full().flex().child(left).child(right)

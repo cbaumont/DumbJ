@@ -40,9 +40,14 @@ impl EditorView {
         }
     }
 
-    /// A cheap copy of the text, once the file has loaded.
-    pub(crate) fn buffer_snapshot(&self) -> Option<Buffer> {
-        matches!(self.state, LoadState::Ready).then(|| self.model.buffer().clone())
+    /// A cheap copy of the text to compare, once loading has finished. A file that cannot
+    /// be read (deleted from the working tree) compares as empty.
+    pub(crate) fn diff_snapshot(&self) -> Option<Buffer> {
+        match self.state {
+            LoadState::Loading => None,
+            LoadState::Failed(_) => Some(Buffer::new("")),
+            LoadState::Ready => Some(self.model.buffer().clone()),
+        }
     }
 
     /// The buffer line at the top of the view; fractional while it is partly scrolled off.

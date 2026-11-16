@@ -200,6 +200,7 @@ impl Workspace {
                     let open: Vec<_> = this
                         .tabs
                         .iter()
+                        .filter(|tab| tab.shows_working_file())
                         .map(|tab| (tab.editor.clone(), tab.path.clone()))
                         .collect();
                     for (editor, path) in open {

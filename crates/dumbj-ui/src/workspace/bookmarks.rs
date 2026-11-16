@@ -68,7 +68,7 @@ impl Workspace {
     }
 
     pub(super) fn refresh_bookmark_marks(&self, cx: &mut Context<Self>) {
-        for tab in &self.tabs {
+        for tab in self.tabs.iter().filter(|tab| tab.shows_working_file()) {
             let marks = self
                 .state
                 .bookmarks

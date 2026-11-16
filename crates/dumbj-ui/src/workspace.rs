@@ -30,7 +30,7 @@ mod usages;
 mod vcs;
 
 use bookmarks::MnemonicPrompt;
-use diff::DiffTab;
+use diff::{DiffSides, DiffTab};
 use dumbj_index::SearchScope;
 use dumbj_settings::ProjectState;
 use find_in_files::FindInFiles;
@@ -60,6 +60,13 @@ struct Tab {
     /// own tab, so both show the same unsaved text.
     editor: Entity<EditorView>,
     diff: Option<DiffTab>,
+}
+
+impl Tab {
+    /// Whether `editor` holds the working file, not a revision of it.
+    fn shows_working_file(&self) -> bool {
+        self.diff.as_ref().is_none_or(DiffTab::shows_working_file)
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -377,7 +384,11 @@ impl Workspace {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Entity<EditorView> {
-        if let Some(tab) = self.tabs.iter().find(|tab| tab.path == path) {
+        if let Some(tab) = self
+            .tabs
+            .iter()
+            .find(|tab| tab.path == path && tab.shows_working_file())
+        {
             return tab.editor.clone();
         }
         let editor = cx.new(|cx| EditorView::open(path.to_path_buf(), cx));
@@ -679,7 +690,7 @@ impl Workspace {
             Action::GotoDeclaration => self.goto_declaration(window, cx),
             Action::ShowDiff => {
                 if let Some(path) = self.diff_target(cx) {
-                    self.show_diff(path, window, cx);
+                    self.show_diff(DiffSides::with_head_commit(path), window, cx);
                 }
             }
             Action::NextDiff | Action::PreviousDiff => {
