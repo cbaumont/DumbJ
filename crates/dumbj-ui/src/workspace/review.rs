@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -7,15 +8,17 @@ use dumbj_settings::{PullRequestRef, Review, UiRole};
 use dumbj_vcs::{Change, FileStatus, Repository};
 use gpui::{
     AppContext, Context, IntoElement, MouseButton, ScrollStrategy, Task, UniformListScrollHandle,
-    Window, div, prelude::*, px, uniform_list,
+    Window, div, prelude::*, px, svg, uniform_list,
 };
 
 use super::diff::DiffSides;
+use super::review_tree::{self, Node, Row};
 use super::{LeftTool, ToolWindowState, Workspace};
 use crate::file_tree::status_role;
 use crate::theme;
 
 const ROW_HEIGHT: f32 = 22.;
+const INDENT: f32 = 14.;
 const PROMPT_ROW_HEIGHT: f32 = 26.;
 const SHORT_ID: usize = 10;
 
@@ -93,9 +96,10 @@ fn load(
     let changes = repository
         .changed_files(&base, spec.head.as_deref(), cancelled)
         .map_err(|error| error.to_string())?;
-    let Some(changes) = changes else {
+    let Some(mut changes) = changes else {
         return Ok(None);
     };
+    changes.sort_by(|a, b| review_tree::tree_order(&a.path, &b.path));
     let paths: Vec<PathBuf> = changes.iter().map(|change| change.path.clone()).collect();
     let ids = repository
         .content_ids(spec.head.as_deref(), &paths, cancelled)
@@ -118,11 +122,67 @@ pub(super) struct ReviewWindow {
     base: String,
     changes: Vec<Change>,
     fingerprints: Vec<String>,
+    rows: Vec<Row>,
+    collapsed: HashSet<PathBuf>,
+    /// A row of `rows`.
     selected: usize,
     scroll: UniformListScrollHandle,
     loading: bool,
     cancel: Arc<AtomicBool>,
     task: Option<Task<()>>,
+}
+
+impl ReviewWindow {
+    fn rebuild_rows(&mut self) {
+        let paths: Vec<&Path> = self.changes.iter().map(|c| c.path.as_path()).collect();
+        self.rows = review_tree::rows(&paths, &self.collapsed);
+        self.selected = self.selected.min(self.rows.len().saturating_sub(1));
+    }
+
+    fn selected_file(&self) -> Option<usize> {
+        match self.rows.get(self.selected)?.node {
+            Node::File(index) => Some(index),
+            Node::Folder { .. } => None,
+        }
+    }
+
+    fn select_row(&mut self, row: usize) {
+        self.selected = row.min(self.rows.len().saturating_sub(1));
+        self.scroll
+            .scroll_to_item(self.selected, ScrollStrategy::Nearest);
+    }
+
+    /// Selects the row of a changed file, opening the folders above it.
+    fn select_file(&mut self, index: usize) {
+        let Some(change) = self.changes.get(index) else {
+            return;
+        };
+        let folded = self.collapsed.len();
+        self.collapsed
+            .retain(|folder| !change.path.starts_with(folder));
+        if self.collapsed.len() != folded {
+            self.rebuild_rows();
+        }
+        let row = self.rows.iter().position(|r| r.node == Node::File(index));
+        if let Some(row) = row {
+            self.select_row(row);
+        }
+    }
+
+    fn toggle_folder(&mut self, row: usize) {
+        let Some(Node::Folder {
+            path, collapsed, ..
+        }) = self.rows.get(row).map(|r| &r.node)
+        else {
+            return;
+        };
+        if *collapsed {
+            self.collapsed.remove(path);
+        } else {
+            self.collapsed.insert(path.clone());
+        }
+        self.rebuild_rows();
+    }
 }
 
 impl Drop for ReviewWindow {
@@ -185,11 +245,6 @@ fn offered(suggestions: &[Suggestion], query: &str) -> Vec<(String, String)> {
 fn file_name(path: &Path) -> String {
     path.file_name()
         .map_or_else(String::new, |name| name.to_string_lossy().into_owned())
-}
-
-fn folder(path: &Path) -> String {
-    path.parent()
-        .map_or_else(String::new, |parent| parent.display().to_string())
 }
 
 /// What the left tool window shows.
@@ -348,6 +403,8 @@ impl Workspace {
             spec,
             changes: Vec::new(),
             fingerprints: Vec::new(),
+            rows: Vec::new(),
+            collapsed: HashSet::new(),
             selected: 0,
             scroll: UniformListScrollHandle::new(),
             loading: true,
@@ -415,7 +472,7 @@ impl Workspace {
     fn review_target(&self, window: &Window) -> Option<usize> {
         let review = self.review.as_ref()?;
         if self.review_shown() && self.review_focus.is_focused(window) {
-            return (review.selected < review.changes.len()).then_some(review.selected);
+            return review.selected_file();
         }
         self.active_review_file()
     }
@@ -484,13 +541,15 @@ impl Workspace {
         };
         match loaded {
             Ok(Some(loaded)) => {
-                let selected = review.changes.get(review.selected).map(|c| c.path.clone());
-                review.selected = selected
-                    .and_then(|path| loaded.changes.iter().position(|c| c.path == path))
-                    .unwrap_or(0);
+                let selected = review.selected_file().and_then(|index| {
+                    let path = &review.changes.get(index)?.path;
+                    loaded.changes.iter().position(|c| c.path == *path)
+                });
                 review.base = loaded.base;
                 review.changes = loaded.changes;
                 review.fingerprints = loaded.fingerprints;
+                review.rebuild_rows();
+                review.select_file(selected.unwrap_or(0));
                 review.loading = false;
                 match (review.spec.head.clone(), loaded.head_commit) {
                     (Some(head), Some(commit)) => self.index_head(&head, &commit, cx),
@@ -508,6 +567,7 @@ impl Workspace {
                     self.left_tool = LeftTool::Project;
                 } else {
                     review.changes.clear();
+                    review.rebuild_rows();
                 }
             }
         }
@@ -534,11 +594,10 @@ impl Workspace {
         else {
             return;
         };
+        review.select_file(index);
         let Some(change) = review.changes.get(index) else {
             return;
         };
-        review.selected = index;
-        review.scroll.scroll_to_item(index, ScrollStrategy::Nearest);
         let workdir = repository.workdir();
         let sides = DiffSides {
             path: workdir.join(&change.path),
@@ -621,32 +680,111 @@ impl Workspace {
         let Some(review) = self.review.as_mut() else {
             return;
         };
-        let last = review.changes.len().saturating_sub(1);
         let selected = review.selected;
-        let mut select = |row: usize| {
-            review.selected = row.min(last);
-            review
-                .scroll
-                .scroll_to_item(review.selected, ScrollStrategy::Nearest);
+        let node = review.rows.get(selected).map(|row| row.node.clone());
+        let folded = match &node {
+            Some(Node::Folder { collapsed, .. }) => Some(*collapsed),
+            _ => None,
         };
         match action {
-            Action::MoveUp => select(selected.saturating_sub(1)),
-            Action::MoveDown => select(selected + 1),
-            Action::MovePageUp => select(selected.saturating_sub(20)),
-            Action::MovePageDown => select(selected + 20),
-            Action::MoveTextStart | Action::MoveLineStart => select(0),
-            Action::MoveTextEnd | Action::MoveLineEnd => select(last),
-            Action::Enter => self.open_review_file(selected, window, cx),
+            Action::MoveUp => review.select_row(selected.saturating_sub(1)),
+            Action::MoveDown => review.select_row(selected + 1),
+            Action::MovePageUp => review.select_row(selected.saturating_sub(20)),
+            Action::MovePageDown => review.select_row(selected + 20),
+            Action::MoveTextStart | Action::MoveLineStart => review.select_row(0),
+            Action::MoveTextEnd | Action::MoveLineEnd => review.select_row(usize::MAX),
+            Action::MoveRight if folded == Some(true) => review.toggle_folder(selected),
+            Action::MoveRight if folded == Some(false) => review.select_row(selected + 1),
+            Action::MoveLeft if folded == Some(false) => review.toggle_folder(selected),
+            Action::MoveLeft => {
+                if let Some(parent) = review_tree::parent_of(&review.rows, selected) {
+                    review.select_row(parent);
+                }
+            }
+            Action::Enter => match node {
+                Some(Node::File(index)) => self.open_review_file(index, window, cx),
+                Some(Node::Folder { .. }) => review.toggle_folder(selected),
+                None => {}
+            },
             Action::Escape => self.focus_fallback(window, cx),
             _ => {}
         }
         cx.notify();
     }
 
+    fn render_review_node(
+        review: &ReviewWindow,
+        row: &Row,
+        viewed: bool,
+        cx: &Context<Self>,
+    ) -> gpui::Div {
+        let icon = |path: &'static str, role: UiRole| {
+            svg()
+                .path(path)
+                .size(px(14.))
+                .flex_none()
+                .text_color(theme::ui(cx, role))
+        };
+        match &row.node {
+            Node::Folder {
+                label, collapsed, ..
+            } => {
+                let (arrow, folder) = if *collapsed {
+                    ("icons/chevron-right.svg", "icons/folder.svg")
+                } else {
+                    ("icons/chevron-down.svg", "icons/folder-open.svg")
+                };
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(5.))
+                    .min_w_0()
+                    .child(icon(arrow, UiRole::TextFaint))
+                    .child(icon(folder, UiRole::FolderIcon))
+                    .child(div().truncate().child(label.clone()))
+            }
+            Node::File(file) => {
+                let change = review.changes.get(*file);
+                let status = change.map_or(FileStatus::Modified, |change| change.status);
+                let name = change.map(|change| file_name(&change.path));
+                let detail = change.and_then(|change| match (&change.old_path, change.status) {
+                    (Some(old), _) => Some(format!("← {}", old.display())),
+                    (None, FileStatus::Deleted) => Some("deleted".to_owned()),
+                    (None, _) => None,
+                });
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(5.))
+                    .min_w_0()
+                    .when(viewed, |row| row.opacity(0.6))
+                    .child(
+                        div()
+                            .w(px(14.))
+                            .flex_none()
+                            .text_color(theme::ui(cx, UiRole::Success))
+                            .child(if viewed { "✓" } else { "" }),
+                    )
+                    .child(
+                        div()
+                            .flex_none()
+                            .text_color(theme::ui(cx, status_role(status)))
+                            .children(name),
+                    )
+                    .children(detail.map(|detail| {
+                        div()
+                            .truncate()
+                            .text_color(theme::ui(cx, UiRole::TextFaint))
+                            .child(detail)
+                    }))
+            }
+        }
+    }
+
     fn render_review_row(
         review: &ReviewWindow,
         index: usize,
-        change: &Change,
+        row: &Row,
         (focused, viewed): (bool, bool),
         cx: &Context<Self>,
     ) -> impl IntoElement {
@@ -656,19 +794,21 @@ impl Workspace {
             (true, false) => Some(UiRole::SelectedInactive),
             (false, _) => None,
         };
-        let detail = match (&change.old_path, change.status) {
-            (Some(old), _) => format!("{} ← {}", folder(&change.path), old.display()),
-            (None, FileStatus::Deleted) => format!("{} (deleted)", folder(&change.path)),
-            (None, _) => folder(&change.path),
+        let file = match row.node {
+            Node::File(file) => Some(file),
+            Node::Folder { .. } => None,
         };
+        let content = Self::render_review_node(review, row, viewed, cx);
+        #[expect(clippy::cast_precision_loss, reason = "tree depth is small")]
+        let indent = px(8. + INDENT * row.depth as f32);
         div()
             .id(("review-row", index))
             .w_full()
             .h(px(ROW_HEIGHT))
             .flex()
             .items_center()
-            .gap(px(8.))
-            .px(px(12.))
+            .pl(indent)
+            .pr(px(8.))
             .when_some(background, |row, role| row.bg(theme::ui(cx, role)))
             .when(!selected, |row| {
                 row.hover(|style| style.bg(theme::ui(cx, UiRole::Hover)))
@@ -678,34 +818,26 @@ impl Workspace {
                 cx.listener(move |this, event: &gpui::MouseDownEvent, window, cx| {
                     let focus = this.review_focus.clone();
                     window.focus(&focus, cx);
-                    if event.click_count >= 2 {
-                        this.open_review_file(index, window, cx);
-                    } else if let Some(review) = this.review.as_mut() {
-                        review.selected = index;
+                    match file {
+                        Some(file) if event.click_count >= 2 => {
+                            this.open_review_file(file, window, cx);
+                        }
+                        Some(_) => {
+                            if let Some(review) = this.review.as_mut() {
+                                review.select_row(index);
+                            }
+                        }
+                        None => {
+                            if let Some(review) = this.review.as_mut() {
+                                review.select_row(index);
+                                review.toggle_folder(index);
+                            }
+                        }
                     }
                     cx.notify();
                 }),
             )
-            .child(
-                div()
-                    .w(px(12.))
-                    .flex_none()
-                    .text_color(theme::ui(cx, UiRole::Success))
-                    .child(if viewed { "✓" } else { "" }),
-            )
-            .when(viewed, |row| row.opacity(0.6))
-            .child(
-                div()
-                    .flex_none()
-                    .text_color(theme::ui(cx, status_role(change.status)))
-                    .child(file_name(&change.path)),
-            )
-            .child(
-                div()
-                    .truncate()
-                    .text_color(theme::ui(cx, UiRole::TextFaint))
-                    .child(detail),
-            )
+            .child(content)
     }
 
     pub(super) fn render_review_window(
@@ -717,16 +849,19 @@ impl Workspace {
         let focused = self.review_focus.is_focused(window);
         let rows = uniform_list(
             "review-rows",
-            review.changes.len(),
+            review.rows.len(),
             cx.processor(move |this, range: std::ops::Range<usize>, _window, cx| {
                 let Some(review) = this.review.as_ref() else {
                     return Vec::new();
                 };
                 range
-                    .filter_map(|index| Some((index, review.changes.get(index)?)))
-                    .map(|(index, change)| {
-                        let viewed = this.review_file_viewed(index);
-                        Self::render_review_row(review, index, change, (focused, viewed), cx)
+                    .filter_map(|index| Some((index, review.rows.get(index)?)))
+                    .map(|(index, row)| {
+                        let viewed = match row.node {
+                            Node::File(file) => this.review_file_viewed(file),
+                            Node::Folder { .. } => false,
+                        };
+                        Self::render_review_row(review, index, row, (focused, viewed), cx)
                             .into_any_element()
                     })
                     .collect::<Vec<_>>()

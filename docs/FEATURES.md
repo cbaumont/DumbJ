@@ -12,7 +12,7 @@
 - [ ] Structure tool window
 - [x] Find tool window — Find Usages and Find in Files results, grouped by file
 - [~] Git tool window — log only; no branches pane
-- [~] Review tool window — local review only: the changed files of a base/head range, flat list
+- [x] Review tool window — the changed files of a local review as a folder tree (Alt+0); Pull Requests has its own (Alt+8)
 - [ ] Bookmarks tool window
 - [ ] Problems tool window
 - [~] Hierarchy tool window — below the editor; no docking choice

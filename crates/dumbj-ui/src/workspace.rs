@@ -32,6 +32,7 @@ mod overview;
 mod pulls;
 mod review;
 mod review_notes;
+mod review_tree;
 mod search_popup;
 mod state;
 mod threads;
