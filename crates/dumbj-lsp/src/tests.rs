@@ -339,3 +339,54 @@ fn goto_reads_every_response_shape() {
         assert_eq!(found, lines);
     }
 }
+
+#[test]
+fn references_exclude_the_declaration() {
+    let (server, mut mock, _events) = connect();
+    let asked = server.clone();
+    let call = std::thread::spawn(move || {
+        crate::references(
+            &asked,
+            std::path::Path::new("/a.kt"),
+            Position::new(0, 1),
+            WAIT,
+        )
+    });
+    let request = mock.recv();
+    assert_eq!(request["method"], "textDocument/references");
+    assert_eq!(request["params"]["context"]["includeDeclaration"], false);
+    mock.reply(&request["id"], &json!([location(2), location(6)]));
+    assert_eq!(call.join().unwrap().unwrap().len(), 2);
+}
+
+#[test]
+fn hover_is_flattened_to_markdown() {
+    let (server, mut mock, _events) = connect();
+    let cases = [
+        (
+            json!({"contents": {"kind": "markdown", "value": "**doc**"}}),
+            Some("**doc**"),
+        ),
+        (
+            json!({"contents": [{"language": "java", "value": "void f()"}, "text"]}),
+            Some("```java\nvoid f()\n```\n\ntext"),
+        ),
+        (json!({"contents": "  "}), None),
+        (Value::Null, None),
+    ];
+    for (result, expected) in cases {
+        let asked = server.clone();
+        let call = std::thread::spawn(move || {
+            crate::hover(
+                &asked,
+                std::path::Path::new("/a.kt"),
+                Position::new(0, 1),
+                WAIT,
+            )
+        });
+        let request = mock.recv();
+        assert_eq!(request["method"], "textDocument/hover");
+        mock.reply(&request["id"], &result);
+        assert_eq!(call.join().unwrap().unwrap().as_deref(), expected);
+    }
+}

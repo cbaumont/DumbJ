@@ -131,8 +131,12 @@ fn find_rows(index: &Index, usages: &[Usage]) -> Vec<FindRow> {
     rows
 }
 
-fn summary(name: &str, usages: &[Usage]) -> String {
+fn dumb_summary(name: &str, usages: &[Usage]) -> String {
     let files = usages.chunk_by(|a, b| a.path == b.path).count();
+    summary(name, usages.len(), files)
+}
+
+pub(super) fn summary(name: &str, usages: usize, files: usize) -> String {
     let plural = |count: usize, word: &str| {
         if count == 1 {
             format!("1 {word}")
@@ -142,7 +146,7 @@ fn summary(name: &str, usages: &[Usage]) -> String {
     };
     format!(
         "Usages of {name}: {} in {}",
-        plural(usages.len(), "usage"),
+        plural(usages, "usage"),
         plural(files, "file")
     )
 }
@@ -167,13 +171,42 @@ impl Workspace {
         self.usages_cancel = cancel.clone();
         self.status_message = Some(format!("Searching for usages of {name}…"));
         cx.notify();
+        let asked = self.ask_exact_usages(cx);
+        // With a server asked, the dumb list waits a moment so a quick exact one is not
+        // preceded by a flash of guesses.
+        let hold = asked
+            .is_some()
+            .then(|| cx.background_executor().timer(super::smart_nav::DUMB_AFTER));
+        let dumb_shown = Arc::new(AtomicBool::new(false));
+        if let Some(asked) = asked {
+            let (current, dumb_shown, name) = (cancel.clone(), dumb_shown.clone(), name.clone());
+            cx.spawn(async move |this, cx| {
+                let Some(usages) = asked.await else { return };
+                let _ = this.update(cx, |this, cx| {
+                    let closed =
+                        in_popup && dumb_shown.load(Ordering::Relaxed) && this.chooser.is_none();
+                    if closed || !Arc::ptr_eq(&this.usages_cancel, &current) {
+                        return;
+                    }
+                    current.store(true, Ordering::Relaxed);
+                    this.show_exact_usages(&name, usages, in_popup, cx);
+                });
+            })
+            .detach();
+        }
         cx.spawn(async move |this, cx| {
             let (search_index, flag) = (index.clone(), cancel.clone());
             let usages = cx
                 .background_spawn(async move { find_usages(&search_index, &target, &flag) })
                 .await;
+            if let Some(hold) = hold {
+                hold.await;
+            }
             let _ = this.update(cx, |this, cx| {
-                let Some(usages) = usages else { return };
+                let Some(usages) = usages.filter(|_| !cancel.load(Ordering::Relaxed)) else {
+                    return;
+                };
+                dumb_shown.store(true, Ordering::Relaxed);
                 this.status_message = None;
                 if usages.is_empty() {
                     this.status_message = Some(format!("No usages of {name} found"));
@@ -190,10 +223,10 @@ impl Workspace {
                             ChooserItem::new(label, usage.line_text.clone(), location(usage))
                         })
                         .collect();
-                    this.chooser = Some(Chooser::new(summary(&name, &usages), items));
+                    this.chooser = Some(Chooser::new(dumb_summary(&name, &usages), items));
                 } else {
                     this.find_window = Some(FindWindow::new(
-                        summary(&name, &usages),
+                        dumb_summary(&name, &usages),
                         find_rows(&index, &usages),
                         false,
                     ));
@@ -492,9 +525,12 @@ mod tests {
             ]
         );
         assert_eq!(
-            summary("add", &usages),
+            dumb_summary("add", &usages),
             "Usages of add: 3 usages in 2 files"
         );
-        assert_eq!(summary("x", &usages[..1]), "Usages of x: 1 usage in 1 file");
+        assert_eq!(
+            dumb_summary("x", &usages[..1]),
+            "Usages of x: 1 usage in 1 file"
+        );
     }
 }

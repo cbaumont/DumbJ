@@ -37,6 +37,7 @@ mod review_tree;
 mod search_popup;
 mod smart;
 mod smart_nav;
+mod smart_usages;
 mod state;
 mod threads;
 mod usages;

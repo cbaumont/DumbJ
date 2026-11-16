@@ -73,3 +73,67 @@ pub fn goto(
             .collect(),
     })
 }
+
+/// Every reference to the symbol at `position`, without its declaration.
+pub fn references(
+    server: &Server,
+    path: &Path,
+    position: Position,
+    timeout: Duration,
+) -> Result<Vec<Place>, LspError> {
+    let params = lsp_types::ReferenceParams {
+        text_document_position: position_params(path, position),
+        work_done_progress_params: WorkDoneProgressParams::default(),
+        partial_result_params: PartialResultParams::default(),
+        context: lsp_types::ReferenceContext {
+            include_declaration: false,
+        },
+    };
+    let found = server
+        .request::<lsp_types::request::References>(params)
+        .wait(timeout)?;
+    Ok(found
+        .unwrap_or_default()
+        .into_iter()
+        .map(|location| Place {
+            uri: location.uri,
+            range: location.range,
+        })
+        .collect())
+}
+
+fn marked(text: lsp_types::MarkedString) -> String {
+    match text {
+        lsp_types::MarkedString::String(text) => text,
+        lsp_types::MarkedString::LanguageString(code) => {
+            format!("```{}\n{}\n```", code.language, code.value)
+        }
+    }
+}
+
+/// The documentation of the symbol at `position` as Markdown; `None` when the server has
+/// nothing to say.
+pub fn hover(
+    server: &Server,
+    path: &Path,
+    position: Position,
+    timeout: Duration,
+) -> Result<Option<String>, LspError> {
+    let params = lsp_types::HoverParams {
+        text_document_position_params: position_params(path, position),
+        work_done_progress_params: WorkDoneProgressParams::default(),
+    };
+    let hover = server
+        .request::<lsp_types::request::HoverRequest>(params)
+        .wait(timeout)?;
+    let text = hover.map(|hover| match hover.contents {
+        lsp_types::HoverContents::Scalar(text) => marked(text),
+        lsp_types::HoverContents::Array(parts) => parts
+            .into_iter()
+            .map(marked)
+            .collect::<Vec<_>>()
+            .join("\n\n"),
+        lsp_types::HoverContents::Markup(markup) => markup.value,
+    });
+    Ok(text.filter(|text| !text.trim().is_empty()))
+}

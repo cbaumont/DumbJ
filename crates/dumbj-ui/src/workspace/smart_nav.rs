@@ -9,7 +9,7 @@ use super::Workspace;
 use super::navigation::{Chooser, ChooserItem, Location};
 
 /// How long the exact answer may take before the dumb one is shown in its place.
-const DUMB_AFTER: Duration = Duration::from_millis(300);
+pub(super) const DUMB_AFTER: Duration = Duration::from_millis(300);
 const GIVE_UP_AFTER: Duration = Duration::from_secs(10);
 
 struct ExactTarget {
