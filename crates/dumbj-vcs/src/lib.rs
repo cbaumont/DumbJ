@@ -1,6 +1,7 @@
 mod changes;
 pub mod diff;
 mod git;
+pub mod graph;
 mod log;
 mod revision;
 mod status;
