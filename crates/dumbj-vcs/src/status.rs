@@ -1,13 +1,9 @@
 use std::ffi::OsStr;
-use std::io::Read;
 use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::thread;
-use std::time::Duration;
+use std::sync::atomic::AtomicBool;
 
-use crate::VcsError;
+use crate::{VcsError, git};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FileStatus {
@@ -20,56 +16,13 @@ pub enum FileStatus {
 }
 
 /// Runs `git status` in `workdir`. The CLI is used because it honours ignore files, the
-/// index and rename detection exactly as users expect; `--no-optional-locks` keeps the
-/// call from writing to the repository.
+/// index and rename detection exactly as users expect.
 pub(crate) fn run(
     workdir: &Path,
     cancelled: &AtomicBool,
 ) -> Result<Option<Vec<(PathBuf, FileStatus)>>, VcsError> {
-    let mut child = Command::new("git")
-        .args([
-            "--no-optional-locks",
-            "status",
-            "--porcelain=v2",
-            "-z",
-            "--untracked-files=all",
-        ])
-        .current_dir(workdir)
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()?;
-    let out = drain(child.stdout.take());
-    let err = drain(child.stderr.take());
-    let status = loop {
-        if cancelled.load(Ordering::Relaxed) {
-            let _ = child.kill();
-            let _ = child.wait();
-            return Ok(None);
-        }
-        if let Some(status) = child.try_wait()? {
-            break status;
-        }
-        thread::sleep(Duration::from_millis(5));
-    };
-    let stdout = out.join().unwrap_or_default();
-    if !status.success() {
-        let stderr = err.join().unwrap_or_default();
-        return Err(VcsError::Git(
-            String::from_utf8_lossy(&stderr).trim().to_owned(),
-        ));
-    }
-    Ok(Some(parse_porcelain_v2(&stdout)))
-}
-
-fn drain(pipe: Option<impl Read + Send + 'static>) -> thread::JoinHandle<Vec<u8>> {
-    thread::spawn(move || {
-        let mut buf = Vec::new();
-        if let Some(mut pipe) = pipe {
-            let _ = pipe.read_to_end(&mut buf);
-        }
-        buf
-    })
+    let args = ["status", "--porcelain=v2", "-z", "--untracked-files=all"];
+    Ok(git::run(workdir, &args, cancelled)?.map(|out| parse_porcelain_v2(&out)))
 }
 
 /// Parses `git status --porcelain=v2 -z` output. Ignored entries, headers and unknown

@@ -144,3 +144,138 @@ fn head_text_is_none_when_there_is_nothing_to_show() {
     );
     assert_eq!(repo.head_text(Path::new("")).unwrap(), None);
 }
+
+impl TempRepo {
+    pub(crate) fn commit_msg(&self, message: &str) {
+        self.git(&["add", "-A"]);
+        self.git(&["commit", "-q", "-m", message]);
+    }
+
+    pub(crate) fn rev(&self, revision: &str) -> String {
+        self.repo().resolve(revision).unwrap().unwrap()
+    }
+}
+
+#[test]
+fn resolve_names_and_garbage() {
+    let t = TempRepo::new();
+    let repo = t.repo();
+    assert_eq!(repo.resolve("HEAD").unwrap(), None);
+    t.file("a.txt", "1\n");
+    t.commit_msg("one");
+    let first = repo.head_id().unwrap().unwrap();
+    t.file("a.txt", "2\n");
+    t.commit_msg("two");
+    let second = repo.head_id().unwrap().unwrap();
+    t.git(&["tag", "v1", &first]);
+    assert_eq!(repo.resolve("main").unwrap().as_deref(), Some(&*second));
+    assert_eq!(repo.resolve("HEAD~1").unwrap().as_deref(), Some(&*first));
+    assert_eq!(repo.resolve("v1").unwrap().as_deref(), Some(&*first));
+    assert_eq!(repo.resolve(&first[..8]).unwrap().as_deref(), Some(&*first));
+    assert_eq!(repo.resolve("no-such-thing").unwrap(), None);
+    assert_eq!(repo.resolve("HEAD~9").unwrap(), None);
+    assert_eq!(repo.resolve("--help").unwrap(), None);
+    assert_eq!(repo.resolve("").unwrap(), None);
+}
+
+#[test]
+fn text_at_older_revisions() {
+    let t = TempRepo::new();
+    t.file("a.txt", "old\n");
+    t.file("gone.txt", "bye\n");
+    t.file("bin.dat", [0xff, 0xfe]);
+    t.commit_msg("one");
+    t.file("a.txt", "new\n");
+    fs::remove_file(t.0.join("gone.txt")).unwrap();
+    t.commit_msg("two");
+    let repo = t.repo();
+    let a = Path::new("a.txt");
+    assert_eq!(repo.text_at("HEAD~1", a).unwrap().as_deref(), Some("old\n"));
+    assert_eq!(repo.text_at("HEAD", a).unwrap().as_deref(), Some("new\n"));
+    assert_eq!(
+        repo.text_at("main", &t.0.join("a.txt")).unwrap().as_deref(),
+        Some("new\n")
+    );
+    let gone = Path::new("gone.txt");
+    assert_eq!(repo.text_at("HEAD", gone).unwrap(), None);
+    assert_eq!(
+        repo.text_at("HEAD~1", gone).unwrap().as_deref(),
+        Some("bye\n")
+    );
+    assert_eq!(repo.text_at("nope", a).unwrap(), None);
+    assert_eq!(repo.text_at("HEAD~1", Path::new("bin.dat")).unwrap(), None);
+    assert_eq!(repo.text_at("HEAD~1", Path::new("")).unwrap(), None);
+    assert_eq!(repo.text_at("HEAD~1", Path::new("missing")).unwrap(), None);
+}
+
+#[test]
+fn merge_base_of_diverged_and_unrelated_histories() {
+    let t = TempRepo::new();
+    t.file("a.txt", "1\n");
+    t.commit_msg("root");
+    let root = t.rev("HEAD");
+    t.git(&["checkout", "-q", "-b", "side"]);
+    t.file("s.txt", "s\n");
+    t.commit_msg("side");
+    t.git(&["checkout", "-q", "main"]);
+    t.file("m.txt", "m\n");
+    t.commit_msg("main");
+    let repo = t.repo();
+    assert_eq!(
+        repo.merge_base("main", "side").unwrap().as_deref(),
+        Some(&*root)
+    );
+    assert_eq!(repo.merge_base("main", "nope").unwrap(), None);
+
+    t.git(&["checkout", "-q", "--orphan", "other"]);
+    t.git(&["rm", "-rfq", "."]);
+    t.file("o.txt", "o\n");
+    t.commit_msg("orphan");
+    assert_eq!(repo.merge_base("main", "other").unwrap(), None);
+}
+
+#[test]
+fn branches_with_remote_tracking_refs() {
+    let t = TempRepo::new();
+    t.file("a.txt", "1\n");
+    t.commit_msg("one");
+    let id = t.rev("HEAD");
+    t.git(&["branch", "alpha"]);
+    t.git(&["update-ref", "refs/remotes/origin/x", &id]);
+    t.git(&["update-ref", "refs/remotes/origin/main", &id]);
+    t.git(&[
+        "symbolic-ref",
+        "refs/remotes/origin/HEAD",
+        "refs/remotes/origin/main",
+    ]);
+    let got: Vec<_> = t
+        .repo()
+        .branches()
+        .unwrap()
+        .into_iter()
+        .map(|b| (b.name, b.remote, b.current, b.tip == id))
+        .collect();
+    let expected = [
+        ("alpha", false, false),
+        ("main", false, true),
+        ("origin/main", true, false),
+        ("origin/x", true, false),
+    ]
+    .map(|(n, r, c)| (n.to_owned(), r, c, true));
+    assert_eq!(got, expected);
+    t.git(&["checkout", "-q", "alpha"]);
+    let current: Vec<_> = t
+        .repo()
+        .branches()
+        .unwrap()
+        .into_iter()
+        .filter(|b| b.current)
+        .map(|b| b.name)
+        .collect();
+    assert_eq!(current, ["alpha"]);
+}
+
+#[test]
+fn branches_of_an_empty_repository() {
+    assert_eq!(TempRepo::new().repo().branches().unwrap(), []);
+}
