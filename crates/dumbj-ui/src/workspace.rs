@@ -651,11 +651,11 @@ impl Workspace {
                 self.active_diff().is_some() && !popup_open
             }
             Action::StartReview => self.repository.is_some() && !popup_open,
-            Action::ActivateReviewToolWindow => self.review.is_some() && !popup_open,
-            Action::ToggleFileViewed
-            | Action::NextUnviewedFile
-            | Action::AddReviewNote
-            | Action::ExportReviewNotes => false,
+            Action::ActivateReviewToolWindow | Action::NextUnviewedFile => {
+                self.review.is_some() && !popup_open
+            }
+            Action::ToggleFileViewed => self.can_mark_viewed(window) && !popup_open,
+            Action::AddReviewNote | Action::ExportReviewNotes => false,
             Action::ActivateFindToolWindow => self.find_window.is_some() && !popup_open,
             Action::ActivateHierarchyToolWindow => self.hierarchy_window.is_some() && !popup_open,
             Action::Back => self.history.can_go_back() && !popup_open,
@@ -737,6 +737,8 @@ impl Workspace {
             }
             Action::StartReview => self.open_review_prompt(window, cx),
             Action::ActivateReviewToolWindow => self.toggle_review_window(window, cx),
+            Action::ToggleFileViewed => self.toggle_file_viewed(window, cx),
+            Action::NextUnviewedFile => self.next_unviewed_file(window, cx),
             Action::FocusOppositeDiffPane => self.focus_opposite_diff_pane(window, cx),
             Action::Back => self.go_back(window, cx),
             Action::Forward => self.go_forward(window, cx),

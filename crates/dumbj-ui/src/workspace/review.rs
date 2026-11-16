@@ -3,7 +3,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use dumbj_actions::Action;
-use dumbj_settings::UiRole;
+use dumbj_settings::{Review, UiRole};
 use dumbj_vcs::{Change, FileStatus, Repository};
 use gpui::{
     AppContext, Context, IntoElement, MouseButton, ScrollStrategy, Task, UniformListScrollHandle,
@@ -55,6 +55,8 @@ fn parse_spec(text: &str) -> Option<RangeSpec> {
 struct Loaded {
     base: String,
     changes: Vec<Change>,
+    /// What each changed file holds on the head side, to notice when it changes again.
+    fingerprints: Vec<String>,
 }
 
 fn load(
@@ -84,7 +86,21 @@ fn load(
     let changes = repository
         .changed_files(&base, spec.head.as_deref(), cancelled)
         .map_err(|error| error.to_string())?;
-    Ok(changes.map(|changes| Loaded { base, changes }))
+    let Some(changes) = changes else {
+        return Ok(None);
+    };
+    let paths: Vec<PathBuf> = changes.iter().map(|change| change.path.clone()).collect();
+    let ids = repository
+        .content_ids(spec.head.as_deref(), &paths, cancelled)
+        .map_err(|error| error.to_string())?;
+    Ok(ids.map(|ids| Loaded {
+        base,
+        changes,
+        fingerprints: ids
+            .into_iter()
+            .map(|id| id.unwrap_or_else(|| "deleted".to_owned()))
+            .collect(),
+    }))
 }
 
 pub(super) struct ReviewWindow {
@@ -93,6 +109,7 @@ pub(super) struct ReviewWindow {
     /// The revision on the left of every diff: `spec.base`, or the merge base's id.
     base: String,
     changes: Vec<Change>,
+    fingerprints: Vec<String>,
     selected: usize,
     scroll: UniformListScrollHandle,
     loading: bool,
@@ -277,17 +294,90 @@ impl Workspace {
             base: spec.base.clone(),
             spec,
             changes: Vec::new(),
+            fingerprints: Vec::new(),
             selected: 0,
             scroll: UniformListScrollHandle::new(),
             loading: true,
             cancel: Arc::default(),
             task: None,
         });
+        let saved = self
+            .review
+            .as_ref()
+            .map(|review| &review.spec)
+            .zip(self.state.review.as_ref());
+        let same =
+            saved.is_some_and(|(spec, saved)| saved.base == spec.base && saved.head == spec.head);
+        if !same {
+            let spec = self.review.as_ref().map(|review| &review.spec);
+            self.state.review = spec.map(|spec| Review::new(&spec.base, spec.head.as_deref()));
+            self.save_project_state(cx);
+        }
         self.left_tool = LeftTool::Review;
         self.project_window = ToolWindowState::Visible;
         let focus = self.review_focus.clone();
         window.focus(&focus, cx);
         self.refresh_review(cx);
+    }
+
+    fn review_file_viewed(&self, index: usize) -> bool {
+        let (Some(review), Some(saved)) = (&self.review, &self.state.review) else {
+            return false;
+        };
+        let file = review
+            .changes
+            .get(index)
+            .zip(review.fingerprints.get(index));
+        file.is_some_and(|(change, fingerprint)| saved.is_viewed(&change.path, fingerprint))
+    }
+
+    /// The review file that actions act on: the selected row while the Review window has
+    /// focus, otherwise the file of the active diff.
+    fn review_target(&self, window: &Window) -> Option<usize> {
+        let review = self.review.as_ref()?;
+        if self.review_shown() && self.review_focus.is_focused(window) {
+            return (review.selected < review.changes.len()).then_some(review.selected);
+        }
+        self.active_review_file()
+    }
+
+    pub(super) fn can_mark_viewed(&self, window: &Window) -> bool {
+        self.review_target(window).is_some()
+    }
+
+    pub(super) fn toggle_file_viewed(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(index) = self.review_target(window) else {
+            return;
+        };
+        let viewed = !self.review_file_viewed(index);
+        let (Some(review), Some(saved)) = (&self.review, &mut self.state.review) else {
+            return;
+        };
+        if let Some((change, fingerprint)) = review
+            .changes
+            .get(index)
+            .zip(review.fingerprints.get(index))
+        {
+            saved.set_viewed(&change.path, fingerprint, viewed);
+        }
+        self.save_project_state(cx);
+        cx.notify();
+    }
+
+    pub(super) fn next_unviewed_file(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(count) = self.review.as_ref().map(|review| review.changes.len()) else {
+            return;
+        };
+        let start = self.review_target(window).map_or(0, |index| index + 1);
+        let next = (0..count)
+            .map(|step| (start + step) % count.max(1))
+            .find(|index| !self.review_file_viewed(*index));
+        if let Some(index) = next {
+            self.open_review_file(index, window, cx);
+        } else {
+            self.status_message = Some("Every file is viewed".to_owned());
+            cx.notify();
+        }
     }
 
     /// Lists the review's changed files again; the selection stays on its file.
@@ -319,6 +409,7 @@ impl Workspace {
                     .unwrap_or(0);
                 review.base = loaded.base;
                 review.changes = loaded.changes;
+                review.fingerprints = loaded.fingerprints;
                 review.loading = false;
             }
             Ok(None) => {}
@@ -388,6 +479,17 @@ impl Workspace {
     }
 
     fn neighbour_review_file(&self, forward: bool) -> Option<usize> {
+        let (review, current) = (self.review.as_ref()?, self.active_review_file()?);
+        let target = if forward {
+            current + 1
+        } else {
+            current.checked_sub(1)?
+        };
+        (target < review.changes.len()).then_some(target)
+    }
+
+    /// The review file whose diff is the active tab.
+    fn active_review_file(&self) -> Option<usize> {
         let (review, tab) = (self.review.as_ref()?, self.active_tab()?);
         let diff = tab.diff.as_ref()?;
         if !diff.compares(&review.base, review.spec.head.as_deref()) {
@@ -398,13 +500,7 @@ impl Workspace {
             .strip_prefix(self.repository.as_ref()?.workdir())
             .ok()?
             .to_path_buf();
-        let current = review.changes.iter().position(|c| c.path == relative)?;
-        let target = if forward {
-            current + 1
-        } else {
-            current.checked_sub(1)?
-        };
-        (target < review.changes.len()).then_some(target)
+        review.changes.iter().position(|c| c.path == relative)
     }
 
     pub(super) fn review_window_action(
@@ -442,7 +538,7 @@ impl Workspace {
         review: &ReviewWindow,
         index: usize,
         change: &Change,
-        focused: bool,
+        (focused, viewed): (bool, bool),
         cx: &Context<Self>,
     ) -> impl IntoElement {
         let selected = index == review.selected;
@@ -483,6 +579,14 @@ impl Workspace {
             )
             .child(
                 div()
+                    .w(px(12.))
+                    .flex_none()
+                    .text_color(theme::ui(cx, UiRole::Success))
+                    .child(if viewed { "✓" } else { "" }),
+            )
+            .when(viewed, |row| row.opacity(0.6))
+            .child(
+                div()
                     .flex_none()
                     .text_color(theme::ui(cx, status_role(change.status)))
                     .child(file_name(&change.path)),
@@ -512,7 +616,8 @@ impl Workspace {
                 range
                     .filter_map(|index| Some((index, review.changes.get(index)?)))
                     .map(|(index, change)| {
-                        Self::render_review_row(review, index, change, focused, cx)
+                        let viewed = this.review_file_viewed(index);
+                        Self::render_review_row(review, index, change, (focused, viewed), cx)
                             .into_any_element()
                     })
                     .collect::<Vec<_>>()
@@ -520,11 +625,13 @@ impl Workspace {
         )
         .track_scroll(&review.scroll)
         .size_full();
+        let viewed = (0..review.changes.len())
+            .filter(|index| self.review_file_viewed(*index))
+            .count();
         let summary = match (review.loading, review.changes.len()) {
             (true, _) => "Loading…".to_owned(),
             (false, 0) => "No changes".to_owned(),
-            (false, 1) => "1 file".to_owned(),
-            (false, count) => format!("{count} files"),
+            (false, count) => format!("{viewed}/{count} viewed"),
         };
         let title = div()
             .h(px(34.))
