@@ -1,9 +1,16 @@
+mod changes;
 pub mod diff;
+mod git;
+mod log;
+mod revision;
 mod status;
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
 
+pub use changes::Change;
+pub use log::{Commit, LogOptions};
+pub use revision::Branch;
 pub use status::FileStatus;
 
 #[derive(Debug, thiserror::Error)]
@@ -76,22 +83,7 @@ impl Repository {
     /// The content of `path` (absolute, or relative to the workdir) in the HEAD commit.
     /// `Ok(None)` when the file is not in HEAD or is not valid UTF-8.
     pub fn head_text(&self, path: &Path) -> Result<Option<String>, VcsError> {
-        let Some(relative) = self.relative(path) else {
-            return Ok(None);
-        };
-        let repo = self.open()?;
-        let Ok(commit) = repo.head_commit() else {
-            return Ok(None);
-        };
-        let tree = commit.tree().map_err(git_err)?;
-        let Some(entry) = tree.lookup_entry_by_path(&relative).map_err(git_err)? else {
-            return Ok(None);
-        };
-        if !entry.mode().is_blob() {
-            return Ok(None);
-        }
-        let object = entry.object().map_err(git_err)?;
-        Ok(String::from_utf8(object.detach().data).ok())
+        self.text_at("HEAD", path)
     }
 
     /// Files that differ from HEAD (staged or not) and untracked files, as paths relative to

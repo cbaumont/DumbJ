@@ -144,3 +144,405 @@ fn head_text_is_none_when_there_is_nothing_to_show() {
     );
     assert_eq!(repo.head_text(Path::new("")).unwrap(), None);
 }
+
+impl TempRepo {
+    pub(crate) fn commit_msg(&self, message: &str) {
+        self.git(&["add", "-A"]);
+        self.git(&["commit", "-q", "-m", message]);
+    }
+
+    pub(crate) fn rev(&self, revision: &str) -> String {
+        self.repo().resolve(revision).unwrap().unwrap()
+    }
+}
+
+#[test]
+fn resolve_names_and_garbage() {
+    let t = TempRepo::new();
+    let repo = t.repo();
+    assert_eq!(repo.resolve("HEAD").unwrap(), None);
+    t.file("a.txt", "1\n");
+    t.commit_msg("one");
+    let first = repo.head_id().unwrap().unwrap();
+    t.file("a.txt", "2\n");
+    t.commit_msg("two");
+    let second = repo.head_id().unwrap().unwrap();
+    t.git(&["tag", "v1", &first]);
+    assert_eq!(repo.resolve("main").unwrap().as_deref(), Some(&*second));
+    assert_eq!(repo.resolve("HEAD~1").unwrap().as_deref(), Some(&*first));
+    assert_eq!(repo.resolve("v1").unwrap().as_deref(), Some(&*first));
+    assert_eq!(repo.resolve(&first[..8]).unwrap().as_deref(), Some(&*first));
+    assert_eq!(repo.resolve("no-such-thing").unwrap(), None);
+    assert_eq!(repo.resolve("HEAD~9").unwrap(), None);
+    assert_eq!(repo.resolve("--help").unwrap(), None);
+    assert_eq!(repo.resolve("").unwrap(), None);
+}
+
+#[test]
+fn text_at_older_revisions() {
+    let t = TempRepo::new();
+    t.file("a.txt", "old\n");
+    t.file("gone.txt", "bye\n");
+    t.file("bin.dat", [0xff, 0xfe]);
+    t.commit_msg("one");
+    t.file("a.txt", "new\n");
+    fs::remove_file(t.0.join("gone.txt")).unwrap();
+    t.commit_msg("two");
+    let repo = t.repo();
+    let a = Path::new("a.txt");
+    assert_eq!(repo.text_at("HEAD~1", a).unwrap().as_deref(), Some("old\n"));
+    assert_eq!(repo.text_at("HEAD", a).unwrap().as_deref(), Some("new\n"));
+    assert_eq!(
+        repo.text_at("main", &t.0.join("a.txt")).unwrap().as_deref(),
+        Some("new\n")
+    );
+    let gone = Path::new("gone.txt");
+    assert_eq!(repo.text_at("HEAD", gone).unwrap(), None);
+    assert_eq!(
+        repo.text_at("HEAD~1", gone).unwrap().as_deref(),
+        Some("bye\n")
+    );
+    assert_eq!(repo.text_at("nope", a).unwrap(), None);
+    assert_eq!(repo.text_at("HEAD~1", Path::new("bin.dat")).unwrap(), None);
+    assert_eq!(repo.text_at("HEAD~1", Path::new("")).unwrap(), None);
+    assert_eq!(repo.text_at("HEAD~1", Path::new("missing")).unwrap(), None);
+}
+
+#[test]
+fn merge_base_of_diverged_and_unrelated_histories() {
+    let t = TempRepo::new();
+    t.file("a.txt", "1\n");
+    t.commit_msg("root");
+    let root = t.rev("HEAD");
+    t.git(&["checkout", "-q", "-b", "side"]);
+    t.file("s.txt", "s\n");
+    t.commit_msg("side");
+    t.git(&["checkout", "-q", "main"]);
+    t.file("m.txt", "m\n");
+    t.commit_msg("main");
+    let repo = t.repo();
+    assert_eq!(
+        repo.merge_base("main", "side").unwrap().as_deref(),
+        Some(&*root)
+    );
+    assert_eq!(repo.merge_base("main", "nope").unwrap(), None);
+
+    t.git(&["checkout", "-q", "--orphan", "other"]);
+    t.git(&["rm", "-rfq", "."]);
+    t.file("o.txt", "o\n");
+    t.commit_msg("orphan");
+    assert_eq!(repo.merge_base("main", "other").unwrap(), None);
+}
+
+#[test]
+fn branches_with_remote_tracking_refs() {
+    let t = TempRepo::new();
+    t.file("a.txt", "1\n");
+    t.commit_msg("one");
+    let id = t.rev("HEAD");
+    t.git(&["branch", "alpha"]);
+    t.git(&["update-ref", "refs/remotes/origin/x", &id]);
+    t.git(&["update-ref", "refs/remotes/origin/main", &id]);
+    t.git(&[
+        "symbolic-ref",
+        "refs/remotes/origin/HEAD",
+        "refs/remotes/origin/main",
+    ]);
+    let got: Vec<_> = t
+        .repo()
+        .branches()
+        .unwrap()
+        .into_iter()
+        .map(|b| (b.name, b.remote, b.current, b.tip == id))
+        .collect();
+    let expected = [
+        ("alpha", false, false),
+        ("main", false, true),
+        ("origin/main", true, false),
+        ("origin/x", true, false),
+    ]
+    .map(|(n, r, c)| (n.to_owned(), r, c, true));
+    assert_eq!(got, expected);
+    t.git(&["checkout", "-q", "alpha"]);
+    let current: Vec<_> = t
+        .repo()
+        .branches()
+        .unwrap()
+        .into_iter()
+        .filter(|b| b.current)
+        .map(|b| b.name)
+        .collect();
+    assert_eq!(current, ["alpha"]);
+}
+
+#[test]
+fn branches_of_an_empty_repository() {
+    assert_eq!(TempRepo::new().repo().branches().unwrap(), []);
+}
+
+fn change(path: &str, old: Option<&str>, status: FileStatus) -> Change {
+    Change {
+        path: path.into(),
+        old_path: old.map(Into::into),
+        status,
+    }
+}
+
+#[test]
+fn changed_files_between_commits() {
+    let t = TempRepo::new();
+    t.file("keep.txt", "keep\n");
+    t.file("edit.txt", "one\n");
+    t.file("remove.txt", "bye\n");
+    t.file(
+        "old.txt",
+        "some content that is long enough to be detected as a rename\n",
+    );
+    t.commit_msg("base");
+    let base = t.rev("HEAD");
+    t.file("edit.txt", "two\n");
+    fs::remove_file(t.0.join("remove.txt")).unwrap();
+    fs::create_dir(t.0.join("dir")).unwrap();
+    t.git(&["mv", "old.txt", "dir/moved.txt"]);
+    t.file("added.txt", "new\n");
+    t.commit_msg("change");
+    let repo = t.repo();
+    let never = AtomicBool::new(false);
+    let got = repo
+        .changed_files(&base, Some("HEAD"), &never)
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        got,
+        [
+            change("added.txt", None, FileStatus::Added),
+            change("dir/moved.txt", Some("old.txt"), FileStatus::Renamed),
+            change("edit.txt", None, FileStatus::Modified),
+            change("remove.txt", None, FileStatus::Deleted),
+        ]
+    );
+    assert_eq!(
+        repo.changed_files("HEAD", Some("HEAD"), &never)
+            .unwrap()
+            .unwrap(),
+        []
+    );
+    assert!(repo.changed_files("nope", Some("HEAD"), &never).is_err());
+    assert!(repo.changed_files("--oops", None, &never).is_err());
+    assert!(
+        repo.changed_files(&base, Some("HEAD"), &AtomicBool::new(true))
+            .unwrap()
+            .is_none()
+    );
+}
+
+fn subjects(commits: &[Commit]) -> Vec<&str> {
+    commits.iter().map(|c| c.subject.as_str()).collect()
+}
+
+fn log(t: &TempRepo, options: &LogOptions) -> Vec<Commit> {
+    t.repo()
+        .log(options, &AtomicBool::new(false))
+        .unwrap()
+        .unwrap()
+}
+
+#[test]
+fn log_of_an_empty_repository_is_empty() {
+    let t = TempRepo::new();
+    assert_eq!(log(&t, &LogOptions::default()), []);
+    assert_eq!(t.repo().commit("HEAD").unwrap(), None);
+}
+
+#[test]
+fn log_limit_skip_and_commit() {
+    let t = TempRepo::new();
+    for n in 1..=4 {
+        t.file("a.txt", format!("{n}\n"));
+        t.commit_msg(&format!("c{n}"));
+    }
+    let all = log(&t, &LogOptions::default());
+    assert_eq!(subjects(&all), ["c4", "c3", "c2", "c1"]);
+    assert_eq!(all[0].id, t.rev("HEAD"));
+    assert_eq!(all[0].parents, [t.rev("HEAD~1")]);
+    assert_eq!(all[3].parents, Vec::<String>::new());
+    assert_eq!(
+        (all[0].author.as_str(), all[0].email.as_str()),
+        ("T", "t@example.com")
+    );
+    assert!(all[0].time > 1_600_000_000);
+    let page = LogOptions {
+        skip: 1,
+        limit: 2,
+        ..LogOptions::default()
+    };
+    assert_eq!(subjects(&log(&t, &page)), ["c3", "c2"]);
+    let from = LogOptions {
+        revision: Some("HEAD~2".to_owned()),
+        ..LogOptions::default()
+    };
+    assert_eq!(subjects(&log(&t, &from)), ["c2", "c1"]);
+    let one = t.repo().commit("HEAD~1").unwrap().unwrap();
+    assert_eq!(one.subject, "c3");
+    assert_eq!(t.repo().commit("nope").unwrap(), None);
+    let bad = LogOptions {
+        revision: Some("nope".to_owned()),
+        ..LogOptions::default()
+    };
+    assert!(t.repo().log(&bad, &AtomicBool::new(false)).is_err());
+    assert!(
+        t.repo()
+            .log(&LogOptions::default(), &AtomicBool::new(true))
+            .unwrap()
+            .is_none()
+    );
+}
+
+#[test]
+fn log_follows_renames_for_a_file_and_filters_directories() {
+    let t = TempRepo::new();
+    t.file(
+        "old.txt",
+        "a long enough file so that the rename is detected\nline two\n",
+    );
+    t.commit_msg("create");
+    t.file("other/x.txt", "x\n");
+    t.commit_msg("other");
+    t.git(&["mv", "old.txt", "new.txt"]);
+    t.commit_msg("rename");
+    t.file(
+        "new.txt",
+        "a long enough file so that the rename is detected\nline two\nthree\n",
+    );
+    t.commit_msg("edit");
+    let file = LogOptions {
+        path: Some(PathBuf::from("new.txt")),
+        ..LogOptions::default()
+    };
+    assert_eq!(subjects(&log(&t, &file)), ["edit", "rename", "create"]);
+    let absolute = LogOptions {
+        path: Some(t.0.join("new.txt")),
+        ..LogOptions::default()
+    };
+    assert_eq!(subjects(&log(&t, &absolute)), ["edit", "rename", "create"]);
+    let dir = LogOptions {
+        path: Some(PathBuf::from("other")),
+        ..LogOptions::default()
+    };
+    assert_eq!(subjects(&log(&t, &dir)), ["other"]);
+}
+
+#[test]
+fn log_filters_by_author_and_text() {
+    let t = TempRepo::new();
+    t.file("a.txt", "1\n");
+    t.git(&["add", "-A"]);
+    t.git(&[
+        "commit",
+        "-q",
+        "-m",
+        "Fix the Parser",
+        "--author=Zed Zebra <zed@zoo.org>",
+    ]);
+    t.file("a.txt", "2\n");
+    t.commit_msg("Unrelated.* change");
+    let by_author = LogOptions {
+        author: Some("ZOO.ORG".to_owned()),
+        ..LogOptions::default()
+    };
+    assert_eq!(subjects(&log(&t, &by_author)), ["Fix the Parser"]);
+    let by_text = LogOptions {
+        text: Some("the parser".to_owned()),
+        ..LogOptions::default()
+    };
+    assert_eq!(subjects(&log(&t, &by_text)), ["Fix the Parser"]);
+    let literal = LogOptions {
+        text: Some(".*".to_owned()),
+        ..LogOptions::default()
+    };
+    assert_eq!(subjects(&log(&t, &literal)), ["Unrelated.* change"]);
+    let both = LogOptions {
+        author: Some("zed".to_owned()),
+        text: Some("unrelated".to_owned()),
+        ..LogOptions::default()
+    };
+    assert_eq!(log(&t, &both), []);
+}
+
+#[test]
+fn log_of_line_ranges() {
+    let t = TempRepo::new();
+    t.file("a.txt", "one\ntwo\nthree\nfour\n");
+    t.commit_msg("create");
+    t.file("a.txt", "one\nTWO\nthree\nfour\n");
+    t.commit_msg("edit two");
+    t.file("a.txt", "one\nTWO\nthree\nFOUR\n");
+    t.commit_msg("edit four");
+    let lines = |range| LogOptions {
+        path: Some(PathBuf::from("a.txt")),
+        lines: Some(range),
+        ..LogOptions::default()
+    };
+    assert_eq!(subjects(&log(&t, &lines(1..2))), ["edit two", "create"]);
+    assert_eq!(subjects(&log(&t, &lines(3..4))), ["edit four", "create"]);
+    assert_eq!(log(&t, &lines(2..2)), []);
+}
+
+#[test]
+fn log_shows_merges_and_multi_line_bodies() {
+    let t = TempRepo::new();
+    t.file("a.txt", "1\n");
+    t.commit_msg("root");
+    t.git(&["checkout", "-q", "-b", "side"]);
+    t.file("s.txt", "s\n");
+    t.git(&["add", "-A"]);
+    t.git(&[
+        "commit",
+        "-q",
+        "-m",
+        "side work",
+        "-m",
+        "First paragraph\nwraps.",
+        "-m",
+        "Second paragraph.",
+    ]);
+    t.git(&["checkout", "-q", "main"]);
+    t.file("m.txt", "m\n");
+    t.commit_msg("main work");
+    t.git(&["merge", "-q", "--no-ff", "-m", "merge side", "side"]);
+    let commits = log(&t, &LogOptions::default());
+    assert_eq!(
+        subjects(&commits),
+        ["merge side", "main work", "side work", "root"]
+    );
+    assert_eq!(commits[0].parents, [t.rev("main~1"), t.rev("side")]);
+    let side = t.repo().commit("side").unwrap().unwrap();
+    assert_eq!(side.subject, "side work");
+    assert_eq!(side.body, "First paragraph\nwraps.\n\nSecond paragraph.");
+    assert_eq!(commits[0].body, "");
+}
+
+#[test]
+fn changed_files_against_the_working_tree() {
+    let t = TempRepo::new();
+    t.file("edit.txt", "one\n");
+    t.file("staged.txt", "s\n");
+    t.commit_msg("base");
+    t.file("edit.txt", "two\n");
+    t.file("staged.txt", "s2\n");
+    t.git(&["add", "staged.txt"]);
+    t.file("fresh.txt", "u\n");
+    let got = t
+        .repo()
+        .changed_files("HEAD", None, &AtomicBool::new(false))
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        got,
+        [
+            change("edit.txt", None, FileStatus::Modified),
+            change("fresh.txt", None, FileStatus::Untracked),
+            change("staged.txt", None, FileStatus::Modified),
+        ]
+    );
+}
