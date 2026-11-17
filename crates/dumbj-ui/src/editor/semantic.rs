@@ -1,10 +1,10 @@
 use std::ops::Range;
 use std::sync::Arc;
 
-use dumbj_lsp::SemanticToken;
+use dumbj_lsp::{Inlay, SemanticToken};
 use dumbj_syntax::{HighlightKind, HighlightSpan};
 use dumbj_text::{Buffer, ByteOffset, Edit};
-use gpui::Context;
+use gpui::{Context, Hsla, TextRun};
 use lsp_types::Position;
 
 use super::{EditorView, LoadState};
@@ -89,6 +89,41 @@ pub(super) fn overlay(base: Vec<HighlightSpan>, top: &[HighlightSpan]) -> Vec<Hi
     result
 }
 
+/// `runs` with the drawn text in `inlays` faint on a background of its own.
+pub(super) fn mark_inlays(
+    runs: Vec<TextRun>,
+    inlays: &[Range<usize>],
+    color: Hsla,
+    background: Hsla,
+) -> Vec<TextRun> {
+    if inlays.is_empty() {
+        return runs;
+    }
+    let mut cuts: Vec<usize> = inlays.iter().flat_map(|r| [r.start, r.end]).collect();
+    let mut result = Vec::with_capacity(runs.len() + 2 * inlays.len());
+    let mut position = 0;
+    for run in runs {
+        let end = position + run.len;
+        cuts.retain(|cut| *cut > position);
+        let mut start = position;
+        for cut in cuts.iter().copied().filter(|cut| *cut < end).chain([end]) {
+            if cut <= start {
+                continue;
+            }
+            let mut piece = run.clone();
+            piece.len = cut - start;
+            if inlays.iter().any(|r| r.start <= start && start < r.end) {
+                piece.color = color;
+                piece.background_color = Some(background);
+            }
+            result.push(piece);
+            start = cut;
+        }
+        position = end;
+    }
+    result
+}
+
 /// Where `range` is after `edits`; `None` when an edit touched it.
 pub(super) fn shifted(range: &Range<ByteOffset>, edits: &[Edit]) -> Option<Range<ByteOffset>> {
     let mut range = range.clone();
@@ -120,7 +155,53 @@ impl EditorView {
         cx.notify();
     }
 
+    /// Takes the server's inlay hints if they describe the buffer as it is now.
+    pub(crate) fn set_inlays(&mut self, version: u64, inlays: &[Inlay], cx: &mut Context<Self>) {
+        if !matches!(self.state, LoadState::Ready) || self.model.buffer().version() != version {
+            return;
+        }
+        let buffer = self.model.buffer();
+        let mut placed: Vec<(ByteOffset, String)> = inlays
+            .iter()
+            .filter(|inlay| !inlay.label.trim().is_empty())
+            .map(|inlay| {
+                (
+                    dumbj_lsp::from_lsp(buffer, inlay.position),
+                    inlay.label.clone(),
+                )
+            })
+            .collect();
+        placed.sort_by_key(|(at, _)| *at);
+        self.inlays = Arc::new(placed);
+        cx.notify();
+    }
+
+    /// The end of the buffer as a language server counts it.
+    pub(crate) fn lsp_end(&self) -> Position {
+        dumbj_lsp::to_lsp(self.model.buffer(), self.model.buffer().len())
+    }
+
+    /// The inlays of the line from `start` to `end`, as columns of that line.
+    pub(super) fn inlays_in(&self, start: ByteOffset, end: ByteOffset) -> Vec<(usize, &str)> {
+        let first = self.inlays.partition_point(|(at, _)| *at < start);
+        self.inlays[first..]
+            .iter()
+            .take_while(|(at, _)| *at <= end)
+            .map(|(at, label)| (at.get() - start.get(), label.as_str()))
+            .collect()
+    }
+
     pub(super) fn shift_server_marks(&mut self, edits: &[Edit]) {
+        if !self.inlays.is_empty() {
+            self.inlays = Arc::new(
+                self.inlays
+                    .iter()
+                    .filter_map(|(at, label)| {
+                        Some((shifted(&(*at..*at), edits)?.start, label.clone()))
+                    })
+                    .collect(),
+            );
+        }
         if !self.semantic.is_empty() {
             self.semantic = Arc::new(
                 self.semantic
@@ -216,6 +297,30 @@ mod tests {
                 span(12, 13, HighlightKind::Keyword),
                 span(13, 16, HighlightKind::Function),
             ]
+        );
+    }
+
+    #[test]
+    fn inlay_text_gets_its_own_runs() {
+        let plain = gpui::hsla(0.0, 0.0, 1.0, 1.0);
+        let faint = gpui::hsla(0.0, 0.0, 0.5, 1.0);
+        let background = gpui::hsla(0.0, 0.0, 0.1, 1.0);
+        let run = |len| TextRun {
+            len,
+            font: gpui::font("Mono"),
+            color: plain,
+            background_color: None,
+            underline: None,
+            strikethrough: None,
+        };
+        let runs = mark_inlays(vec![run(4), run(6)], &[2..5, 8..10], faint, background);
+        let seen: Vec<_> = runs
+            .iter()
+            .map(|r| (r.len, r.background_color.is_some()))
+            .collect();
+        assert_eq!(
+            seen,
+            [(2, false), (2, true), (1, true), (3, false), (2, true)]
         );
     }
 

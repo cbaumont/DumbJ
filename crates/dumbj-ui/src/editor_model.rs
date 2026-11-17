@@ -1014,71 +1014,137 @@ impl Folds {
 
 const TAB_WIDTH: usize = 4;
 
+/// Text drawn in place of buffer text: an expanded tab, or an inlay hint, which replaces
+/// nothing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Insert {
+    /// Byte column in the buffer line.
+    at: usize,
+    replaced: usize,
+    width: usize,
+}
+
+impl Insert {
+    fn is_inlay(&self) -> bool {
+        self.replaced == 0
+    }
+
+    /// Whether the insert is drawn before buffer column `column`. A caret at an inlay's
+    /// column is drawn after the inlay.
+    fn before(&self, column: usize) -> bool {
+        if self.is_inlay() {
+            self.at <= column
+        } else {
+            self.at < column
+        }
+    }
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct DisplayLine {
     pub(crate) text: String,
-    /// For each tab: its byte column in the buffer line and how many spaces replaced it.
-    tabs: Vec<(usize, usize)>,
+    inserts: Vec<Insert>,
 }
 
 impl DisplayLine {
     /// Expands the tabs of `line`. At most `max_bytes` of the line are kept, so that a
     /// minified file cannot make shaping a single line arbitrarily slow.
     pub(crate) fn new(line: &str, max_bytes: usize) -> Self {
+        Self::with_inlays(line, max_bytes, &[])
+    }
+
+    /// Like `new`, and draws each inlay's text before the byte column it is attached to.
+    /// `inlays` are sorted by column.
+    pub(crate) fn with_inlays(line: &str, max_bytes: usize, inlays: &[(usize, &str)]) -> Self {
         let mut end = line.len().min(max_bytes);
         while !line.is_char_boundary(end) {
             end -= 1;
         }
         let line = line.get(..end).unwrap_or("");
-        if !line.contains('\t') {
+        if !line.contains('\t') && inlays.is_empty() {
             return Self {
                 text: line.to_owned(),
-                tabs: Vec::new(),
+                inserts: Vec::new(),
             };
         }
         let mut text = String::with_capacity(line.len() + TAB_WIDTH);
-        let mut tabs = Vec::new();
+        let mut inserts = Vec::new();
         let mut column = 0;
+        let mut pending = inlays.iter().filter(|(at, _)| *at <= line.len()).peekable();
+        let mut put_inlays = |index: usize, text: &mut String, column: &mut usize| {
+            while let Some((at, label)) = pending.next_if(|(at, _)| *at <= index) {
+                inserts.push(Insert {
+                    at: *at,
+                    replaced: 0,
+                    width: label.len(),
+                });
+                text.push_str(label);
+                *column += label.chars().count();
+            }
+        };
+        let mut tabs = Vec::new();
         for (index, c) in line.char_indices() {
+            put_inlays(index, &mut text, &mut column);
             if c == '\t' {
                 let width = TAB_WIDTH - column % TAB_WIDTH;
                 text.extend(std::iter::repeat_n(' ', width));
-                tabs.push((index, width));
+                tabs.push(Insert {
+                    at: index,
+                    replaced: 1,
+                    width,
+                });
                 column += width;
             } else {
                 text.push(c);
                 column += 1;
             }
         }
-        Self { text, tabs }
+        put_inlays(line.len(), &mut text, &mut column);
+        inserts.extend(tabs);
+        inserts.sort_by_key(|insert| (insert.at, !insert.is_inlay()));
+        Self { text, inserts }
     }
 
     pub(crate) fn to_display(&self, column: usize) -> usize {
         let extra: usize = self
-            .tabs
+            .inserts
             .iter()
-            .take_while(|(at, _)| *at < column)
-            .map(|(_, width)| width - 1)
+            .take_while(|insert| insert.before(column))
+            .map(|insert| insert.width - insert.replaced)
             .sum();
         (column + extra).min(self.text.len())
     }
 
     /// Maps a byte column of the drawn text back to the buffer line. A position inside an
-    /// expanded tab maps to the nearer side of the tab.
+    /// expanded tab maps to the nearer side of the tab, one inside an inlay to the column
+    /// the inlay is attached to.
     pub(crate) fn to_buffer(&self, display_column: usize) -> usize {
         let mut extra = 0;
-        for (at, width) in &self.tabs {
-            let start = at + extra;
+        for insert in &self.inserts {
+            let start = insert.at + extra;
             if display_column <= start {
                 break;
             }
-            if display_column < start + width {
-                let after_midpoint = display_column - start > width / 2;
-                return at + usize::from(after_midpoint);
+            if display_column < start + insert.width {
+                if insert.is_inlay() {
+                    return insert.at;
+                }
+                let after_midpoint = display_column - start > insert.width / 2;
+                return insert.at + usize::from(after_midpoint);
             }
-            extra += width - 1;
+            extra += insert.width - insert.replaced;
         }
         display_column - extra
+    }
+
+    /// Where the inlays are in the drawn text.
+    pub(crate) fn inlay_ranges(&self) -> impl Iterator<Item = std::ops::Range<usize>> + '_ {
+        let mut extra = 0;
+        self.inserts.iter().filter_map(move |insert| {
+            let start = insert.at + extra;
+            extra += insert.width - insert.replaced;
+            insert.is_inlay().then_some(start..start + insert.width)
+        })
     }
 }
 
@@ -1389,6 +1455,28 @@ mod tests {
         let cut = DisplayLine::new("ééé", 3);
         assert_eq!(cut.text, "é", "cut on a character boundary");
         assert_eq!(cut.to_display(6), 2);
+    }
+
+    #[test]
+    fn inlays_are_drawn_before_their_column_and_map_back_to_it() {
+        let line = DisplayLine::with_inlays("f(1, \tx)", 1000, &[(2, "a: "), (5, "b: ")]);
+        assert_eq!(line.text, "f(a: 1, b:  x)");
+        assert_eq!(
+            line.to_display(2),
+            5,
+            "a caret at the inlay's column is drawn after it"
+        );
+        assert_eq!(line.to_display(1), 1);
+        assert_eq!(line.to_display(6), 12);
+        assert_eq!(line.to_buffer(3), 2, "inside an inlay");
+        for column in 0..=7 {
+            assert_eq!(line.to_buffer(line.to_display(column)), column);
+        }
+        let ranges: Vec<_> = line.inlay_ranges().collect();
+        assert_eq!(ranges, [2..5, 8..11]);
+        let end = DisplayLine::with_inlays("g()", 1000, &[(3, " : Int")]);
+        assert_eq!(end.text, "g() : Int");
+        assert_eq!(end.inlay_ranges().next(), Some(3..9));
     }
 
     #[test]

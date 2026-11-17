@@ -267,27 +267,36 @@ impl Workspace {
                 && self.smart.sent.get(&tab.path) == Some(&version)
                 && self.smart.tokens.get(&tab.path) != Some(&version)
             {
+                let end = tab.editor.read(cx).lsp_end();
                 wanted.push((
                     tab.path.clone(),
                     version,
                     tab.editor.clone(),
                     server,
                     legend,
+                    end,
                 ));
             }
         }
-        for (path, version, editor, server, legend) in wanted {
+        for (path, version, editor, server, legend, end) in wanted {
             self.smart.tokens.insert(path.clone(), version);
-            let tokens = cx.background_spawn(async move {
-                dumbj_lsp::semantic_tokens(&server, &path, &legend, TOKENS_TIMEOUT)
+            let found = cx.background_spawn(async move {
+                let tokens = dumbj_lsp::semantic_tokens(&server, &path, &legend, TOKENS_TIMEOUT);
+                let inlays = dumbj_lsp::inlay_hints(&server, &path, end, TOKENS_TIMEOUT);
+                (tokens, inlays)
             });
-            cx.spawn(async move |_, cx| match tokens.await {
-                Ok(tokens) => {
-                    editor.update(cx, |editor, cx| {
-                        editor.set_semantic_tokens(version, &tokens, cx);
-                    });
-                }
-                Err(error) => tracing::debug!(%error, "no semantic tokens"),
+            cx.spawn(async move |_, cx| {
+                let (tokens, inlays) = found.await;
+                editor.update(cx, |editor, cx| {
+                    match tokens {
+                        Ok(tokens) => editor.set_semantic_tokens(version, &tokens, cx),
+                        Err(error) => tracing::debug!(%error, "no semantic tokens"),
+                    }
+                    match inlays {
+                        Ok(inlays) => editor.set_inlays(version, &inlays, cx),
+                        Err(error) => tracing::debug!(%error, "no inlay hints"),
+                    }
+                });
             })
             .detach();
         }

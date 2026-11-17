@@ -143,3 +143,72 @@ mod tests {
         );
     }
 }
+
+/// An inlay hint: text drawn before `position`, padding included.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Inlay {
+    pub position: lsp_types::Position,
+    pub label: String,
+}
+
+/// The inlay hints of the lines of `path` before `end`.
+pub fn inlay_hints(
+    server: &Server,
+    path: &Path,
+    end: lsp_types::Position,
+    timeout: Duration,
+) -> Result<Vec<Inlay>, LspError> {
+    let params = lsp_types::InlayHintParams {
+        text_document: TextDocumentIdentifier {
+            uri: path_to_uri(path),
+        },
+        range: lsp_types::Range::new(lsp_types::Position::new(0, 0), end),
+        work_done_progress_params: WorkDoneProgressParams::default(),
+    };
+    let hints = server
+        .request::<lsp_types::request::InlayHintRequest>(params)
+        .wait(timeout)?;
+    Ok(hints.unwrap_or_default().into_iter().map(inlay).collect())
+}
+
+fn inlay(hint: lsp_types::InlayHint) -> Inlay {
+    let text = match hint.label {
+        lsp_types::InlayHintLabel::String(text) => text,
+        lsp_types::InlayHintLabel::LabelParts(parts) => {
+            parts.into_iter().map(|part| part.value).collect()
+        }
+    };
+    let pad = |on: Option<bool>| if on == Some(true) { " " } else { "" };
+    Inlay {
+        position: hint.position,
+        label: format!(
+            "{}{}{}",
+            pad(hint.padding_left),
+            text.trim(),
+            pad(hint.padding_right)
+        ),
+    }
+}
+
+#[cfg(test)]
+mod inlay_tests {
+    use super::*;
+
+    #[test]
+    fn labels_are_joined_and_padded() {
+        let hint: lsp_types::InlayHint = serde_json::from_value(serde_json::json!({
+            "position": {"line": 1, "character": 4},
+            "label": [{"value": "name"}, {"value": ":"}],
+            "paddingRight": true
+        }))
+        .unwrap();
+        assert_eq!(inlay(hint).label, "name: ");
+        let hint: lsp_types::InlayHint = serde_json::from_value(serde_json::json!({
+            "position": {"line": 0, "character": 9},
+            "label": ": Int",
+            "paddingLeft": true
+        }))
+        .unwrap();
+        assert_eq!(inlay(hint).label, " : Int");
+    }
+}

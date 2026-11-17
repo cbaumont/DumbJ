@@ -28,9 +28,9 @@
 - [~] Degraded mode — no highlighting over 20 MB, long lines cut; no notice shown
 - [~] Tree-sitter highlighting — Java, Kotlin, Groovy, YAML, XML, JSON, TOML, .properties, Markdown (block level only), shell, Dockerfile, SQL
 - [~] Scope-aware highlighting (locals) — parameters and their uses; locals keep the default colour
-- [ ] Semantic tokens (LSP)
+- [~] Semantic tokens (LSP) — laid over tree-sitter colours for known token types
 - [~] Gutter — line numbers, fold markers, implements/overrides icons, bookmarks, change markers against HEAD
-- [ ] Inlay hints
+- [~] Inlay hints — from the server, whole file, faint text; no toggle
 - [~] Inline blame / Annotate — gutter column with date and author at HEAD, edited lines blank; no age colouring, no popup with the commit, no inline (end-of-line) blame
 - [x] Sticky lines
 - [ ] Indent guides, bracket matching, whitespace, right margin, soft wrap
@@ -139,7 +139,7 @@ Code navigation
 - [ ] JumpToLastChange
 - [ ] ShowNavBar
 - [ ] SelectIn
-- [ ] GotoNextError
+- [~] GotoNextError — F2 / Shift+F2 through server diagnostics
 - [ ] GotoPreviousError
 - [ ] EditSource
 

@@ -280,6 +280,8 @@ pub(crate) struct EditorView {
     problems: Arc<Vec<diagnostics::Problem>>,
     /// Colours from the language server, laid over tree-sitter's.
     semantic: Arc<Vec<HighlightSpan>>,
+    /// Inlay hints from the language server, sorted by offset.
+    inlays: Arc<Vec<(ByteOffset, String)>>,
     note_lines: Vec<(usize, usize)>,
     annotations: Option<Arc<Vec<String>>>,
     read_only: bool,
@@ -448,6 +450,7 @@ impl EditorView {
             diff_marks: DiffMarks::default(),
             problems: Arc::new(Vec::new()),
             semantic: Arc::new(Vec::new()),
+            inlays: Arc::new(Vec::new()),
             note_lines: Vec::new(),
             annotations: None,
             read_only: true,
@@ -1349,7 +1352,11 @@ impl EditorView {
             {
                 usage_index += 1;
             }
-            let display = DisplayLine::new(&buffer.line(line_index), MAX_LINE_BYTES);
+            let display = DisplayLine::with_inlays(
+                &buffer.line(line_index),
+                MAX_LINE_BYTES,
+                &self.inlays_in(line_start, line_end),
+            );
             let column = |offset: ByteOffset| {
                 display.to_display(
                     offset.get().clamp(line_start.get(), line_end.get()) - line_start.get(),
@@ -1378,6 +1385,8 @@ impl EditorView {
             if display.text.len() > position {
                 runs.push(run(display.text.len() - position, text_color));
             }
+            let inlay_ranges: Vec<_> = display.inlay_ranges().collect();
+            let runs = semantic::mark_inlays(runs, &inlay_ranges, fold_color, block_background);
             let shaped = shape(window, display.text.clone(), &runs);
             max_width = max_width.max(shaped.width);
             let x =
