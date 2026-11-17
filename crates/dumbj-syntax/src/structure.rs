@@ -221,6 +221,12 @@ impl Source<'_> {
     pub(crate) fn text(&self, node: Node<'_>) -> String {
         self.buffer.text(range_of(node)).unwrap_or_default()
     }
+
+    pub(crate) fn text_before(&self, ancestor: Node<'_>, node: Node<'_>) -> String {
+        self.buffer
+            .text(ByteOffset(ancestor.start_byte())..ByteOffset(node.start_byte()))
+            .unwrap_or_default()
+    }
 }
 
 pub(crate) fn range_of(node: Node<'_>) -> ByteRange {

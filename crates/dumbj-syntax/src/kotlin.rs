@@ -382,20 +382,21 @@ fn collect_declaration(collector: &mut Collector<'_>, node: Node<'_>, parent: Op
     }
 }
 
-fn declared_type(source: &Source<'_>, declaration: Node<'_>) -> Option<String> {
+fn written_user_type(declaration: Node<'_>) -> Option<Node<'_>> {
     named_children(declaration)
         .into_iter()
         .filter(|child| matches!(child.kind(), "user_type" | "nullable_type"))
         .find_map(find_user_type)
+}
+
+fn declared_type(source: &Source<'_>, declaration: Node<'_>) -> Option<String> {
+    written_user_type(declaration)
         .map(|user_type| user_type_name(source, user_type))
         .filter(|name| !is_type_parameter(source, declaration, name))
 }
 
 fn declared_type_argument(source: &Source<'_>, declaration: Node<'_>) -> Option<String> {
-    let user_type = named_children(declaration)
-        .into_iter()
-        .filter(|child| matches!(child.kind(), "user_type" | "nullable_type"))
-        .find_map(find_user_type)?;
+    let user_type = written_user_type(declaration)?;
     let arguments = child_of_kind(user_type, "type_arguments")?;
     let projection = named_children(arguments).into_iter().next()?;
     named_children(projection)
@@ -677,13 +678,7 @@ pub(crate) fn classify(
         .named_child(0)
         .is_some_and(|first| first.id() == node.id());
     let preceding = || {
-        let before = source
-            .buffer
-            .text(
-                dumbj_text::ByteOffset(parent.start_byte())
-                    ..dumbj_text::ByteOffset(node.start_byte()),
-            )
-            .unwrap_or_default();
+        let before = source.text_before(parent, node);
         let before: String = before.split_whitespace().collect();
         let before = before.trim_end_matches('.').to_owned();
         (!before.is_empty()).then(|| qualifier_from_text(&before))

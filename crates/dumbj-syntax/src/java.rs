@@ -449,13 +449,7 @@ pub(crate) fn classify(
         "scoped_identifier" => (ReferenceRole::Type, None, in_import),
         // `Outer.Inner`: every part but the first is qualified by what precedes it.
         "scoped_type_identifier" => {
-            let before = source
-                .buffer
-                .text(
-                    dumbj_text::ByteOffset(parent.start_byte())
-                        ..dumbj_text::ByteOffset(node.start_byte()),
-                )
-                .unwrap_or_default();
+            let before = source.text_before(parent, node);
             let before = before.trim_end().trim_end_matches('.');
             let qualifier = (!before.is_empty()).then(|| qualifier_from_text(before));
             (ReferenceRole::Type, qualifier, false)
