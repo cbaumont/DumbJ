@@ -38,11 +38,10 @@ impl Workspace {
             let loaded = cx
                 .background_spawn(async move {
                     let dir = state_dir(&root)?;
-                    let state = ProjectState::load(&dir).unwrap_or_else(|error| {
+                    let mut state = ProjectState::load(&dir).unwrap_or_else(|error| {
                         tracing::warn!(%error, "ignoring the unreadable project state");
                         ProjectState::default()
                     });
-                    let mut state = state;
                     forget_missing_files(&mut state);
                     Some((dir, state))
                 })
