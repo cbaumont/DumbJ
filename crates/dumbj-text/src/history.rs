@@ -1,6 +1,6 @@
 use std::collections::VecDeque;
 
-use crate::buffer::{Buffer, Edit, TextError};
+use crate::buffer::{Buffer, Edit, TextError, is_word_char};
 use crate::position::{ByteOffset, ByteRange};
 
 const MAX_UNDO_GROUPS: usize = 10_000;
@@ -70,10 +70,6 @@ impl Default for History {
             start_new_group: false,
         }
     }
-}
-
-fn is_word_char(c: char) -> bool {
-    c.is_alphanumeric() || c == '_'
 }
 
 impl History {

@@ -5,6 +5,11 @@ use thiserror::Error;
 
 use crate::position::{ByteOffset, ByteRange, LineIndex, Point};
 
+#[must_use]
+pub fn is_word_char(c: char) -> bool {
+    c.is_alphanumeric() || c == '_'
+}
+
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum TextError {
     #[error("range {start}..{end} is outside the buffer (length {len}) or reversed")]
@@ -206,14 +211,13 @@ impl Buffer {
     /// there is no word character on either side of it.
     #[must_use]
     pub fn word_range_at(&self, offset: ByteOffset) -> Option<ByteRange> {
-        let is_word = |c: char| c.is_alphanumeric() || c == '_';
         let caret = self.rope.byte_to_char(self.clamp(offset).0);
         let mut start = caret;
-        while start > 0 && is_word(self.rope.char(start - 1)) {
+        while start > 0 && is_word_char(self.rope.char(start - 1)) {
             start -= 1;
         }
         let mut end = caret;
-        while end < self.rope.len_chars() && is_word(self.rope.char(end)) {
+        while end < self.rope.len_chars() && is_word_char(self.rope.char(end)) {
             end += 1;
         }
         (start < end).then(|| {

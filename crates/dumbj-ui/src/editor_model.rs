@@ -1,6 +1,6 @@
 use dumbj_text::disk::LineEnding;
 use dumbj_text::{
-    Buffer, ByteOffset, ByteRange, Carets, Edit, EditKind, History, LineIndex, Point,
+    Buffer, ByteOffset, ByteRange, Carets, Edit, EditKind, History, LineIndex, Point, is_word_char,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -18,10 +18,6 @@ pub(crate) enum Motion {
     PageDown(usize),
     WordLeft,
     WordRight,
-}
-
-fn is_word(c: char) -> bool {
-    c.is_alphanumeric() || c == '_'
 }
 
 #[derive(Debug, Default)]
@@ -737,8 +733,8 @@ impl EditorModel {
             .unwrap_or("")
             .char_indices()
             .rev()
-            .skip_while(|(_, c)| !is_word(*c))
-            .take_while(|(_, c)| is_word(*c))
+            .skip_while(|(_, c)| !is_word_char(*c))
+            .take_while(|(_, c)| is_word_char(*c))
             .last()
             .map_or(0, |(index, _)| index);
         self.buffer.offset_at(Point {
@@ -757,8 +753,8 @@ impl EditorModel {
             .get(point.column..)
             .unwrap_or("")
             .char_indices()
-            .skip_while(|(_, c)| !is_word(*c))
-            .find(|(_, c)| !is_word(*c))
+            .skip_while(|(_, c)| !is_word_char(*c))
+            .find(|(_, c)| !is_word_char(*c))
             .map_or(text.len(), |(index, _)| point.column + index);
         self.buffer.offset_at(Point {
             line: point.line,

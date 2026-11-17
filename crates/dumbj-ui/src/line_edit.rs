@@ -1,5 +1,7 @@
 use std::ops::Range;
 
+use dumbj_text::is_word_char;
+
 /// A caret movement within one line of text.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum LineMotion {
@@ -18,10 +20,6 @@ pub(crate) struct LineEdit {
     anchor: usize,
     caret: usize,
     marked: Option<Range<usize>>,
-}
-
-fn is_word(c: char) -> bool {
-    c.is_alphanumeric() || c == '_'
 }
 
 pub(crate) fn utf16_to_byte(text: &str, units: usize) -> usize {
@@ -113,13 +111,13 @@ impl LineEdit {
             LineMotion::Start => 0,
             LineMotion::End => self.text.len(),
             LineMotion::WordLeft => before()
-                .skip_while(|(_, c)| !is_word(*c))
-                .take_while(|(_, c)| is_word(*c))
+                .skip_while(|(_, c)| !is_word_char(*c))
+                .take_while(|(_, c)| is_word_char(*c))
                 .last()
                 .map_or(0, |(index, _)| index),
             LineMotion::WordRight => after()
-                .skip_while(|(_, c)| !is_word(*c))
-                .find(|(_, c)| !is_word(*c))
+                .skip_while(|(_, c)| !is_word_char(*c))
+                .find(|(_, c)| !is_word_char(*c))
                 .map_or(self.text.len(), |(index, _)| self.caret + index),
         }
     }
