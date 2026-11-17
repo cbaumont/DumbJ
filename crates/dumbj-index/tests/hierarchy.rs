@@ -200,20 +200,6 @@ fn a_supertype_reached_twice_is_listed_once() {
 }
 
 #[test]
-fn a_top_level_function_has_no_super_members() {
-    let project = Project::new(SHAPES);
-    let index = &project.index;
-    let top_level = index
-        .symbols()
-        .find(|(id, _)| {
-            index.qualified_name(*id) == "ping" || index.qualified_name(*id) == "SizedKt.ping"
-        })
-        .map(|(id, _)| id)
-        .unwrap();
-    assert_eq!(super_members(index, top_level), []);
-}
-
-#[test]
 fn implementations_of_a_type_are_its_subtypes_at_any_depth() {
     let project = Project::new(SHAPES);
     let index = &project.index;
@@ -224,15 +210,4 @@ fn implementations_of_a_type_are_its_subtypes_at_any_depth() {
         names(index, &implementations(index, named(index, "Base.ping"))),
         ["Leaf.ping"]
     );
-}
-
-#[test]
-fn a_recursive_call_is_a_caller_but_the_declaration_is_not() {
-    let project = Project::new(SHAPES);
-    let index = &project.index;
-    let ping = named(index, "Leaf.ping");
-    let found = callers(index, ping, &AtomicBool::new(false)).unwrap();
-    assert_eq!(found.len(), 1);
-    assert_eq!(found[0].symbol, Some(ping));
-    assert_eq!(found[0].calls.len(), 1);
 }

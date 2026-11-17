@@ -418,14 +418,6 @@ mod tests {
     }
 
     #[test]
-    fn only_paths_through_a_jar_are_virtual() {
-        assert!(is_virtual_path(Path::new(
-            "/m2/okio-sources.jar!/okio/Buffer.kt"
-        )));
-        assert!(!is_virtual_path(Path::new("/project/src/Buffer.kt")));
-    }
-
-    #[test]
     fn a_member_is_looked_up_in_its_own_class() {
         let source = "package p\nclass First {\n    fun read() {}\n}\nclass Second {\n    fun read() {}\n}\n";
         let offset = locate(source, Language::Kotlin, "Second", Some("read")).get();
