@@ -13,6 +13,20 @@ pub(crate) struct Output {
     pub(crate) stderr: Vec<u8>,
 }
 
+impl Output {
+    pub(crate) fn failure(&self) -> VcsError {
+        VcsError::Git(String::from_utf8_lossy(&self.stderr).trim().to_owned())
+    }
+
+    fn into_stdout(self) -> Result<Vec<u8>, VcsError> {
+        if self.success {
+            Ok(self.stdout)
+        } else {
+            Err(self.failure())
+        }
+    }
+}
+
 pub(crate) fn never() -> AtomicBool {
     AtomicBool::new(false)
 }
@@ -45,13 +59,9 @@ pub(crate) fn run_input(
     input: Vec<u8>,
     cancelled: &AtomicBool,
 ) -> Result<Option<Vec<u8>>, VcsError> {
-    match run_child(workdir, args, &[], Some(input), cancelled)? {
-        None => Ok(None),
-        Some(out) if out.success => Ok(Some(out.stdout)),
-        Some(out) => Err(VcsError::Git(
-            String::from_utf8_lossy(&out.stderr).trim().to_owned(),
-        )),
-    }
+    run_child(workdir, args, &[], Some(input), cancelled)?
+        .map(Output::into_stdout)
+        .transpose()
 }
 
 fn run_child(
@@ -105,13 +115,9 @@ pub(crate) fn run(
     args: &[&str],
     cancelled: &AtomicBool,
 ) -> Result<Option<Vec<u8>>, VcsError> {
-    match run_raw(workdir, args, cancelled)? {
-        None => Ok(None),
-        Some(out) if out.success => Ok(Some(out.stdout)),
-        Some(out) => Err(VcsError::Git(
-            String::from_utf8_lossy(&out.stderr).trim().to_owned(),
-        )),
-    }
+    run_raw(workdir, args, cancelled)?
+        .map(Output::into_stdout)
+        .transpose()
 }
 
 fn drain(pipe: Option<impl Read + Send + 'static>) -> thread::JoinHandle<Vec<u8>> {

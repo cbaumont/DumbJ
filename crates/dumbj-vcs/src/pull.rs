@@ -90,9 +90,7 @@ impl Repository {
         match run_raw_env(&self.workdir, &args, &env, cancelled)? {
             None => return Ok(None),
             Some(out) if !out.success => {
-                return Err(VcsError::Git(
-                    String::from_utf8_lossy(&out.stderr).trim().to_owned(),
-                ));
+                return Err(out.failure());
             }
             Some(_) => {}
         }

@@ -1,12 +1,8 @@
 use std::sync::atomic::AtomicBool;
 
-use crate::git::{self, Output, run_raw, run_raw_env};
+use crate::git::{self, run_raw, run_raw_env};
 use crate::revision::check_revision;
 use crate::{Branch, Repository, VcsError};
-
-fn failure(out: &Output) -> VcsError {
-    VcsError::Git(String::from_utf8_lossy(&out.stderr).trim().to_owned())
-}
 
 impl Repository {
     /// Switches the working tree to `branch`. A remote-tracking branch (`origin/topic`) checks
@@ -34,7 +30,7 @@ impl Repository {
             vec!["switch", &branch.name]
         };
         match run_raw(&self.workdir, &args, &never)? {
-            Some(out) if !out.success => Err(failure(&out)),
+            Some(out) if !out.success => Err(out.failure()),
             _ => Ok(()),
         }
     }
@@ -47,7 +43,7 @@ impl Repository {
         match run_raw_env(&self.workdir, &args, &env, cancelled)? {
             None => Ok(None),
             Some(out) if out.success => Ok(Some(())),
-            Some(out) => Err(failure(&out)),
+            Some(out) => Err(out.failure()),
         }
     }
 }

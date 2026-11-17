@@ -48,9 +48,7 @@ impl Repository {
             return Ok(None);
         };
         if !out.success {
-            return Err(VcsError::Git(
-                String::from_utf8_lossy(&out.stderr).trim().to_owned(),
-            ));
+            return Err(out.failure());
         }
         Ok(Some(parse_porcelain(&out.stdout)))
     }
