@@ -750,50 +750,28 @@ impl EditorView {
         cx.notify();
     }
 
+    fn site<'a>(&'a self, index: &'a Index) -> Option<Site<'a>> {
+        Some(Site {
+            index,
+            file: index.file_by_path(&self.path)?,
+            tree: self.syntax.as_ref()?,
+            buffer: self.model.buffer(),
+        })
+    }
+
     /// Resolves the identifier at the caret against `index` (dumb Go to Declaration).
     /// `None` when the file is not indexed, not parsed, or the caret is not on a name.
     pub(crate) fn resolve_at_caret(&self, index: &Index) -> Option<Resolution> {
-        let tree = self.syntax.as_ref()?;
-        let buffer = self.model.buffer();
-        let file = index.file_by_path(&self.path)?;
-        dumbj_index::resolve(
-            Site {
-                index,
-                file,
-                tree,
-                buffer,
-            },
-            self.model.caret(),
-        )
+        dumbj_index::resolve(self.site(index)?, self.model.caret())
     }
 
     pub(crate) fn library_targets_at_caret(&self, index: &Index) -> Vec<LibraryTarget> {
-        let (Some(tree), Some(file)) = (self.syntax.as_ref(), index.file_by_path(&self.path))
-        else {
-            return Vec::new();
-        };
-        let site = Site {
-            index,
-            file,
-            tree,
-            buffer: self.model.buffer(),
-        };
-        dumbj_index::library_targets(site, self.model.caret())
+        self.site(index)
+            .map_or_default(|site| dumbj_index::library_targets(site, self.model.caret()))
     }
 
     pub(crate) fn usage_target_at_caret(&self, index: &Index) -> Option<UsageTarget> {
-        let tree = self.syntax.as_ref()?;
-        let buffer = self.model.buffer();
-        let file = index.file_by_path(&self.path)?;
-        dumbj_index::usage_target_at(
-            Site {
-                index,
-                file,
-                tree,
-                buffer,
-            },
-            self.model.caret(),
-        )
+        dumbj_index::usage_target_at(self.site(index)?, self.model.caret())
     }
 
     pub(crate) fn word_at_caret(&self) -> Option<String> {
