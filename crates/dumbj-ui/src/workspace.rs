@@ -1533,35 +1533,35 @@ impl Workspace {
     fn render_status_bar(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let tab = self.active_tab();
         let library = tab.and_then(|tab| dumbj_jars::split_virtual_path(&tab.path));
-        let breadcrumb = match (&self.project, tab) {
-            _ if library.is_some() => library.map_or_else(String::new, |(jar, entry)| {
-                let jar = file_name(&jar);
-                std::iter::once(jar)
-                    .chain(entry.split('/').map(str::to_owned))
-                    .collect::<Vec<_>>()
-                    .join(" › ")
-            }),
-            (Some(project), Some(tab)) => {
-                let at_commit = dumbj_vcs::split_revision_path(&tab.path);
-                let relative = match &at_commit {
-                    Some((_, _, relative)) => relative,
-                    None => tab.path.strip_prefix(&project.root).unwrap_or(&tab.path),
-                };
-                let parts = relative
-                    .components()
-                    .map(|part| part.as_os_str().to_string_lossy());
-                let commit = at_commit
-                    .iter()
-                    .map(|(_, commit, _)| format!("@{}", &commit[..commit.len().min(7)]).into());
-                std::iter::once(project.name.clone().into())
-                    .chain(parts)
-                    .chain(commit)
-                    .collect::<Vec<_>>()
-                    .join(" › ")
+        let breadcrumb = if let Some((jar, entry)) = library {
+            std::iter::once(file_name(&jar))
+                .chain(entry.split('/').map(str::to_owned))
+                .collect::<Vec<_>>()
+                .join(" › ")
+        } else {
+            match (&self.project, tab) {
+                (Some(project), Some(tab)) => {
+                    let at_commit = dumbj_vcs::split_revision_path(&tab.path);
+                    let relative = match &at_commit {
+                        Some((_, _, relative)) => relative,
+                        None => tab.path.strip_prefix(&project.root).unwrap_or(&tab.path),
+                    };
+                    let parts = relative
+                        .components()
+                        .map(|part| part.as_os_str().to_string_lossy());
+                    let commit = at_commit.iter().map(|(_, commit, _)| {
+                        format!("@{}", &commit[..commit.len().min(7)]).into()
+                    });
+                    std::iter::once(project.name.clone().into())
+                        .chain(parts)
+                        .chain(commit)
+                        .collect::<Vec<_>>()
+                        .join(" › ")
+                }
+                (Some(project), None) => project.name.clone(),
+                (None, Some(tab)) => tab.path.display().to_string(),
+                (None, None) => String::new(),
             }
-            (Some(project), None) => project.name.clone(),
-            (None, Some(tab)) => tab.path.display().to_string(),
-            (None, None) => String::new(),
         };
         let mut right: Vec<String> = Vec::new();
         if self.dispatcher.is_chord_pending() {
