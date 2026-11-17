@@ -8,8 +8,8 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
 
 use dumbj_jars::{
-    JarIndex, SourceJar, discover, locate, named_by_build, read_virtual,
-    split_virtual_path, virtual_path,
+    JarIndex, SourceJar, discover, locate, named_by_build, read_virtual, split_virtual_path,
+    virtual_path,
 };
 use dumbj_syntax::Language;
 

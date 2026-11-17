@@ -304,7 +304,7 @@ impl Collector<'_> {
     }
 
     /// Adds a symbol named `name`, which need not be written anywhere as such (a Maven
-    /// `groupId:artifactId`); `landing` is where navigation goes, possibly an empty range.
+    /// `groupId:artifactId`); `name_range` is where navigation goes, possibly an empty range.
     pub(crate) fn push_with_name(
         &mut self,
         kind: SymbolKind,

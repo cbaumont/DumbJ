@@ -177,7 +177,6 @@ fn collect_type(
         let parameters = primary.or_else(|| (!has_secondary).then(Vec::new));
         collector.set_parameters(index, parameters);
     }
-    // Before the members are walked: they inherit `expect` from the type.
     mark_platform(collector, node, parent, index);
     for child in named_children(node) {
         match child.kind() {
@@ -230,7 +229,7 @@ fn annotations_of(node: Node<'_>) -> Vec<Node<'_>> {
         .collect()
 }
 
-/// `actual`. Members of an `expect` type are `expect` without saying so.
+/// Marks the new symbols `expect` or `actual`; members of an `expect` type inherit `expect`.
 fn mark_platform(
     collector: &mut Collector<'_>,
     declaration: Node<'_>,

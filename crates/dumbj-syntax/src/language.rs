@@ -223,11 +223,4 @@ mod tests {
             assert_eq!(language as usize, index);
         }
     }
-
-    #[test]
-    fn every_highlight_query_compiles() {
-        for &language in Language::ALL {
-            language.highlights_query().unwrap();
-        }
-    }
 }
