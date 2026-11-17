@@ -1,23 +1,7 @@
-use serde_json::{Value, json};
+use serde_json::json;
 
-use crate::testing::MockServer;
-use crate::{Client, ReviewError, ReviewEvent};
-
-fn client(responses: Vec<&str>) -> (MockServer, Client) {
-    let server = MockServer::start(
-        responses
-            .into_iter()
-            .map(|b| (200, b.to_string()))
-            .collect(),
-    );
-    let client = Client::with_endpoint(server.endpoint(), "t".into());
-    (server, client)
-}
-
-fn variables(server: &MockServer, index: usize) -> Value {
-    let body: Value = serde_json::from_str(&server.requests()[index].body).unwrap();
-    body["variables"].clone()
-}
+use crate::testing::{client, variables};
+use crate::{ReviewError, ReviewEvent};
 
 #[test]
 fn start_review_sends_no_event_and_returns_the_id() {

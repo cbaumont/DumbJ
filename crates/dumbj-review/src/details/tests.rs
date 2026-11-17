@@ -1,15 +1,7 @@
 use serde_json::json;
 
-use crate::testing::MockServer;
-use crate::{CheckState, Client, PrState, RepoId, ReviewDecision, ReviewError};
-
-fn repo() -> RepoId {
-    RepoId {
-        host: "github.com".into(),
-        owner: "o".into(),
-        name: "r".into(),
-    }
-}
+use crate::testing::{client, repo};
+use crate::{CheckState, PrState, ReviewDecision, ReviewError};
 
 fn details(rollup: &str, reviews: &str) -> String {
     format!(
@@ -46,8 +38,7 @@ const ROLLUP: &str = r#"{"contexts":{"nodes":[
 fn decodes_details_checks_and_commits() {
     let reviews =
         r#"[{"id":"R_other","viewerDidAuthor":false},{"id":"R_mine","viewerDidAuthor":true}]"#;
-    let server = MockServer::start(vec![(200, details(ROLLUP, reviews))]);
-    let client = Client::with_endpoint(server.endpoint(), "t".into());
+    let (server, client) = client(vec![details(ROLLUP, reviews)]);
     let pr = client.pull_request(&repo(), 7).unwrap();
     assert_eq!(pr.id, "PR_1");
     assert_eq!(pr.number, 7);
@@ -100,8 +91,7 @@ fn decodes_details_checks_and_commits() {
 
 #[test]
 fn no_rollup_and_no_pending_review() {
-    let server = MockServer::start(vec![(200, details("null", "[]"))]);
-    let client = Client::with_endpoint(server.endpoint(), "t".into());
+    let (_server, client) = client(vec![details("null", "[]")]);
     let pr = client.pull_request(&repo(), 7).unwrap();
     assert_eq!(pr.checks.len(), 0);
     assert_eq!(pr.pending_review, None);
@@ -109,11 +99,7 @@ fn no_rollup_and_no_pending_review() {
 
 #[test]
 fn missing_pull_request_is_a_decode_error() {
-    let server = MockServer::start(vec![(
-        200,
-        r#"{"data":{"repository":{"pullRequest":null}}}"#.to_string(),
-    )]);
-    let client = Client::with_endpoint(server.endpoint(), "t".into());
+    let (_server, client) = client(vec![r#"{"data":{"repository":{"pullRequest":null}}}"#]);
     assert!(matches!(
         client.pull_request(&repo(), 9),
         Err(ReviewError::Decode(m)) if m.contains("#9")

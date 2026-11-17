@@ -139,15 +139,7 @@ impl Client {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::testing::MockServer;
-
-    fn repo() -> RepoId {
-        RepoId {
-            host: "github.com".into(),
-            owner: "o".into(),
-            name: "r".into(),
-        }
-    }
+    use crate::testing::{MockServer, repo};
 
     #[test]
     fn search_strings() {

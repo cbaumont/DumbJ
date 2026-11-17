@@ -1,31 +1,7 @@
 use serde_json::{Value, json};
 
-use crate::testing::MockServer;
-use crate::{Client, RepoId, ReviewError};
-
-fn repo() -> RepoId {
-    RepoId {
-        host: "github.com".into(),
-        owner: "o".into(),
-        name: "r".into(),
-    }
-}
-
-fn client(responses: Vec<&str>) -> (MockServer, Client) {
-    let server = MockServer::start(
-        responses
-            .into_iter()
-            .map(|b| (200, b.to_string()))
-            .collect(),
-    );
-    let client = Client::with_endpoint(server.endpoint(), "t".into());
-    (server, client)
-}
-
-fn variables(server: &MockServer, index: usize) -> Value {
-    let body: Value = serde_json::from_str(&server.requests()[index].body).unwrap();
-    body["variables"].clone()
-}
+use crate::ReviewError;
+use crate::testing::{client, repo, variables};
 
 #[test]
 fn collects_viewed_paths_across_pages() {

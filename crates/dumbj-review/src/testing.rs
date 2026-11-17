@@ -4,6 +4,10 @@ use std::net::{TcpListener, TcpStream};
 use std::sync::{Arc, Mutex};
 use std::thread;
 
+use serde_json::Value;
+
+use crate::{Client, RepoId};
+
 #[derive(Debug, Clone)]
 pub(crate) struct Recorded {
     pub(crate) method: String,
@@ -94,4 +98,23 @@ fn serve(stream: &TcpStream, status: u16, body: &str, recorded: &Mutex<Vec<Recor
     let mut stream = stream;
     let _ = stream.write_all(response.as_bytes());
     let _ = stream.flush();
+}
+
+pub(crate) fn client<S: Into<String>>(responses: Vec<S>) -> (MockServer, Client) {
+    let server = MockServer::start(responses.into_iter().map(|b| (200, b.into())).collect());
+    let client = Client::with_endpoint(server.endpoint(), "t".into());
+    (server, client)
+}
+
+pub(crate) fn variables(server: &MockServer, index: usize) -> Value {
+    let body: Value = serde_json::from_str(&server.requests()[index].body).unwrap();
+    body["variables"].clone()
+}
+
+pub(crate) fn repo() -> RepoId {
+    RepoId {
+        host: "github.com".into(),
+        owner: "o".into(),
+        name: "r".into(),
+    }
 }

@@ -69,7 +69,7 @@ mod tests {
 
     use super::*;
     use crate::DiffSide;
-    use crate::testing::MockServer;
+    use crate::testing::client;
 
     const STARTED: &str =
         r#"{"data":{"addPullRequestReview":{"pullRequestReview":{"id":"R_new"}}}}"#;
@@ -117,13 +117,7 @@ mod tests {
         comments: &[OutgoingComment],
         responses: &[&str],
     ) -> (Vec<bool>, Vec<(String, String)>) {
-        let server = MockServer::start(
-            responses
-                .iter()
-                .map(|body| (200, (*body).to_owned()))
-                .collect(),
-        );
-        let client = Client::with_endpoint(server.endpoint(), "t".into());
+        let (server, client) = client(responses.to_vec());
         let outcomes = client
             .post_comments("PR", pending, comments)
             .iter()

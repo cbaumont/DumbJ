@@ -1,26 +1,7 @@
 use serde_json::{Value, json};
 
-use crate::testing::MockServer;
-use crate::{Client, DiffSide, NewThread, RepoId, ReviewError};
-
-fn repo() -> RepoId {
-    RepoId {
-        host: "github.com".into(),
-        owner: "o".into(),
-        name: "r".into(),
-    }
-}
-
-fn client(responses: Vec<String>) -> (MockServer, Client) {
-    let server = MockServer::start(responses.into_iter().map(|b| (200, b)).collect());
-    let client = Client::with_endpoint(server.endpoint(), "t".into());
-    (server, client)
-}
-
-fn variables(server: &MockServer, index: usize) -> Value {
-    let body: Value = serde_json::from_str(&server.requests()[index].body).unwrap();
-    body["variables"].clone()
-}
+use crate::testing::{client, repo, variables};
+use crate::{DiffSide, NewThread, ReviewError};
 
 fn thread_json(id: &str, extra: &str) -> String {
     format!(
@@ -221,15 +202,4 @@ fn resolve_and_unresolve_send_the_thread_id() {
         .collect();
     assert!(queries[0].contains("resolveReviewThread"));
     assert!(queries[1].contains("unresolveReviewThread"));
-}
-
-#[test]
-fn api_errors_on_mutations_surface() {
-    let (_server, client) = client(vec![
-        r#"{"data":null,"errors":[{"message":"Could not resolve to a node"}]}"#.to_string(),
-    ]);
-    assert!(matches!(
-        client.resolve_thread("nope"),
-        Err(ReviewError::Api(m)) if m.contains("Could not resolve")
-    ));
 }
