@@ -66,8 +66,6 @@ pub enum StoreError {
     Schema,
 }
 
-/// The modification time and size of a file; when both match the stored values the file is
-/// assumed unchanged.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct CacheStamp {
     pub mtime_ns: i64,
@@ -103,9 +101,8 @@ pub struct IndexStore {
 }
 
 impl IndexStore {
-    /// Opens the cache at `path`, creating it and its parent directories when missing. A
-    /// file that is not a healthy database of the current schema version is deleted and
-    /// replaced by an empty one.
+    /// A file that is not a healthy database of the current schema version is replaced
+    /// by an empty one.
     pub fn open(path: &Path) -> Result<Self, StoreError> {
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent)?;
@@ -131,7 +128,6 @@ impl IndexStore {
         let connection = Connection::open(path)?;
         let version: i64 = connection.query_row("PRAGMA user_version", [], |row| row.get(0))?;
         if version == 0 {
-            // A new database, or one this code never finished creating.
             let tables: i64 = connection.query_row(
                 "SELECT count(*) FROM sqlite_master WHERE type = 'table'",
                 [],

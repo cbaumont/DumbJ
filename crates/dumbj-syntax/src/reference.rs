@@ -7,7 +7,6 @@ use crate::{Language, SyntaxTree};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ReferenceRole {
     Type,
-    /// The callee of a call: `foo()`, `x.foo()`. In Kotlin this may also be a constructor.
     Call,
     Member,
     Value,
@@ -20,11 +19,8 @@ pub enum Qualifier {
     Super,
     Name(String),
     Path(String),
-    /// A call: `foo(x)`, `a.foo(x)`, or in Kotlin a constructor call `Foo(x)`.
     Call(Box<Call>),
     Member(Box<Qualifier>, String),
-    /// A value whose type is written on the spot: `new Foo()`, `x as Foo`, or a literal
-    /// (`String`, and `Int`/`int` and the like in the file's language).
     Typed(String),
     Lambda,
     Other,
@@ -37,16 +33,12 @@ pub struct Call {
     pub arguments: Vec<Argument>,
 }
 
-/// A Kotlin lambda and the call it is passed to: `x.let { … }` has callee `let` and
-/// receiver `x`; `with(y) { … }` has `y` as its first argument.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LambdaCall {
     pub callee: String,
     pub receiver: Option<Qualifier>,
     pub first_argument: Option<Qualifier>,
-    /// Whether it names its parameters (`{ v -> … }`) instead of using `it`.
     pub has_parameters: bool,
-    /// Where the first parameter is named, for `{ v -> … }`.
     pub first_parameter: Option<ByteRange>,
 }
 
@@ -59,8 +51,6 @@ pub struct Argument {
 }
 
 impl Qualifier {
-    /// `receiver.name`: a longer dotted path when the receiver is one, otherwise a member
-    /// read.
     pub(crate) fn member(receiver: Self, name: String) -> Self {
         match receiver {
             Self::Name(first) => Self::Path(format!("{first}.{name}")),
@@ -177,7 +167,6 @@ impl SyntaxTree {
         Some(self.classify(&Source { buffer }, node))
     }
 
-    /// The Kotlin lambdas around `offset`, innermost first.
     #[must_use]
     pub fn enclosing_lambdas(&self, buffer: &Buffer, offset: ByteOffset) -> Vec<LambdaCall> {
         if self.language() != Language::Kotlin {
@@ -228,8 +217,6 @@ impl SyntaxTree {
         }
     }
 
-    /// Whether the identifier at `offset` is assigned to: the target of `=`, a compound
-    /// assignment, `++` or `--`, possibly through `this.` or another qualifier.
     #[must_use]
     pub fn is_write(&self, offset: ByteOffset) -> bool {
         let Some(mut node) = self.identifier_node(offset) else {

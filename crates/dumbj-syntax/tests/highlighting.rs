@@ -169,7 +169,6 @@ fn kotlin_annotated_function_type_parameter_is_a_known_grammar_gap() {
         tree.has_errors(),
         "the grammar now parses annotated function types"
     );
-    // The damage stays local: the following declaration is still highlighted.
     let spans = tree
         .highlights(&buffer, ByteOffset::ZERO..buffer.len())
         .unwrap();

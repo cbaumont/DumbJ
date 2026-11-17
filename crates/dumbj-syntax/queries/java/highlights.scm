@@ -1,12 +1,7 @@
 ; Adapted from tree-sitter-java 0.23.5 (MIT), queries/highlights.scm.
 ; https://github.com/tree-sitter/tree-sitter-java
-; Later patterns take precedence over earlier ones.
-
-; Variables
 
 (identifier) @variable
-
-; Methods
 
 (method_declaration
   name: (identifier) @function.method)
@@ -14,16 +9,12 @@
   name: (identifier) @function.method)
 (super) @function.builtin
 
-; Annotations
-
 (annotation
   name: (identifier) @attribute)
 (marker_annotation
   name: (identifier) @attribute)
 
 "@" @operator
-
-; Types
 
 (type_identifier) @type
 
@@ -58,16 +49,10 @@
   (void_type)
 ] @type.builtin
 
-; Constants
-
 ((identifier) @constant
  (#match? @constant "^_*[A-Z][A-Z\\d_]+$"))
 
-; Builtins
-
 (this) @variable.builtin
-
-; Literals
 
 [
   (hex_integer_literal)
@@ -93,8 +78,6 @@
   (line_comment)
   (block_comment)
 ] @comment
-
-; Keywords
 
 [
   "abstract"

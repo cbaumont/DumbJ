@@ -1,5 +1,3 @@
-//! Saving to disk: crash-safe writes, change detection stamps and line-ending detection.
-
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
@@ -8,7 +6,6 @@ use std::time::SystemTime;
 
 static TEMP_COUNTER: AtomicU64 = AtomicU64::new(0);
 
-/// What a file looked like when it was read or written, to notice outside changes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct FileStamp {
     pub modified: Option<SystemTime>,

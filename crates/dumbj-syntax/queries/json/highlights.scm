@@ -1,6 +1,5 @@
 ; Adapted from tree-sitter-json 0.24.8 (MIT), queries/highlights.scm.
 ; https://github.com/tree-sitter/tree-sitter-json
-; Later patterns take precedence over earlier ones.
 
 (string) @string
 

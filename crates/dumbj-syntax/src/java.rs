@@ -447,7 +447,6 @@ pub(crate) fn classify(
             (ReferenceRole::Type, qualifier_of("scope"), in_import)
         }
         "scoped_identifier" => (ReferenceRole::Type, None, in_import),
-        // `Outer.Inner`: every part but the first is qualified by what precedes it.
         "scoped_type_identifier" => {
             let before = source.text_before(parent, node);
             let before = before.trim_end().trim_end_matches('.');

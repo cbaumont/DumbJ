@@ -233,8 +233,6 @@ fn is_parameter(node: Node<'_>) -> bool {
 }
 
 impl SyntaxTree {
-    /// Parameters and every use of them, which highlight queries alone cannot tell
-    /// apart from other names.
     fn parameter_captures(&self, buffer: &Buffer, start: usize, end: usize) -> Vec<Capture> {
         if !matches!(self.language(), Language::Java | Language::Kotlin) {
             return Vec::new();

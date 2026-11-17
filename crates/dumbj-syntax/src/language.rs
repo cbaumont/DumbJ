@@ -79,7 +79,6 @@ impl Language {
         )
     }
 
-    /// What starts a comment that runs to the end of the line, if the language has one.
     #[must_use]
     pub fn line_comment(self) -> Option<&'static str> {
         match self {

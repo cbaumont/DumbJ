@@ -1,5 +1,3 @@
-//! The on-disk index cache: round trips, reuse, invalidation and recovery.
-
 #![expect(
     clippy::unwrap_used,
     reason = "integration test: a panic is the failure report"
@@ -15,7 +13,6 @@ use common::{MONEY, shop_root};
 use dumbj_index::{CacheStamp, Index, IndexStore, cache_path, index_project, index_project_cached};
 use dumbj_syntax::{FileFacts, Language};
 
-/// A scratch directory that is removed when dropped.
 struct Scratch(PathBuf);
 
 impl Scratch {
@@ -35,7 +32,6 @@ impl Scratch {
         self.0.join("cache/index.sqlite")
     }
 
-    /// A copy of the fixture project that tests may modify.
     fn project(&self) -> PathBuf {
         let root = self.0.join("project");
         copy_dir(&shop_root(), &root);
@@ -140,7 +136,6 @@ fn modified_deleted_and_new_files_are_brought_up_to_date() {
     assert!(index.files().all(|(_, file)| file.relative != gone));
     assert_eq!(symbol_names(&index, "core/Fresh.java"), ["Fresh"]);
 
-    // The store agrees: a further run returns the same thing.
     assert_eq!(summary(&run_cached(&root, &scratch.db())), summary(&index));
     let store = IndexStore::open(&scratch.db()).unwrap();
     let stored = store.load().unwrap();

@@ -1,6 +1,5 @@
 ; Adapted from tree-sitter-properties 0.3.0 (MIT), queries/highlights.scm.
 ; https://github.com/tree-sitter-grammars/tree-sitter-properties
-; Later patterns take precedence over earlier ones.
 
 (comment) @comment
 

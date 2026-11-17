@@ -12,7 +12,6 @@ use thiserror::Error;
 /// stall the search.
 const CANCEL_INTERVAL: usize = 1024;
 const MAX_FILE_BYTES: u64 = 5 * 1024 * 1024;
-/// How much of a file is checked for NUL bytes to tell binary files from text.
 const BINARY_SNIFF_BYTES: usize = 8192;
 /// Longer lines are cut so that one minified file cannot fill the results.
 const MAX_LINE_CHARS: usize = 300;
@@ -32,9 +31,7 @@ pub struct Match {
     pub path: PathBuf,
     /// Zero-based.
     pub line: usize,
-    /// The line without its leading whitespace, cut to a reasonable length.
     pub text: String,
-    /// Byte ranges of the matches inside `text`.
     pub ranges: Vec<Range<usize>>,
     /// Byte offset in the file of the first match on the line.
     pub offset: usize,

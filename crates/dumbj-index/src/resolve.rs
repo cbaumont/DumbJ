@@ -61,7 +61,6 @@ const MAX_EXPRESSION_DEPTH: usize = 8;
 fn kind_fits(kind: SymbolKind, role: ReferenceRole, language: Language) -> bool {
     match role {
         ReferenceRole::Type => kind.is_type(),
-        // Kotlin `Foo()` constructs a Foo.
         ReferenceRole::Call => {
             matches!(kind, SymbolKind::Function | SymbolKind::Method)
                 || (language == Language::Kotlin && kind.is_type())
@@ -465,7 +464,6 @@ const ELEMENT_PRESERVING: &[&str] = &[
     "filterIsInstance",
 ];
 
-/// Library calls that return one element of their receiver.
 const ELEMENT_RETURNING: &[&str] = &[
     "first",
     "firstOrNull",
@@ -517,7 +515,6 @@ fn decapitalise(name: &str) -> String {
     })
 }
 
-/// `getX` without its prefix, when the rest starts with an upper-case letter.
 fn strip_accessor<'n>(name: &'n str, prefix: &str) -> Option<&'n str> {
     name.strip_prefix(prefix)
         .filter(|rest| rest.starts_with(char::is_uppercase))
@@ -557,8 +554,6 @@ fn accessor_alternatives(
     }
 }
 
-/// The other names Find Usages must look for to see the accessors of a property, or the
-/// property behind an accessor.
 pub(crate) fn accessor_aliases(name: &str, kind: SymbolKind) -> Vec<String> {
     match kind {
         SymbolKind::Property | SymbolKind::Field => {
@@ -602,7 +597,6 @@ fn facade_name(file: &crate::index::IndexedFile) -> Option<String> {
     Some(format!("{}Kt", capitalise(&identifier)))
 }
 
-/// Built-in types that convert into each other: text, numbers (Java `char` widens), booleans.
 fn scalar_group(name: &str) -> Option<u8> {
     match name {
         "String" => Some(0),
@@ -627,7 +621,6 @@ enum Fit {
 #[derive(Clone, PartialEq, Eq)]
 enum Receiver {
     Function,
-    /// The facade class of Kotlin top-level declarations in these files.
     Facade(Vec<crate::index::FileId>),
     Types(Vec<SymbolId>),
     External(String),
@@ -640,11 +633,8 @@ struct Lookup<'a> {
     enclosing: Vec<SymbolId>,
     /// Inside a Kotlin extension, `this` is its receiver, ahead of the enclosing types.
     extension_receiver: Option<Receiver>,
-    /// `this` inside `apply { }`, `run { }` and `with(x) { }`, innermost first.
     lambda_receivers: Vec<Receiver>,
-    /// What `it` is inside `let { }`, `also { }`, `map { }` and the like.
     it_receiver: Option<Receiver>,
-    /// Named first parameters of such lambdas, by where they are declared.
     lambda_parameters: Vec<(ByteRange, Receiver)>,
 }
 
@@ -932,7 +922,6 @@ impl Lookup<'_> {
             return Receiver::Unknown;
         }
         if found.ranked.is_empty() {
-            // A Kotlin constructor call of a library type: `ArrayList<Foo>()`.
             let constructs = call.receiver.is_none()
                 && self.site.tree.language() == Language::Kotlin
                 && call.name.starts_with(char::is_uppercase);
@@ -989,7 +978,6 @@ impl Lookup<'_> {
             .map_or(Receiver::Unknown, |member| self.element_of_symbol(member))
     }
 
-    /// What one element of the collection or Flow `expression` is.
     fn element_of(&self, expression: &Qualifier, at: ByteOffset, depth: usize) -> Receiver {
         if depth > MAX_EXPRESSION_DEPTH {
             return Receiver::Unknown;
@@ -1343,8 +1331,6 @@ impl Lookup<'_> {
             })
     }
 
-    /// Kotlin files whose facade class is called `name`, narrowed to those the reference
-    /// file imports or shares a package with when there are any.
     fn facade_files(&self, name: &str) -> Vec<crate::index::FileId> {
         let index = self.site.index;
         let facades = index.facades.get_or_init(|| {
@@ -1396,8 +1382,6 @@ impl Lookup<'_> {
         if visible.is_empty() { all } else { visible }
     }
 
-    /// Top-level functions and properties called `name` (or reached through a Java
-    /// accessor name) in `files`.
     fn top_level_in(
         &self,
         files: &[crate::index::FileId],
@@ -1692,8 +1676,6 @@ impl Lookup<'_> {
         }
     }
 
-    /// `libs.kotlinx.coroutines.core` in a Gradle Kotlin script is an entry of the version
-    /// catalog: `kotlinx-coroutines-core` under `[libraries]`.
     fn find_in_catalog(&self, qualifier: &Qualifier, name: &str) -> Option<Found> {
         let (Qualifier::Name(path) | Qualifier::Path(path)) = qualifier else {
             return None;
@@ -1900,15 +1882,12 @@ pub fn resolve(site: Site<'_>, offset: ByteOffset) -> Option<Resolution> {
     Some(lookup.finish(reference, found))
 }
 
-/// A declaration outside the project: a class by fully qualified name, and the member
-/// of it the reference names, if any.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LibraryTarget {
     pub class: String,
     pub member: Option<String>,
 }
 
-/// Packages every Java or Kotlin file sees without importing them.
 fn implicit_packages(language: Language) -> &'static [&'static str] {
     match language {
         Language::Kotlin => &[

@@ -3,8 +3,6 @@
 ; DumbJ has no `tag` or `markup` roles: tag names use the keyword colour and
 ; attribute names the property colour. Later patterns take precedence.
 
-;; XML declaration
-
 "xml" @keyword
 
 ["version" "encoding" "standalone"] @property
@@ -15,8 +13,6 @@
 
 ["yes" "no"] @boolean
 
-;; Processing instructions
-
 (PI (PITarget) @keyword)
 
 (XmlModelPI "xml-model" @keyword)
@@ -26,8 +22,6 @@
 (PseudoAtt (Name) @property)
 
 (PseudoAtt (PseudoAttValue) @string)
-
-;; Doctype and DTD declarations
 
 (doctypedecl "DOCTYPE" @keyword)
 
@@ -89,8 +83,6 @@
 
 (SystemLiteral (URI) @string)
 
-;; Entities
-
 (EntityRef) @constant
 
 ((EntityRef) @constant.builtin
@@ -99,8 +91,6 @@
 (CharRef) @constant
 
 (PEReference) @constant
-
-;; Elements and attributes
 
 (STag (Name) @keyword)
 
@@ -113,8 +103,6 @@
 (Attribute (AttValue) @string)
 
 (CDSect (CData) @string)
-
-;; Punctuation
 
 ["<?" "?>" "<!" "]]>" "<" ">" "</" "/>"] @punctuation.delimiter
 

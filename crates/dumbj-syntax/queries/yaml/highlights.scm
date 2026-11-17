@@ -1,6 +1,5 @@
 ; Adapted from tree-sitter-yaml 0.7.2 (MIT), queries/highlights.scm.
 ; https://github.com/tree-sitter-grammars/tree-sitter-yaml
-; Later patterns take precedence over earlier ones.
 
 (boolean_scalar) @boolean
 

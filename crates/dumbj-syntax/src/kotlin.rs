@@ -506,7 +506,6 @@ fn arguments(source: &Source<'_>, call: Node<'_>) -> Vec<Argument> {
     found
 }
 
-/// The lambdas around `node`, innermost first, with the call each is passed to.
 pub(crate) fn enclosing_lambdas(source: &Source<'_>, node: Node<'_>) -> Vec<LambdaCall> {
     std::iter::successors(Some(node), Node::parent)
         .filter(|lambda| lambda.kind() == "lambda_literal")

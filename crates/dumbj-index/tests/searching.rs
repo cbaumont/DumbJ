@@ -1,5 +1,3 @@
-//! Fuzzy search over the `shop` fixture project.
-
 #![expect(
     clippy::unwrap_used,
     reason = "integration test: a panic is the failure report"
@@ -13,7 +11,6 @@ use std::sync::atomic::AtomicBool;
 
 use dumbj_index::{HitTarget, Index, SearchScope, file_structure, index_project, search};
 
-/// The names of the hits, best first: file names for files, qualified names for symbols.
 fn names(index: &Index, query: &str, scope: SearchScope) -> Vec<String> {
     search(index, query, scope, 50, || false)
         .unwrap()

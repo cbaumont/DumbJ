@@ -45,7 +45,6 @@
 
 ["(" ")" "[[" "]]" "[" "]" "{" "}"] @punctuation.bracket
 
-; Variables: assignments, uses and expansions.
 (variable_name) @property
 
 (special_variable_name) @variable.builtin
@@ -86,7 +85,6 @@
 
 [";" ";;" "&"] @punctuation.delimiter
 
-; Options such as -x or --verbose.
 (
   (command (_) @constant)
   (#match? @constant "^-")

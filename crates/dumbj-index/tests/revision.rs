@@ -1,6 +1,3 @@
-//! Indexing a revision that is not checked out: the `shop` fixture with one file changed,
-//! one added and one removed.
-
 #![expect(
     clippy::unwrap_used,
     reason = "integration test: a panic is the failure report"

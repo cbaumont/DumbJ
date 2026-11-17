@@ -12,8 +12,6 @@ use crate::store::{CacheStamp, IndexStore};
 
 const MAX_INDEXED_FILE_BYTES: u64 = 4 * 1024 * 1024;
 
-/// Reads and parses one file. Failures are logged and leave the file without symbols, so
-/// one unreadable file never stops indexing.
 fn file_facts(path: &Path, language: Language, cancelled: &AtomicBool) -> FileFacts {
     let too_large = std::fs::metadata(path).is_ok_and(|meta| meta.len() > MAX_INDEXED_FILE_BYTES);
     if too_large {
@@ -115,9 +113,7 @@ fn walk_files(
     )
 }
 
-/// Indexes every file under `root` that `.gitignore` does not exclude.
-///
-/// Work is spread over the available cores. `cancelled` is polled between files and during
+/// `cancelled` is polled between files and during
 /// parsing; when it is set the function returns `None`. `progress` is called with the
 /// number of files finished so far, from worker threads.
 pub fn index_project(
@@ -148,7 +144,6 @@ pub fn index_project_cached(
     let changed = Mutex::new(HashMap::<String, CacheStamp>::new());
     let files = walk_files(root, cancelled, progress, |path| {
         if !Language::from_path(path).is_some_and(Language::has_structure) {
-            // Nothing is read from these, so there is nothing worth caching.
             return index_file(root, path, cancelled);
         }
         // Taken before reading, so an edit during parsing is noticed next time.

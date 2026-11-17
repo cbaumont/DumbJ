@@ -1,5 +1,3 @@
-//! Indexing a revision that is not checked out, from texts the caller read out of git.
-
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Mutex;
@@ -21,8 +19,6 @@ pub struct RevisionSource {
     pub text: Option<String>,
 }
 
-/// Builds the index of a revision from `sources`, parsing only the files that come with
-/// their text. `reader` serves the text of any of them later (Find Usages, build files).
 /// Returns `None` when cancelled.
 pub fn index_revision(
     working: &Index,

@@ -141,14 +141,12 @@ impl Buffer {
         line.byte_to_char(point.column.min(line.len_bytes()))
     }
 
-    /// The offset one character before `offset`, or the start of the buffer.
     #[must_use]
     pub fn prev_char(&self, offset: ByteOffset) -> ByteOffset {
         let index = self.rope.byte_to_char(self.clamp(offset).0);
         ByteOffset(self.rope.char_to_byte(index.saturating_sub(1)))
     }
 
-    /// The offset one character after `offset`, or the end of the buffer.
     #[must_use]
     pub fn next_char(&self, offset: ByteOffset) -> ByteOffset {
         let index = self.rope.byte_to_char(self.clamp(offset).0);

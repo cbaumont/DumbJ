@@ -40,8 +40,6 @@ pub struct ProjectModel {
 const BUILD_FILES: [&str; 3] = ["build.gradle.kts", "build.gradle", "pom.xml"];
 const SETTINGS_FILES: [&str; 2] = ["settings.gradle.kts", "settings.gradle"];
 
-/// The project paths named by `include` statements in a Gradle settings script, Groovy or
-/// Kotlin: `include(":app", ":core:model")`, `include ':app', ':lib'`.
 pub(crate) fn gradle_includes(settings: &str) -> Vec<String> {
     let mut includes = Vec::new();
     let mut rest = settings;
@@ -115,13 +113,10 @@ fn source_root_of(file: &IndexedFile) -> Option<String> {
         return Some(dir.to_owned());
     }
     let root = dir.strip_suffix(&package_path)?;
-    // The package must start at a directory boundary.
     (root.is_empty() || root.ends_with('/')).then(|| root.trim_end_matches('/').to_owned())
 }
 
 impl ProjectModel {
-    /// Works out the modules of a project from its indexed files. Reads the settings and
-    /// POM files among them through `reader`.
     #[must_use]
     pub fn discover(files: &[IndexedFile], reader: &FileReader) -> Self {
         let mut dirs: BTreeMap<String, Option<String>> = BTreeMap::from([(String::new(), None)]);

@@ -1,5 +1,3 @@
-//! Indexing the `shop` fixture project.
-
 mod common;
 
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};

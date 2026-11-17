@@ -25,8 +25,6 @@ pub struct IndexedFile {
     pub facts: FileFacts,
 }
 
-/// How an index reads the text of its files: from disk, or from git objects for a
-/// revision that is not checked out.
 #[derive(Clone)]
 pub struct FileReader(Arc<ReadFn>);
 
@@ -66,9 +64,7 @@ pub struct Index {
     by_name: HashMap<String, Vec<SymbolId>>,
     project: ProjectModel,
     modules: Vec<Option<ModuleId>>,
-    /// Each type's direct subtypes, worked out on first use (see `hierarchy`).
     pub(crate) subtypes: OnceLock<HashMap<SymbolId, Vec<SymbolId>>>,
-    /// Kotlin files by their facade class name (`ShippingKt`, or `@file:JvmName`).
     pub(crate) facades: OnceLock<HashMap<String, Vec<FileId>>>,
 }
 
@@ -85,7 +81,6 @@ impl Index {
         Self::with_reader(files, FileReader::default())
     }
 
-    /// [`Index::new`] for files whose text comes from `reader` instead of the disk.
     #[must_use]
     pub fn with_reader(mut files: Vec<IndexedFile>, reader: FileReader) -> Self {
         files.sort_by(|a, b| a.path.cmp(&b.path));

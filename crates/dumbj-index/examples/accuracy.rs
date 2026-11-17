@@ -1,10 +1,3 @@
-//! The dumb-mode accuracy benchmark (BRIEF §4.3.1): runs Go to Declaration on hand-checked
-//! cases in the pinned corpus and reports how often it is right.
-//!
-//! Usage: `cargo run --release -p dumbj-index --example accuracy -- [CORPUS_DIR]`
-//! (fetch the corpus first with `scripts/fetch-corpus.sh`; the default directory is
-//! `$XDG_CACHE_HOME/dumbj/corpus`). Cases live in `corpus/expectations/<repo>.toml`:
-//!
 //! ```toml
 //! [[case]]
 //! file = "path/in/repo/Caller.kt"

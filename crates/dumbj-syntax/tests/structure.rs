@@ -147,8 +147,7 @@ fn declarations_survive_syntax_errors() {
     assert!(names.contains(&"A"), "{names:?}");
     assert_eq!(facts.package.as_deref(), Some("p"));
 
-    // The Kotlin grammar gap: the function with the annotated function type is damaged,
-    // but declarations around it are still found.
+    // The Kotlin grammar cannot parse an annotated function type, which damages that function.
     let (_, facts) = facts_of(
         Language::Kotlin,
         "class Before\nfun Button(text: @Composable () -> Unit) {}\nfun after() {}\nclass After { val x = 1 }\n",

@@ -25,7 +25,6 @@ impl LineIndex {
         self.0
     }
 
-    /// The one-based number shown in the gutter.
     #[must_use]
     pub fn display_number(self) -> usize {
         self.0 + 1

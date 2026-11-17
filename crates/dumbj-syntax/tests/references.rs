@@ -15,7 +15,6 @@ fn at_caret(language: Language, marked: &str) -> (Buffer, SyntaxTree, ByteOffset
     (buffer, tree, ByteOffset(caret))
 }
 
-/// The role and qualifier of the identifier at the caret, as `name role qualifier`.
 fn reference(language: Language, marked: &str) -> String {
     let (buffer, tree, caret) = at_caret(language, marked);
     match tree.reference_at(&buffer, caret) {
@@ -66,7 +65,6 @@ fn show_arguments(arguments: &[Argument]) -> String {
     shown.join(", ")
 }
 
-/// The call under the caret as `qualifier.name(arguments)`.
 fn call(language: Language, marked: &str) -> String {
     let (buffer, tree, caret) = at_caret(language, marked);
     let found = tree.reference_at(&buffer, caret).unwrap();
@@ -152,7 +150,6 @@ fn locals_carry_their_initialiser() {
     assert_eq!(kotlin("§p.go()"), "none", "a parameter");
 }
 
-/// Resolves the identifier at the caret locally: `line:column type`.
 fn local(language: Language, marked: &str) -> String {
     let (buffer, tree, caret) = at_caret(language, marked);
     let found = tree.reference_at(&buffer, caret).unwrap();

@@ -1,5 +1,3 @@
-//! Usage: `cargo run -p dumbj-syntax --example dump_tree -- FILE`
-
 #![expect(clippy::print_stdout, reason = "a command-line tool")]
 
 use std::path::Path;

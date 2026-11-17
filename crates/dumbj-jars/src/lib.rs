@@ -1,5 +1,3 @@
-//! Library sources from Gradle and Maven `-sources.jar` files, read in place and never extracted.
-
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::Read;
@@ -19,7 +17,6 @@ pub enum JarError {
     NotInJar(PathBuf),
 }
 
-/// Separates a jar's path from an entry inside it, as in `lib.jar!/okio/Buffer.kt`.
 const SEPARATOR: &str = "!/";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -59,8 +56,6 @@ fn coordinates(path: &Path) -> Option<(String, String)> {
     }
 }
 
-/// The JDK's sources: `$JAVA_HOME/lib/src.zip`, else the newest JDK that has one among
-/// SDKMAN's, IntelliJ's (`~/.jdks`) and the system's (`/usr/lib/jvm`).
 #[must_use]
 pub fn discover_jdk() -> Option<SourceJar> {
     let source_zip = |home: &Path| {
@@ -153,7 +148,6 @@ fn stem_of(entry: &str) -> Option<&str> {
     (!ignored).then_some(stem)
 }
 
-/// The class a file is named after, from its `package` line.
 fn class_from_source(head: &str, stem: &str) -> Option<String> {
     let name = stem.rsplit('/').next()?;
     let package = head.lines().find_map(|line| {
@@ -251,7 +245,6 @@ impl JarIndex {
         self.jars.len()
     }
 
-    /// The sources of the class `fqn`, newest version first.
     #[must_use]
     pub fn find(&self, fqn: &str) -> Vec<ClassSource> {
         let mut found: Vec<ClassSource> = self
@@ -280,8 +273,6 @@ impl JarIndex {
     }
 }
 
-/// Whether the project's build files (`build_text`, all of them concatenated) name this
-/// jar's version for its artifact or group.
 #[must_use]
 pub fn named_by_build(jar: &SourceJar, build_text: &str) -> bool {
     let version = &jar.version;

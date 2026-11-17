@@ -133,14 +133,12 @@ pub struct Symbol {
     pub kind: SymbolKind,
     pub range: ByteRange,
     pub name_range: ByteRange,
-    /// The index, in [`FileFacts::symbols`], of the enclosing declaration.
     pub parent: Option<usize>,
     pub supertypes: Vec<String>,
     pub receiver: Option<String>,
     /// The declared type of a field or property, or the return type of a function, without
     /// type arguments. `None` when it is not written, is primitive or is `void`.
     pub type_name: Option<String>,
-    /// The first type argument of that type: `Foo` for `List<Foo>`.
     pub type_argument: Option<String>,
     /// The parameters of a function, method or constructor, or of the primary constructor
     /// of a Kotlin class (empty when the class declares no constructor at all). `None`
@@ -169,7 +167,6 @@ pub struct Parameter {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Import {
-    /// The imported name without any trailing `.*`, e.g. `java.util.List` or `java.util`.
     pub path: String,
     pub wildcard: bool,
     pub is_static: bool,
@@ -199,7 +196,6 @@ pub struct FileFacts {
 }
 
 impl FileFacts {
-    /// The dotted path of enclosing declarations and the symbol itself, e.g. `Outer.Inner.go`.
     #[must_use]
     pub fn qualified_name(&self, index: usize) -> String {
         let mut names = Vec::new();
@@ -238,7 +234,6 @@ pub(crate) fn named_children(node: Node<'_>) -> Vec<Node<'_>> {
     node.named_children(&mut cursor).collect()
 }
 
-/// All children of `node`, including anonymous tokens such as `interface` or `static`.
 pub(crate) fn all_children(node: Node<'_>) -> Vec<Node<'_>> {
     let mut cursor = node.walk();
     node.children(&mut cursor).collect()

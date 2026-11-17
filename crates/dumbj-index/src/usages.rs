@@ -1,7 +1,3 @@
-//! Dumb Find Usages: an identifier search through the indexed files, narrowed with
-//! tree-sitter (comments and strings never match) and with the same resolver Go to
-//! Declaration uses.
-
 use std::path::PathBuf;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -15,7 +11,6 @@ use crate::resolve::{Decision, Site, resolve};
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum UsageTarget {
     Symbol(SymbolId),
-    /// A parameter or local variable; its usages are all in one file.
     Local {
         file: FileId,
         name: String,
@@ -26,7 +21,6 @@ pub enum UsageTarget {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Certainty {
     Sure,
-    /// The target is one of several candidates (unknown receiver, extension, overload).
     Maybe,
 }
 
@@ -63,7 +57,6 @@ fn hits(index: &Index, target: &UsageTarget, candidate: &crate::resolve::Target)
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UsageHighlight {
     pub range: ByteRange,
-    /// A declaration or an assignment.
     pub write: bool,
 }
 
@@ -136,7 +129,6 @@ pub fn usage_target_at(site: Site<'_>, offset: ByteOffset) -> Option<UsageTarget
                 file: site.file,
                 index: u32::try_from(index).ok()?,
             }),
-            // A declared name that is not in the index is a local or a parameter.
             None => UsageTarget::Local {
                 file: site.file,
                 name: resolution.reference.name,
@@ -160,7 +152,6 @@ struct ParsedFile {
     tree: SyntaxTree,
 }
 
-/// Reads and parses `file` if it is a Java or Kotlin file that mentions one of `names`.
 fn parse_if_mentions(
     index: &Index,
     file: FileId,
@@ -205,7 +196,6 @@ fn usages_in_file(
     name: &str,
     cancelled: &AtomicBool,
 ) -> Vec<Usage> {
-    // The target's own name, plus any alias this file imports it under (Kotlin `as`).
     let mut names = vec![name.to_owned()];
     if let (UsageTarget::Symbol(id), Some(indexed)) = (target, index.file(file)) {
         let fqn = index.fqn(*id);

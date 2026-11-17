@@ -1,6 +1,5 @@
 ; Adapted from tree-sitter-dockerfile-updated 0.2.0 (MIT), queries/highlights.scm.
 ; https://github.com/camdencheek/tree-sitter-dockerfile (grammar by camdencheek)
-; Later patterns take precedence over earlier ones.
 
 [
   "FROM"

@@ -1,8 +1,3 @@
-; tree-sitter-groovy highlight queries.
-;
-; Capture names follow nvim-treesitter conventions:
-; https://neovim.io/doc/user/treesitter.html#treesitter-highlight-groups
-;
 ; Precedence rule: tree-sitter highlight queries are last-match-wins
 ; per node. Layers below are ordered from broadest to most specific:
 ;   1. comments / number / string / boolean / null
@@ -16,8 +11,6 @@
 ;   8. type uses (@type on type_identifier) — must come AFTER
 ;      @variable so aliased identifier-as-type wins
 ;   9. annotation usage (the @attribute capture)
-
-; -- Layer 1: comments and literals --------------------------------
 
 (line_comment) @comment
 (block_comment) @comment
@@ -35,8 +28,6 @@
   "}" @punctuation.special)
 (gstring_dollar_interpolation
   value: (identifier) @variable)
-
-; -- Layer 2: operators (anonymous tokens) -------------------------
 
 [
   "+"
@@ -101,11 +92,7 @@
   "..."
 ] @operator
 
-; -- Layer 3: generic identifier fallback --------------------------
-
 (identifier) @variable
-
-; -- Layer 4: keywords ---------------------------------------------
 
 [
   "new"
@@ -180,8 +167,6 @@
 
 (shebang) @keyword.directive
 
-; -- Layer 5: dot-family property captures -------------------------
-
 (field_access                    field: [(identifier) (quoted_identifier)] @property)
 (safe_navigation_expression     property: [(identifier) (quoted_identifier)] @property)
 (safe_chain_dot_expression      property: [(identifier) (quoted_identifier)] @property)
@@ -191,8 +176,6 @@
 ; `Foo::new` — the `new` literal is captured as @keyword.operator at
 ; layer 4 instead of @function here.
 (method_reference_expression       name: (identifier) @function)
-
-; -- Layer 6: declared names ---------------------------------------
 
 (class_declaration name: (identifier) @type.definition)
 (trait_declaration name: (identifier) @type.definition)
@@ -209,12 +192,9 @@
 (variable_declarator name: (identifier) @variable)
 (field_declaration (variable_declarator name: (identifier) @property))
 
-; Labels (declaration + use sites)
 (labeled_statement label: (identifier) @label)
 (break_statement label: (identifier) @label)
 (continue_statement label: (identifier) @label)
-
-; -- Layer 7: call sites (after layer 5 so method-named fields win) -
 
 (method_invocation
   function: (identifier) @function.call)
@@ -226,15 +206,10 @@
 (command_chain
   receiver: (identifier) @function.call)
 
-; -- Layer 8: types (after @variable so aliased identifier wins) ---
-
 (type_identifier) @type
 
-; Java/Groovy primitive types and `void` highlight as builtin.
 ((type_identifier) @type.builtin
   (#match? @type.builtin "^(boolean|byte|char|double|float|int|long|short|void)$"))
-
-; -- Layer 9: annotation usage -------------------------------------
 
 (annotation
   "@" @attribute

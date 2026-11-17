@@ -23,13 +23,10 @@ use dumbj_text::{Buffer, ByteOffset};
 const SHIPPING: &str = "src/main/kotlin/freight/Shipping.kt";
 const DISPATCH: &str = "src/main/java/freight/app/Dispatch.java";
 
-/// Resolves the caret in `snippet` and renders the outcome:
-/// `Jump file:line name` or `Choose [file:line name, …]` or `NotFound`.
 fn go(index: &Index, file: &str, snippet: &str) -> String {
     go_in(&shop_root(), index, file, snippet)
 }
 
-/// Like [`go`], in the project at `root`.
 fn go_in(root: &Path, index: &Index, file: &str, snippet: &str) -> String {
     let caret = caret_in(root, file, snippet);
     let site = caret.site(index);
@@ -509,7 +506,6 @@ fn kotlin_multiplatform_pairs_are_one_target() {
         "Jump Clock.kt:5 now SamePackage",
         "a file in a platform source set sees that platform's `actual`"
     );
-    // Both land in a file called Clock.kt; make sure they are different files.
     let target = |file: &str, snippet: &str| {
         let path = freight_root().join("kmp").join(file);
         let source = std::fs::read_to_string(&path).unwrap();

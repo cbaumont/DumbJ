@@ -1,6 +1,5 @@
 ; Adapted from tree-sitter-kotlin-sg 0.4.1 (MIT), queries/highlights.scm.
 ; https://github.com/ast-grep/tree-sitter-kotlin
-; Later patterns take precedence over earlier ones.
 ;
 ; DumbJ changes:
 ; - `package` is a keyword and the package name is a namespace (upstream captured the
@@ -16,26 +15,20 @@
 ;; The only difference in this file is that queries using #lua-match?
 ;; have been removed.
 
-;;; Identifiers
-
 (simple_identifier) @variable
 
-; `it` keyword inside lambdas
 ; FIXME: This will highlight the keyword outside of lambdas since tree-sitter
 ;        does not allow us to check for arbitrary nestation
 ((simple_identifier) @variable.builtin
 (#eq? @variable.builtin "it"))
 
-; `field` keyword inside property getter/setter
 ; FIXME: This will highlight the keyword outside of getters and setters
 ;        since tree-sitter does not allow us to check for arbitrary nestation
 ((simple_identifier) @variable.builtin
 (#eq? @variable.builtin "field"))
 
-; `this` this keyword inside classes
 (this_expression) @variable.builtin
 
-; `super` keyword inside classes
 (super_expression) @variable.builtin
 
 (class_parameter
@@ -104,12 +97,9 @@
 (import_header
 	"import" @include)
 
-
 ; TODO: Seperate labeled returns/breaks/continue/super/this
 ;       Must be implemented in the parser first
 (label) @label
-
-;;; Function definitions
 
 (function_declaration
 	(simple_identifier) @function)
@@ -135,19 +125,14 @@
 (parameter_with_optional_type
 	(simple_identifier) @parameter)
 
-; lambda parameters
 (lambda_literal
 	(lambda_parameters
 		(variable_declaration
 			(simple_identifier) @parameter)))
 
-;;; Function calls
-
-; function()
 (call_expression
 	. (simple_identifier) @function)
 
-; object.function() or object.property.function()
 (call_expression
 	(navigation_expression
 		(navigation_suffix
@@ -200,8 +185,6 @@
 		"synchronized"
 ))
 
-;;; Literals
-
 [
 	(line_comment)
 	(multiline_comment)
@@ -228,8 +211,6 @@
 
 (character_escape_seq) @string.escape
 
-; There are 3 ways to define a regex
-;    - "[abc]?".toRegex()
 (call_expression
 	(navigation_expression
 		((string_literal) @string.regex)
@@ -237,7 +218,6 @@
 			((simple_identifier) @_function
 			(#eq? @_function "toRegex")))))
 
-;    - Regex("[abc]?")
 (call_expression
 	((simple_identifier) @_function
 	(#eq? @_function "Regex"))
@@ -246,7 +226,6 @@
 			(value_argument
 				(string_literal) @string.regex))))
 
-;   - Regex.fromLiteral("[abc]?")
 (call_expression
 	(navigation_expression
 		((simple_identifier) @_class
@@ -258,8 +237,6 @@
 		(value_arguments
 			(value_argument
 				(string_literal) @string.regex))))
-
-;;; Keywords
 
 (type_alias "typealias" @keyword)
 [
@@ -308,7 +285,6 @@
 	"finally"
 ] @exception
 
-
 (annotation
 	"@" @attribute (use_site_target)? @attribute)
 (annotation
@@ -328,8 +304,6 @@
 	(constructor_invocation
 		(user_type
 			(type_identifier) @attribute)))
-
-;;; Operators & Punctuation
 
 [
 	"!"

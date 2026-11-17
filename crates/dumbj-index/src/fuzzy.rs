@@ -20,8 +20,6 @@ const PREFIX_BONUS: i32 = 20;
 const EXACT_BONUS: i32 = 40;
 const NONE: i32 = i32::MIN / 2;
 
-/// Whether `chars[index]` starts a word: the first character, one after a separator, an
-/// upper-case letter after a lower-case one, or a digit after a letter.
 fn is_word_start(chars: &[char], index: usize) -> bool {
     let Some(current) = chars.get(index) else {
         return false;
@@ -76,7 +74,6 @@ pub fn fuzzy_match(pattern: &str, candidate: &str) -> Option<FuzzyMatch> {
     let mut from = vec![usize::MAX; rows * columns];
     let cell = |p: usize, c: usize| p * columns + c;
     for (p, pattern_char) in pattern.iter().enumerate() {
-        // The best previous-row score at any earlier column, with its gap cost so far.
         let mut running: Option<(i32, usize)> = None;
         for (c, candidate_char) in chars.iter().enumerate() {
             if p > 0 && c > 0 {

@@ -1,5 +1,3 @@
-//! Tree-sitter layer with no UI and no I/O; callers run [`parse`] on a background thread.
-
 mod document;
 mod highlight;
 mod java;
@@ -132,7 +130,6 @@ impl SyntaxTree {
 }
 
 impl SyntaxTree {
-    /// The smallest syntax node strictly larger than `range` that contains it.
     #[must_use]
     pub fn enclosing_range(&self, range: dumbj_text::ByteRange) -> Option<dumbj_text::ByteRange> {
         let mut node = self
@@ -238,7 +235,6 @@ pub enum FoldKind {
     Imports,
 }
 
-/// A foldable stretch of lines, `start..=end`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Fold {
     /// Where the declaration that owns the region starts: Collapse anywhere from here
@@ -278,8 +274,6 @@ fn fold_kind(language: Language, kind: &str) -> Option<FoldKind> {
 }
 
 impl SyntaxTree {
-    /// Foldable regions spanning two lines or more: bodies, blocks, lambdas, block
-    /// comments, and the run of imports.
     #[must_use]
     pub fn folds(&self, buffer: &Buffer) -> Vec<Fold> {
         let language = self.language();

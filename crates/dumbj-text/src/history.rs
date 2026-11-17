@@ -185,14 +185,12 @@ impl History {
         Ok(edit)
     }
 
-    /// Ends the current group: the next edit starts a new undo step.
     pub fn seal(&mut self) {
         if let Some(group) = self.undo.back_mut() {
             group.sealed = true;
         }
     }
 
-    /// Starts a group that holds every edit until [`end_group`](Self::end_group).
     pub fn begin_group(&mut self) {
         self.seal();
         self.explicit_group = true;
@@ -252,7 +250,6 @@ impl History {
         !self.redo.is_empty()
     }
 
-    /// Remembers the current point in history as what is on disk.
     pub fn mark_saved(&mut self) {
         self.seal();
         self.saved = Some(self.current_id());
