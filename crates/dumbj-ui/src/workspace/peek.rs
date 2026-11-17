@@ -12,7 +12,7 @@ use gpui::{
 };
 
 use super::Workspace;
-use super::popup::{popup_box, popup_layer};
+use super::popup::{list_height, popup_box, popup_layer};
 use super::smart_nav::DUMB_AFTER;
 use crate::assets::EDITOR_FONT;
 use crate::theme;
@@ -365,8 +365,7 @@ impl Workspace {
 
     pub(super) fn render_peek(peek: &Peek, cx: &mut Context<Self>) -> impl IntoElement {
         let count = peek.lines.len();
-        #[expect(clippy::cast_precision_loss, reason = "a popup shows a few dozen rows")]
-        let height = px(ROW_HEIGHT * count.min(VISIBLE_ROWS) as f32);
+        let height = list_height(ROW_HEIGHT, count, VISIBLE_ROWS);
         let rows = uniform_list(
             "peek-rows",
             count,

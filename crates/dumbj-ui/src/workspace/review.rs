@@ -13,7 +13,7 @@ use gpui::{
 
 use super::diff::DiffSides;
 use super::file_name;
-use super::popup::{popup_box, popup_layer};
+use super::popup::{list_height, popup_box, popup_layer};
 use super::review_tree::{self, Node, Row};
 use super::{LeftTool, ToolWindowState, Workspace};
 use crate::file_tree::status_role;
@@ -1054,11 +1054,7 @@ impl Workspace {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let offered = offered(&prompt.suggestions, self.review_input.read(cx).text());
-        #[expect(
-            clippy::cast_precision_loss,
-            reason = "a popup shows at most a dozen rows"
-        )]
-        let list_height = px(PROMPT_ROW_HEIGHT * offered.len().min(12) as f32);
+        let list_height = list_height(PROMPT_ROW_HEIGHT, offered.len(), 12);
         let selected = prompt.selected;
         let rows = uniform_list(
             "review-prompt-rows",

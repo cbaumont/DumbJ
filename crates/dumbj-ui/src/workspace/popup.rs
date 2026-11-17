@@ -1,7 +1,7 @@
 use dumbj_settings::UiRole;
 use gpui::{
-    App, Context, Div, InteractiveElement, IntoElement, MouseButton, ParentElement, Styled, Window,
-    div, px,
+    App, Context, Div, InteractiveElement, IntoElement, MouseButton, ParentElement, Pixels, Styled,
+    Window, div, px,
 };
 
 use crate::theme;
@@ -40,4 +40,12 @@ pub(super) fn popup_layer<V: 'static>(
                 .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                 .child(body),
         )
+}
+
+#[expect(
+    clippy::cast_precision_loss,
+    reason = "popup lists show a few dozen rows at most"
+)]
+pub(super) fn list_height(row: f32, count: usize, max: usize) -> Pixels {
+    px(row * count.min(max) as f32)
 }

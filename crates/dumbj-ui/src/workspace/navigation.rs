@@ -16,7 +16,7 @@ use gpui::{
 };
 
 use super::Workspace;
-use super::popup::{popup_box, popup_layer};
+use super::popup::{list_height, popup_box, popup_layer};
 use crate::theme;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -486,11 +486,7 @@ impl Workspace {
 
     pub(super) fn render_chooser(chooser: &Chooser, cx: &mut Context<Self>) -> impl IntoElement {
         let count = chooser.items.len();
-        #[expect(
-            clippy::cast_precision_loss,
-            reason = "a popup shows at most a dozen rows"
-        )]
-        let list_height = px(CHOOSER_ROW_HEIGHT * count.min(14) as f32);
+        let list_height = list_height(CHOOSER_ROW_HEIGHT, count, 14);
         let rows = uniform_list(
             "chooser-rows",
             count,

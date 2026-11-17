@@ -11,7 +11,7 @@ use gpui::{
 
 use super::Workspace;
 use super::git_log::format_time;
-use super::popup::{popup_box, popup_layer};
+use super::popup::{list_height, popup_box, popup_layer};
 use crate::editor::EditorView;
 use crate::theme;
 
@@ -292,11 +292,7 @@ impl Workspace {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let rows = rows(&popup.branches, self.branch_input.read(cx).text());
-        #[expect(
-            clippy::cast_precision_loss,
-            reason = "a popup shows at most a dozen rows"
-        )]
-        let list_height = px(ROW_HEIGHT * rows.len().min(14) as f32);
+        let list_height = list_height(ROW_HEIGHT, rows.len(), 14);
         let selected = popup.selected;
         let list = uniform_list(
             "branch-rows",

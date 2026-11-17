@@ -18,12 +18,12 @@ use gpui::{
 use super::Workspace;
 use super::file_name;
 use super::navigation::Location;
-use super::popup::{popup_box, popup_layer};
+use super::popup::{list_height, popup_box, popup_layer};
 use crate::theme;
 
 const ROW_HEIGHT: f32 = 26.;
 const MAX_RESULTS: usize = 80;
-const MAX_VISIBLE_ROWS: f32 = 14.;
+const MAX_VISIBLE_ROWS: usize = 14;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum SearchMode {
@@ -570,8 +570,7 @@ impl Workspace {
             .child(self.search_input.clone());
         let has_query = !self.search_input.read(cx).text().trim().is_empty();
         let count = popup.rows.len();
-        #[expect(clippy::cast_precision_loss, reason = "at most MAX_RESULTS rows")]
-        let list_height = px(ROW_HEIGHT * (count as f32).min(MAX_VISIBLE_ROWS));
+        let list_height = list_height(ROW_HEIGHT, count, MAX_VISIBLE_ROWS);
         let results = if count == 0 {
             let text = if has_query {
                 "Nothing found"
