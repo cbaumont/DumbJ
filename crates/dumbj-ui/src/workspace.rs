@@ -94,6 +94,16 @@ impl Tab {
     }
 }
 
+impl Workspace {
+    fn working_editors(&self) -> Vec<(Entity<EditorView>, PathBuf)> {
+        self.tabs
+            .iter()
+            .filter(|tab| tab.shows_working_file())
+            .map(|tab| (tab.editor.clone(), tab.path.clone()))
+            .collect()
+    }
+}
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum ToolWindowState {
     Visible,

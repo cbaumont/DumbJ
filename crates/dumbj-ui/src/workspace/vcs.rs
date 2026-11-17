@@ -50,13 +50,7 @@ impl Workspace {
                         tree.reload(cx);
                     });
                 }
-                let open: Vec<(Entity<EditorView>, PathBuf)> = this
-                    .tabs
-                    .iter()
-                    .filter(|tab| tab.shows_working_file())
-                    .map(|tab| (tab.editor.clone(), tab.path.clone()))
-                    .collect();
-                for (editor, path) in open {
+                for (editor, path) in this.working_editors() {
                     this.refresh_base_text(&editor, &path, cx);
                     if editor.read(cx).is_annotated() {
                         this.load_annotations(&editor, path, cx);

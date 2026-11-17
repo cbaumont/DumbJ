@@ -207,13 +207,7 @@ impl Workspace {
                     );
                     this.index = Some(Arc::new(index));
                     this.sync_watched_files(cx);
-                    let open: Vec<_> = this
-                        .tabs
-                        .iter()
-                        .filter(|tab| tab.shows_working_file())
-                        .map(|tab| (tab.editor.clone(), tab.path.clone()))
-                        .collect();
-                    for (editor, path) in open {
+                    for (editor, path) in this.working_editors() {
                         this.refresh_gutter_icons(&editor, &path, cx);
                     }
                     this.index_revision_editors(cx);
