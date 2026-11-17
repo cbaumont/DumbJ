@@ -13,6 +13,8 @@ use gpui::{
     div, prelude::*, px, uniform_list,
 };
 
+mod exact;
+
 use super::Workspace;
 use super::navigation::{Chooser, ChooserItem, Location};
 use crate::editor::{EditorView, GutterIcon};
@@ -47,18 +49,46 @@ struct Row {
     expansion: Expansion,
     emphasised: bool,
     maybe: bool,
+    /// The language server's item behind an exact row.
+    item: Option<exact::Item>,
 }
 
 pub(super) struct HierarchyWindow {
     kind: HierarchyKind,
     /// The index the rows' symbols belong to.
     index: Arc<Index>,
-    title: String,
+    name: String,
+    /// Rows from the language server, whose `server` expands them.
+    exact: bool,
+    server: Option<dumbj_lsp::Server>,
+    direction: exact::Direction,
     rows: Vec<Row>,
     selected: usize,
     scroll: UniformListScrollHandle,
     pub(super) visible: bool,
     pub(super) hidden_by_hide_all: bool,
+}
+
+struct Prepared {
+    kind: HierarchyKind,
+    index: Arc<Index>,
+    name: String,
+    rows: Vec<Row>,
+    selected: usize,
+}
+
+impl HierarchyWindow {
+    fn title(&self) -> String {
+        match (self.kind, self.direction) {
+            (HierarchyKind::Type, _) => format!("Type hierarchy of {}", self.name),
+            (HierarchyKind::Calls, exact::Direction::Callers) => {
+                format!("Callers of {}", self.name)
+            }
+            (HierarchyKind::Calls, exact::Direction::Callees) => {
+                format!("Callees of {}", self.name)
+            }
+        }
+    }
 }
 
 fn symbol_location(index: &Index, id: SymbolId) -> Option<Location> {
@@ -93,6 +123,7 @@ fn symbol_row(index: &Index, id: SymbolId, depth: usize, expansion: Expansion) -
         expansion,
         emphasised: false,
         maybe: false,
+        item: None,
     }
 }
 
@@ -198,6 +229,7 @@ fn caller_rows(index: &Index, found: &[Caller], depth: usize) -> Vec<Row> {
                 },
                 emphasised: false,
                 maybe,
+                item: None,
             }
         })
         .collect()
@@ -386,9 +418,62 @@ impl Workspace {
     }
 
     pub(super) fn type_hierarchy(&mut self, cx: &mut Context<Self>) {
-        let Some((index, id)) = self.symbol_at_caret(cx) else {
-            return;
+        self.hierarchy(HierarchyKind::Type, cx);
+    }
+
+    pub(super) fn call_hierarchy(&mut self, cx: &mut Context<Self>) {
+        self.hierarchy(HierarchyKind::Calls, cx);
+    }
+
+    /// Asks the language server when there is one; the dumb tree is shown at once
+    /// without one, or after 300 ms if the exact tree has not arrived.
+    fn hierarchy(&mut self, kind: HierarchyKind, cx: &mut Context<Self>) {
+        let dumb = match kind {
+            HierarchyKind::Type => self.dumb_type_hierarchy(cx),
+            HierarchyKind::Calls => self.dumb_call_hierarchy(cx),
         };
+        if !self.ask_exact_hierarchy(kind, cx) {
+            self.show_dumb_hierarchy(dumb, cx);
+            return;
+        }
+        let generation = self.smart.generation;
+        cx.spawn(async move |this, cx| {
+            cx.background_executor()
+                .timer(super::smart_nav::DUMB_AFTER)
+                .await;
+            let _ = this.update(cx, |this, cx| {
+                if this.smart.hierarchy_waiting == Some(generation) {
+                    this.smart.hierarchy_waiting = None;
+                    this.show_dumb_hierarchy(dumb, cx);
+                }
+            });
+        })
+        .detach();
+    }
+
+    fn show_dumb_hierarchy(
+        &mut self,
+        dumb: Option<Result<Prepared, String>>,
+        cx: &mut Context<Self>,
+    ) {
+        match dumb {
+            None => {}
+            Some(Err(message)) => {
+                self.status_message = Some(message);
+                cx.notify();
+            }
+            Some(Ok(prepared)) => {
+                let kind = prepared.kind;
+                self.show_hierarchy(prepared, cx);
+                if kind == HierarchyKind::Calls {
+                    self.expand_hierarchy_row(0, cx);
+                }
+            }
+        }
+    }
+
+    fn dumb_type_hierarchy(&self, cx: &Context<Self>) -> Option<Result<Prepared, String>> {
+        let (index, id) = self.symbol_at_caret(cx)?;
         let owner = if index.symbol(id).is_some_and(|s| s.kind.is_type()) {
             Some(id)
         } else {
@@ -396,66 +481,55 @@ impl Workspace {
                 .find(|p| index.symbol(*p).is_some_and(|s| s.kind.is_type()))
         };
         let Some(owner) = owner else {
-            self.status_message = Some("No type at the caret".to_owned());
-            cx.notify();
-            return;
+            return Some(Err("No type at the caret".to_owned()));
         };
         let rows = type_rows(&index, owner);
         let selected = rows.iter().position(|row| row.emphasised).unwrap_or(0);
-        self.show_hierarchy(
-            HierarchyKind::Type,
-            index.clone(),
-            &index.qualified_name(owner),
+        Some(Ok(Prepared {
+            kind: HierarchyKind::Type,
+            name: index.qualified_name(owner),
+            index,
             rows,
             selected,
-            cx,
-        );
+        }))
     }
 
-    pub(super) fn call_hierarchy(&mut self, cx: &mut Context<Self>) {
-        let Some((index, id)) = self.symbol_at_caret(cx) else {
-            return;
-        };
+    fn dumb_call_hierarchy(&self, cx: &Context<Self>) -> Option<Result<Prepared, String>> {
+        let (index, id) = self.symbol_at_caret(cx)?;
         let callable = index
             .symbol(id)
             .is_some_and(|s| s.parameters.is_some() && !s.kind.is_type());
         if !callable {
-            self.status_message = Some("No method at the caret".to_owned());
-            cx.notify();
-            return;
+            return Some(Err("No method at the caret".to_owned()));
         }
         let mut root = symbol_row(&index, id, 0, Expansion::Collapsed);
         root.emphasised = true;
-        self.show_hierarchy(
-            HierarchyKind::Calls,
-            index.clone(),
-            &index.qualified_name(id),
-            vec![root],
-            0,
-            cx,
-        );
-        self.expand_hierarchy_row(0, cx);
+        Some(Ok(Prepared {
+            kind: HierarchyKind::Calls,
+            name: index.qualified_name(id),
+            index,
+            rows: vec![root],
+            selected: 0,
+        }))
     }
 
-    fn show_hierarchy(
-        &mut self,
-        kind: HierarchyKind,
-        index: Arc<Index>,
-        name: &str,
-        rows: Vec<Row>,
-        selected: usize,
-        cx: &mut Context<Self>,
-    ) {
-        let title = match kind {
-            HierarchyKind::Type => format!("Type hierarchy of {name}"),
-            HierarchyKind::Calls => format!("Callers of {name}"),
-        };
+    fn show_hierarchy(&mut self, prepared: Prepared, cx: &mut Context<Self>) {
+        let Prepared {
+            kind,
+            index,
+            name,
+            rows,
+            selected,
+        } = prepared;
         let scroll = UniformListScrollHandle::new();
         scroll.scroll_to_item(selected, ScrollStrategy::Center);
         self.hierarchy_window = Some(HierarchyWindow {
             kind,
             index,
-            title,
+            name,
+            exact: false,
+            server: None,
+            direction: exact::Direction::Callers,
             rows,
             selected,
             scroll,
@@ -471,6 +545,10 @@ impl Workspace {
             return;
         };
         let index = hierarchy.index.clone();
+        if hierarchy.exact {
+            self.expand_exact_row(row, cx);
+            return;
+        }
         let Some(target) = hierarchy.rows.get_mut(row) else {
             return;
         };
@@ -561,7 +639,7 @@ impl Workspace {
                     .rows
                     .get(selected)
                     .is_some_and(|r| r.expansion == Expansion::Expanded);
-                if hierarchy.kind == HierarchyKind::Calls && expanded {
+                if (hierarchy.kind == HierarchyKind::Calls || hierarchy.exact) && expanded {
                     collapse(&mut hierarchy.rows, selected);
                 } else if let Some(depth) = hierarchy.rows.get(selected).map(|r| r.depth) {
                     let parent = hierarchy.rows[..selected]
@@ -574,6 +652,7 @@ impl Workspace {
             }
             Action::Enter => self.open_hierarchy_row(selected, window, cx),
             Action::Escape => self.focus_fallback(window, cx),
+            Action::Tab | Action::Unindent => self.switch_call_direction(cx),
             _ => {}
         }
         cx.notify();
@@ -691,12 +770,23 @@ impl Workspace {
             .justify_between()
             .px(px(12.))
             .text_color(theme::ui(cx, UiRole::TextMuted))
-            .child(format!("Hierarchy: {}", hierarchy.title))
+            .child(format!("Hierarchy: {}", hierarchy.title()))
             .child(
                 div()
-                    .text_size(px(11.))
-                    .text_color(theme::ui(cx, UiRole::Warning))
-                    .child("best guess"),
+                    .flex()
+                    .items_center()
+                    .gap(px(12.))
+                    .children(Self::render_direction_switch(hierarchy, cx))
+                    .child(
+                        div()
+                            .text_size(px(11.))
+                            .text_color(theme::ui(cx, UiRole::Warning))
+                            .child(if hierarchy.exact {
+                                "exact"
+                            } else {
+                                "best guess"
+                            }),
+                    ),
             );
         div()
             .track_focus(&self.hierarchy_window_focus)
@@ -726,6 +816,7 @@ mod tests {
             expansion,
             emphasised: false,
             maybe: false,
+            item: None,
         }
     }
 

@@ -56,7 +56,7 @@
 - [x] Find Usages / Show Usages
 - [~] Quick Definition / Quick Documentation — plain-text popup; hover in smart mode, else the comment above the best-guess target
 - [x] File Structure popup
-- [~] Call Hierarchy / Type Hierarchy — callers only, no callees
+- [~] Call Hierarchy / Type Hierarchy — exact from the server with callers and callees; dumb mode has callers only
 - [x] Navigate Back / Forward
 - [~] Recent Files, Recent Locations — per project, kept in the state dir; no Last Edit Location or Switcher
 - [~] Find in Files — regex, case, whole word, file mask, directory scope, gitignore; toggles are mouse-only; no Replace in Files
@@ -133,7 +133,7 @@ Code navigation
 - [ ] ParameterInfo
 - [x] FileStructurePopup
 - [x] TypeHierarchy
-- [~] CallHierarchy — callers only
+- [~] CallHierarchy — callees in smart mode only
 - [x] Back
 - [x] Forward
 - [ ] JumpToLastChange

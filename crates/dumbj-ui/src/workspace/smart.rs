@@ -27,6 +27,8 @@ pub(super) struct Smart {
     poll: Option<Task<()>>,
     pub(super) nav: Option<super::smart_nav::SmartNav>,
     pub(super) generation: u64,
+    /// The hierarchy request whose dumb tree waits for the exact one.
+    pub(super) hierarchy_waiting: Option<u64>,
     pub(super) peek: Option<super::peek::Peek>,
     /// The generation of the peek the user closed, so a late exact answer stays away.
     pub(super) peek_closed: u64,
