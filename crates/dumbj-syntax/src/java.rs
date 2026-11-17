@@ -87,9 +87,7 @@ fn collect_type(
             supertypes(collector, clause, &mut supers);
         }
     }
-    if let Some(symbol) = collector.facts.symbols.get_mut(index) {
-        symbol.supertypes = supers;
-    }
+    collector.update(index, |symbol| symbol.supertypes = supers);
     if let Some(parameters) = node
         .child_by_field_name("parameters")
         .filter(|_| kind == SymbolKind::Record)
@@ -98,9 +96,8 @@ fn collect_type(
             if let Some(name) = parameter.child_by_field_name("name") {
                 let field = collector.push(SymbolKind::Field, parameter, name, Some(index));
                 let type_name = declared_type(&collector.source, parameter, None);
-                collector.set_type(field, type_name);
                 let argument = declared_type_argument(&collector.source, parameter);
-                collector.set_type_argument(field, argument);
+                collector.set_types(field, type_name, argument);
             }
         }
     }
@@ -138,19 +135,18 @@ pub(crate) fn collect(collector: &mut Collector<'_>, node: Node<'_>, parent: Opt
             if let Some(name) = node.child_by_field_name("name") {
                 let method = collector.push(SymbolKind::Method, node, name, parent);
                 let type_name = declared_type(&collector.source, node, None);
-                collector.set_type(method, type_name);
                 let argument = declared_type_argument(&collector.source, node);
-                collector.set_type_argument(method, argument);
+                collector.set_types(method, type_name, argument);
                 // An annotation element has no parameter list but is called as `name()`.
                 let parameters = parameters(&collector.source, node).or_else(|| Some(Vec::new()));
-                collector.set_parameters(method, parameters);
+                collector.update(method, |symbol| symbol.parameters = parameters);
             }
         }
         "constructor_declaration" | "compact_constructor_declaration" => {
             if let Some(name) = node.child_by_field_name("name") {
                 let constructor = collector.push(SymbolKind::Constructor, node, name, parent);
                 let parameters = parameters(&collector.source, node);
-                collector.set_parameters(constructor, parameters);
+                collector.update(constructor, |symbol| symbol.parameters = parameters);
             }
         }
         "field_declaration" | "constant_declaration" => {
@@ -160,8 +156,7 @@ pub(crate) fn collect(collector: &mut Collector<'_>, node: Node<'_>, parent: Opt
                 let name = declarator.child_by_field_name("name");
                 if let Some(name) = name.filter(|_| declarator.kind() == "variable_declarator") {
                     let field = collector.push(SymbolKind::Field, node, name, parent);
-                    collector.set_type(field, type_name.clone());
-                    collector.set_type_argument(field, argument.clone());
+                    collector.set_types(field, type_name.clone(), argument.clone());
                 }
             }
         }

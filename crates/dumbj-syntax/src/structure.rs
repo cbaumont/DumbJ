@@ -260,22 +260,22 @@ pub(crate) struct Collector<'a> {
 }
 
 impl Collector<'_> {
-    pub(crate) fn set_type_argument(&mut self, index: usize, argument: Option<String>) {
+    pub(crate) fn update(&mut self, index: usize, change: impl FnOnce(&mut Symbol)) {
         if let Some(symbol) = self.facts.symbols.get_mut(index) {
-            symbol.type_argument = argument;
+            change(symbol);
         }
     }
 
-    pub(crate) fn set_type(&mut self, index: usize, type_name: Option<String>) {
-        if let Some(symbol) = self.facts.symbols.get_mut(index) {
+    pub(crate) fn set_types(
+        &mut self,
+        index: usize,
+        type_name: Option<String>,
+        type_argument: Option<String>,
+    ) {
+        self.update(index, |symbol| {
             symbol.type_name = type_name;
-        }
-    }
-
-    pub(crate) fn set_parameters(&mut self, index: usize, parameters: Option<Vec<Parameter>>) {
-        if let Some(symbol) = self.facts.symbols.get_mut(index) {
-            symbol.parameters = parameters;
-        }
+            symbol.type_argument = type_argument;
+        });
     }
 
     pub(crate) fn push(

@@ -147,10 +147,10 @@ fn collect_type(
         // An unnamed companion is called `Companion`; navigation lands on the keyword.
         (None, SymbolKind::Companion) => {
             let index = collector.push(kind, node, node, parent);
-            if let Some(symbol) = collector.facts.symbols.get_mut(index) {
+            collector.update(index, |symbol| {
                 "Companion".clone_into(&mut symbol.name);
                 symbol.name_range.end = symbol.name_range.start;
-            }
+            });
             index
         }
         (None, _) => return,
@@ -161,9 +161,7 @@ fn collect_type(
         .filter_map(find_user_type)
         .map(|user_type| user_type_name(&collector.source, user_type))
         .collect();
-    if let Some(symbol) = collector.facts.symbols.get_mut(index) {
-        symbol.supertypes = supers;
-    }
+    collector.update(index, |symbol| symbol.supertypes = supers);
     // What `Name(…)` calls: the primary constructor, or the implicit one of a class that
     // declares none. A class with only secondary constructors is called through those.
     if matches!(kind, SymbolKind::Class | SymbolKind::Annotation) {
@@ -175,7 +173,7 @@ fn collect_type(
                 .any(|member| member.kind() == "secondary_constructor")
         });
         let parameters = primary.or_else(|| (!has_secondary).then(Vec::new));
-        collector.set_parameters(index, parameters);
+        collector.update(index, |symbol| symbol.parameters = parameters);
     }
     mark_platform(collector, node, parent, index);
     for child in named_children(node) {
@@ -188,9 +186,8 @@ fn collect_type(
                         let property =
                             collector.push(SymbolKind::Property, parameter, name, Some(index));
                         let type_name = declared_type(&collector.source, parameter);
-                        collector.set_type(property, type_name);
                         let argument = declared_type_argument(&collector.source, parameter);
-                        collector.set_type_argument(property, argument);
+                        collector.set_types(property, type_name, argument);
                     }
                 }
             }
@@ -283,13 +280,13 @@ fn collect_function(collector: &mut Collector<'_>, node: Node<'_>, parent: Optio
         let parameters = child_of_kind(node, "function_value_parameters")
             .map(|list| function_parameters(&collector.source, list));
         let renamed = jvm_name(&collector.source, &annotations_of(node), None);
-        if let Some(symbol) = collector.facts.symbols.get_mut(index) {
+        collector.update(index, |symbol| {
             symbol.receiver = receiver;
             symbol.type_name = type_name;
             symbol.type_argument = type_argument;
             symbol.parameters = parameters;
             symbol.jvm_name = renamed;
-        }
+        });
     }
 }
 
@@ -310,12 +307,12 @@ fn collect_property(collector: &mut Collector<'_>, node: Node<'_>, parent: Optio
             let type_name =
                 declared_type(&collector.source, declaration).or_else(|| constructed.clone());
             let type_argument = declared_type_argument(&collector.source, declaration);
-            if let Some(symbol) = collector.facts.symbols.get_mut(index) {
+            collector.update(index, |symbol| {
                 symbol.receiver.clone_from(&receiver);
                 symbol.type_name = type_name;
                 symbol.type_argument = type_argument;
                 symbol.jvm_name.clone_from(&getter);
-            }
+            });
         }
     }
 }
@@ -367,11 +364,11 @@ fn collect_declaration(collector: &mut Collector<'_>, node: Node<'_>, parent: Op
                 let index = collector.push(SymbolKind::Constructor, node, node, parent);
                 let parameters = child_of_kind(node, "function_value_parameters")
                     .map(|list| function_parameters(&collector.source, list));
-                if let Some(symbol) = collector.facts.symbols.get_mut(index) {
+                collector.update(index, |symbol| {
                     symbol.name = class_name;
                     symbol.name_range.end = symbol.name_range.start;
                     symbol.parameters = parameters;
-                }
+                });
             }
         }
         // Containers of declarations, and ERROR nodes so a syntax error hides as little
