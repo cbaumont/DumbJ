@@ -3,7 +3,7 @@ use std::time::Duration;
 
 use lsp_types::request::{GotoDefinition, GotoImplementation, GotoTypeDefinition};
 use lsp_types::{
-    GotoDefinitionParams, GotoDefinitionResponse, PartialResultParams, Position, Range,
+    GotoDefinitionParams, GotoDefinitionResponse, Location, PartialResultParams, Position, Range,
     TextDocumentIdentifier, TextDocumentPositionParams, Uri, WorkDoneProgressParams,
 };
 
@@ -21,6 +21,15 @@ pub enum GotoKind {
 pub struct Place {
     pub uri: Uri,
     pub range: Range,
+}
+
+impl From<Location> for Place {
+    fn from(location: Location) -> Self {
+        Self {
+            uri: location.uri,
+            range: location.range,
+        }
+    }
 }
 
 pub(crate) fn position_params(path: &Path, position: Position) -> TextDocumentPositionParams {
@@ -53,17 +62,10 @@ pub fn goto(
     }?;
     Ok(match response {
         None => Vec::new(),
-        Some(GotoDefinitionResponse::Scalar(location)) => vec![Place {
-            uri: location.uri,
-            range: location.range,
-        }],
-        Some(GotoDefinitionResponse::Array(locations)) => locations
-            .into_iter()
-            .map(|location| Place {
-                uri: location.uri,
-                range: location.range,
-            })
-            .collect(),
+        Some(GotoDefinitionResponse::Scalar(location)) => vec![location.into()],
+        Some(GotoDefinitionResponse::Array(locations)) => {
+            locations.into_iter().map(Place::from).collect()
+        }
         Some(GotoDefinitionResponse::Link(links)) => links
             .into_iter()
             .map(|link| Place {
@@ -95,10 +97,7 @@ pub fn references(
     Ok(found
         .unwrap_or_default()
         .into_iter()
-        .map(|location| Place {
-            uri: location.uri,
-            range: location.range,
-        })
+        .map(Place::from)
         .collect())
 }
 
