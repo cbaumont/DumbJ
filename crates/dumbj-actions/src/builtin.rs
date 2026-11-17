@@ -15,11 +15,6 @@ const ACTION_ID_MAP_TOML: &str = include_str!("../../../keymaps/action-id-map.to
 pub const DUMBJ_LINUX: &str = "DumbJ";
 /// The default keymap on macOS: IntelliJ's "macOS" keymap plus DumbJ's own actions.
 pub const DUMBJ_MACOS: &str = "DumbJ macOS";
-pub const MACOS_FOR_ALL: &str = "macOS For All";
-/// IntelliJ's "macOS" keymap, under its internal name.
-pub const IDEA_MACOS: &str = "Mac OS X 10.5+";
-/// IntelliJ's root keymap, the parent of the other two.
-pub const IDEA_DEFAULT: &str = "$default";
 
 #[derive(Debug, Error)]
 pub enum BuiltinError {

@@ -11,6 +11,10 @@ use dumbj_actions::{
     render_keymap_markdown,
 };
 
+const MACOS_FOR_ALL: &str = "macOS For All";
+const IDEA_MACOS: &str = "Mac OS X 10.5+";
+const IDEA_DEFAULT: &str = "$default";
+
 fn shown(keymap: &str, intellij_id: &str, style: ShortcutStyle) -> Vec<String> {
     let resolved = builtin::library().unwrap().resolve(keymap).unwrap();
     resolved
@@ -21,11 +25,11 @@ fn shown(keymap: &str, intellij_id: &str, style: ShortcutStyle) -> Vec<String> {
 }
 
 fn linux(intellij_id: &str) -> Vec<String> {
-    shown(builtin::MACOS_FOR_ALL, intellij_id, ShortcutStyle::Linux)
+    shown(MACOS_FOR_ALL, intellij_id, ShortcutStyle::Linux)
 }
 
 fn macos(intellij_id: &str) -> Vec<String> {
-    shown(builtin::IDEA_MACOS, intellij_id, ShortcutStyle::MacOs)
+    shown(IDEA_MACOS, intellij_id, ShortcutStyle::MacOs)
 }
 
 /// The canary bindings from BRIEF §6.1. If the vendored XML changes one of these, the XML
@@ -71,9 +75,9 @@ fn intellij_macos_known_bindings() {
 fn every_vendored_keymap_parses_cleanly() {
     let library = builtin::library().unwrap();
     for name in [
-        builtin::IDEA_DEFAULT,
-        builtin::IDEA_MACOS,
-        builtin::MACOS_FOR_ALL,
+        IDEA_DEFAULT,
+        IDEA_MACOS,
+        MACOS_FOR_ALL,
         builtin::DUMBJ_LINUX,
         builtin::DUMBJ_MACOS,
     ] {
