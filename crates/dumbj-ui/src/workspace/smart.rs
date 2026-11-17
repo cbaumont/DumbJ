@@ -41,6 +41,13 @@ pub(super) struct Smart {
     pub(super) last_jump: Option<super::navigation::Location>,
 }
 
+impl Smart {
+    pub(super) fn next_generation(&mut self) -> u64 {
+        self.generation += 1;
+        self.generation
+    }
+}
+
 fn label(kind: ServerKind, state: &SessionState) -> String {
     match state {
         SessionState::Starting => "smart (starting…)".to_owned(),

@@ -265,8 +265,7 @@ impl Workspace {
         let Some(position) = editor.read(cx).lsp_caret() else {
             return false;
         };
-        self.smart.generation += 1;
-        let generation = self.smart.generation;
+        let generation = self.smart.next_generation();
         self.smart.hierarchy_waiting = Some(generation);
         let asked = server.clone();
         let tree = cx.background_spawn(async move {

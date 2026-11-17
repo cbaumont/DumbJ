@@ -102,8 +102,7 @@ impl Workspace {
         let Some(position) = editor.read(cx).lsp_caret() else {
             return false;
         };
-        self.smart.generation += 1;
-        let generation = self.smart.generation;
+        let generation = self.smart.next_generation();
         let path = origin.path.clone();
         let answer = cx.background_spawn(async move {
             exact(goto(&server, kind, &path, position, GIVE_UP_AFTER))

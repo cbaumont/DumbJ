@@ -225,8 +225,7 @@ impl Workspace {
             PeekKind::Documentation => format!("Documentation of {name}"),
             PeekKind::Definition => format!("Definition of {name}"),
         };
-        self.smart.generation += 1;
-        let generation = self.smart.generation;
+        let generation = self.smart.next_generation();
         self.smart.peek = None;
 
         let asked = self.current_location(cx).and_then(|origin| {
