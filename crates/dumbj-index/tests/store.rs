@@ -9,9 +9,9 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
-use common::{MONEY, shop_root};
+use common::{MONEY, freight_root, shop_root};
 use dumbj_index::{CacheStamp, Index, IndexStore, cache_path, index_project, index_project_cached};
-use dumbj_syntax::{FileFacts, Language};
+use dumbj_syntax::{FileFacts, Language, Platform};
 
 struct Scratch(PathBuf);
 
@@ -91,12 +91,30 @@ fn sql(db: &Path, statement: &str) {
 
 #[test]
 fn cached_index_equals_the_uncached_one_and_survives_a_second_run() {
-    let scratch = Scratch::new("roundtrip");
-    let root = shop_root();
-    let expected = summary(&index_project(&root, &AtomicBool::new(false), |_| {}).unwrap());
-    assert!(expected.len() > 1);
-    assert_eq!(summary(&run_cached(&root, &scratch.db())), expected);
-    assert_eq!(summary(&run_cached(&root, &scratch.db())), expected);
+    for root in [shop_root(), freight_root()] {
+        let scratch = Scratch::new("roundtrip");
+        let expected = summary(&index_project(&root, &AtomicBool::new(false), |_| {}).unwrap());
+        assert!(expected.len() > 1);
+        assert_eq!(summary(&run_cached(&root, &scratch.db())), expected);
+        assert_eq!(summary(&run_cached(&root, &scratch.db())), expected);
+    }
+}
+
+#[test]
+fn the_freight_fixture_covers_what_the_cache_must_keep() {
+    let facts: Vec<FileFacts> =
+        summary(&index_project(&freight_root(), &AtomicBool::new(false), |_| {}).unwrap())
+            .into_iter()
+            .map(|(_, _, facts)| facts)
+            .collect();
+    assert!(facts.iter().any(|facts| facts.jvm_name.is_some()));
+    let platforms: Vec<_> = facts
+        .iter()
+        .flat_map(|facts| &facts.symbols)
+        .filter_map(|symbol| symbol.platform)
+        .collect();
+    assert!(platforms.contains(&Platform::Expect));
+    assert!(platforms.contains(&Platform::Actual));
 }
 
 #[test]
