@@ -1017,8 +1017,8 @@ impl EditorView {
             event.position.x >= painted.gutter_right - GUTTER_PADDING_RIGHT
                 && event.position.x < painted.gutter_right
         });
-        let clicked_line = self.model.buffer().point_at(offset).line.get();
-        if on_fold_marker && self.model.folds.toggle(clicked_line) {
+        let clicked_line = self.model.buffer().point_at(offset).line;
+        if on_fold_marker && self.model.folds.toggle(clicked_line.get()) {
             cx.notify();
             return;
         }
@@ -1027,8 +1027,7 @@ impl EditorView {
             .as_ref()
             .is_some_and(|painted| event.position.x < painted.bounds.left() + GUTTER_PADDING_LEFT);
         if in_icon_column {
-            let line = self.model.buffer().point_at(offset).line.get();
-            if let Some(icon) = self.gutter_icon_on_line(line) {
+            if let Some(icon) = self.gutter_icon_on_line(clicked_line.get()) {
                 cx.emit(GutterIconClicked(icon));
                 return;
             }
@@ -1044,9 +1043,7 @@ impl EditorView {
             2 => {
                 self.model.select_word_at(offset);
             }
-            _ => self
-                .model
-                .select_line(self.model.buffer().point_at(offset).line),
+            _ => self.model.select_line(clicked_line),
         }
         self.drag = (event.click_count == 1).then_some(Drag::Selecting);
         cx.notify();
