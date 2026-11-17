@@ -218,20 +218,6 @@ impl ProjectModel {
             .max_by_key(|(_, module)| module.dir.len())
             .and_then(|(index, _)| Some(ModuleId(u32::try_from(index).ok()?)))
     }
-
-    #[must_use]
-    pub fn is_test_path(&self, relative: &str) -> bool {
-        let Some(module) = self.module_of_path(relative).and_then(|id| self.module(id)) else {
-            return false;
-        };
-        module.source_roots.iter().any(|root| {
-            root.kind == SourceKind::Test
-                && (root.path.is_empty()
-                    || relative
-                        .strip_prefix(&root.path)
-                        .is_some_and(|rest| rest.starts_with('/')))
-        })
-    }
 }
 
 #[cfg(test)]
@@ -358,9 +344,6 @@ mod tests {
             Some("model")
         );
         assert_eq!(module_name("core/README.md"), Some(":"));
-        assert!(model.is_test_path("app/src/test/java/com/shop/app/CartTest.java"));
-        assert!(model.is_test_path("app/src/androidTest/kotlin/com/shop/app/UiTest.kt"));
-        assert!(!model.is_test_path("app/src/main/java/com/shop/app/Cart.java"));
     }
 
     #[test]
