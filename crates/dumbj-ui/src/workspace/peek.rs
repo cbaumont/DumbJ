@@ -123,6 +123,32 @@ fn doc_lines(buffer: &Buffer, line: usize) -> Vec<String> {
     }
 }
 
+/// A line of Markdown prose as plain text: list markers become bullets, links their
+/// text, and emphasis and code marks go.
+fn plain(line: &str) -> String {
+    let line = line.trim_start_matches('#').trim_start();
+    let (bullet, line) = match line.strip_prefix("* ").or_else(|| line.strip_prefix("- ")) {
+        Some(rest) => ("• ", rest),
+        None => ("", line),
+    };
+    let mut text = String::from(bullet);
+    let mut rest = line;
+    while let Some(open) = rest.find('[') {
+        let after = &rest[open + 1..];
+        let Some((label, tail)) = after
+            .split_once("](")
+            .and_then(|(label, tail)| Some((label, tail.split_once(')')?.1)))
+        else {
+            break;
+        };
+        text.push_str(&rest[..open]);
+        text.push_str(label);
+        rest = tail;
+    }
+    text.push_str(rest);
+    text.replace(['*', '`'], "").replace("__", "")
+}
+
 fn markdown_lines(markdown: &str) -> Vec<PeekLine> {
     let mut code = false;
     let mut lines = Vec::new();
@@ -133,14 +159,7 @@ fn markdown_lines(markdown: &str) -> Vec<PeekLine> {
         }
         let text = text.trim_end();
         lines.push(PeekLine {
-            text: if code {
-                text.to_owned()
-            } else {
-                text.trim_start_matches('#')
-                    .trim_start()
-                    .replace("**", "")
-                    .replace('`', "")
-            },
+            text: if code { text.to_owned() } else { plain(text) },
             code,
         });
     }
@@ -456,6 +475,16 @@ mod tests {
         let lines = doc_lines(&Buffer::new(SOURCE), 7);
         assert_eq!(lines, ["Says hello.", "", "@return the greeting"]);
         assert_eq!(doc_lines(&Buffer::new(SOURCE), 15), Vec::<String>::new());
+    }
+
+    #[test]
+    fn prose_loses_its_markdown() {
+        assert_eq!(plain("* Returns:"), "• Returns:");
+        assert_eq!(
+            plain("Source: *[demo](file:///p/Greeter.java#3)* and [x](y)"),
+            "Source: demo and x"
+        );
+        assert_eq!(plain("a [b] c"), "a [b] c");
     }
 
     #[test]
