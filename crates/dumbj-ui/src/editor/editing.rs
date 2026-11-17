@@ -132,6 +132,7 @@ impl EditorView {
                 tree.edit(edit, self.model.buffer());
             }
         }
+        self.shift_server_marks(edits);
         for icon in &mut self.gutter_icons {
             for edit in edits {
                 if icon.offset >= edit.old_end {

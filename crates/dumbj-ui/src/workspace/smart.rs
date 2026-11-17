@@ -12,6 +12,7 @@ use super::state::is_project_file;
 
 const SYNC_DELAY: Duration = Duration::from_millis(300);
 const POLL_INTERVAL: Duration = Duration::from_millis(200);
+const TOKENS_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// The project's language servers. A server starts when the first file of its language
 /// opens, not with the project, so a Kotlin-only project never pays for jdtls.
@@ -22,6 +23,8 @@ pub(super) struct Smart {
     detecting: HashSet<ServerKind>,
     /// The buffer version each open document was last sent at.
     sent: HashMap<PathBuf, u64>,
+    /// The buffer version whose semantic tokens were asked for, per file.
+    tokens: HashMap<PathBuf, u64>,
     changed: Arc<AtomicBool>,
     sync: Option<Task<()>>,
     poll: Option<Task<()>>,
@@ -188,7 +191,7 @@ impl Workspace {
                 if changed.swap(false, Ordering::Relaxed)
                     && this
                         .update(cx, |this, cx| {
-                            this.refresh_problems(cx);
+                            this.refresh_from_servers(cx);
                             cx.notify();
                         })
                         .is_err()
@@ -238,18 +241,55 @@ impl Workspace {
         if loading {
             self.schedule_smart_sync(cx);
         }
-        self.refresh_problems(cx);
+        self.refresh_from_servers(cx);
     }
 
-    /// Gives each open working file the diagnostics its server last published.
-    fn refresh_problems(&mut self, cx: &mut Context<Self>) {
+    /// Gives each open working file the diagnostics its server last published, and asks
+    /// for the semantic tokens of files whose text the server has not coloured yet.
+    fn refresh_from_servers(&mut self, cx: &mut Context<Self>) {
+        let mut wanted = Vec::new();
         for tab in self.tabs.iter().filter(|tab| tab.shows_working_file()) {
-            let diagnostics = self
+            let session = self
                 .smart_kind(&tab.path)
-                .and_then(|kind| self.smart.sessions.get(&kind))
-                .map_or_else(Default::default, |session| session.diagnostics(&tab.path));
+                .and_then(|kind| self.smart.sessions.get(&kind));
+            let diagnostics =
+                session.map_or_else(Default::default, |session| session.diagnostics(&tab.path));
             tab.editor
                 .update(cx, |editor, cx| editor.set_diagnostics(&diagnostics, cx));
+            let ready = session.filter(|session| session.state() == SessionState::Ready);
+            let Some(session) = ready else {
+                self.smart.tokens.remove(&tab.path);
+                continue;
+            };
+            let version = tab.editor.read(cx).document_version();
+            if let (Some(version), Some(server), Some(legend)) =
+                (version, session.server(), session.semantic_legend())
+                && self.smart.sent.get(&tab.path) == Some(&version)
+                && self.smart.tokens.get(&tab.path) != Some(&version)
+            {
+                wanted.push((
+                    tab.path.clone(),
+                    version,
+                    tab.editor.clone(),
+                    server,
+                    legend,
+                ));
+            }
+        }
+        for (path, version, editor, server, legend) in wanted {
+            self.smart.tokens.insert(path.clone(), version);
+            let tokens = cx.background_spawn(async move {
+                dumbj_lsp::semantic_tokens(&server, &path, &legend, TOKENS_TIMEOUT)
+            });
+            cx.spawn(async move |_, cx| match tokens.await {
+                Ok(tokens) => {
+                    editor.update(cx, |editor, cx| {
+                        editor.set_semantic_tokens(version, &tokens, cx);
+                    });
+                }
+                Err(error) => tracing::debug!(%error, "no semantic tokens"),
+            })
+            .detach();
         }
     }
 

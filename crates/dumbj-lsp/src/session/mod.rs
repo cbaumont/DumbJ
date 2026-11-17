@@ -132,6 +132,7 @@ struct Shared {
     documents: Mutex<HashMap<PathBuf, (i32, String)>>,
     diagnostics: Mutex<HashMap<PathBuf, Arc<Vec<Diagnostic>>>>,
     diagnostics_version: AtomicU64,
+    legend: Mutex<Option<lsp_types::SemanticTokensLegend>>,
     stopped: AtomicBool,
 }
 
@@ -271,14 +272,28 @@ impl Shared {
                 }
             };
             let params = initialize_params(self.kind, &self.root);
-            if let Err(error) = server.initialize(params, self.timing.initialize_timeout) {
-                tracing::warn!(%error, label, "language server did not initialize");
-                drop(server);
-                if self.retry(&mut backoff, &format!("{label} did not start")) {
-                    continue;
+            let initialized = match server.initialize(params, self.timing.initialize_timeout) {
+                Ok(initialized) => initialized,
+                Err(error) => {
+                    tracing::warn!(%error, label, "language server did not initialize");
+                    drop(server);
+                    if self.retry(&mut backoff, &format!("{label} did not start")) {
+                        continue;
+                    }
+                    return;
                 }
-                return;
-            }
+            };
+            *lock(&self.legend) = match initialized.capabilities.semantic_tokens_provider {
+                Some(lsp_types::SemanticTokensServerCapabilities::SemanticTokensOptions(
+                    options,
+                )) => Some(options.legend),
+                Some(
+                    lsp_types::SemanticTokensServerCapabilities::SemanticTokensRegistrationOptions(
+                        options,
+                    ),
+                ) => Some(options.semantic_tokens_options.legend),
+                None => None,
+            };
             let connected = Instant::now();
             let mut progress = Progress::default();
             {
@@ -408,6 +423,7 @@ impl Session {
             documents: Mutex::new(HashMap::new()),
             diagnostics: Mutex::new(HashMap::new()),
             diagnostics_version: AtomicU64::new(0),
+            legend: Mutex::new(None),
             stopped: AtomicBool::new(false),
         });
         let thread_shared = Arc::clone(&shared);
@@ -446,6 +462,12 @@ impl Session {
             .get(path)
             .cloned()
             .unwrap_or_default()
+    }
+
+    /// How the server names its semantic tokens; `None` when it has none to give.
+    #[must_use]
+    pub fn semantic_legend(&self) -> Option<lsp_types::SemanticTokensLegend> {
+        lock(&self.shared.legend).clone()
     }
 
     /// Changes whenever any file's diagnostics change.

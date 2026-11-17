@@ -34,6 +34,7 @@ mod changes;
 mod diagnostics;
 mod diff_marks;
 mod editing;
+mod semantic;
 
 use blocks::Slot;
 pub(crate) use blocks::{Block, BlockRow, BlockTone};
@@ -277,6 +278,8 @@ pub(crate) struct EditorView {
     changes: changes::Changes,
     diff_marks: DiffMarks,
     problems: Arc<Vec<diagnostics::Problem>>,
+    /// Colours from the language server, laid over tree-sitter's.
+    semantic: Arc<Vec<HighlightSpan>>,
     note_lines: Vec<(usize, usize)>,
     annotations: Option<Arc<Vec<String>>>,
     read_only: bool,
@@ -444,6 +447,7 @@ impl EditorView {
             changes: changes::Changes::default(),
             diff_marks: DiffMarks::default(),
             problems: Arc::new(Vec::new()),
+            semantic: Arc::new(Vec::new()),
             note_lines: Vec::new(),
             annotations: None,
             read_only: true,
@@ -1127,12 +1131,21 @@ impl EditorView {
                 .as_ref()
                 .filter(|tree| tree.buffer_version() == version)
             {
-                Some(tree) => tree.highlights(buffer, range).unwrap_or_else(|error| {
-                    tracing::error!(%error, "highlighting failed");
-                    Vec::new()
-                }),
+                Some(tree) => tree
+                    .highlights(buffer, range.clone())
+                    .unwrap_or_else(|error| {
+                        tracing::error!(%error, "highlighting failed");
+                        Vec::new()
+                    }),
                 None => Vec::new(),
             };
+            let first = self
+                .semantic
+                .partition_point(|span| span.range.end <= range.start);
+            let last = self
+                .semantic
+                .partition_point(|span| span.range.start < range.end);
+            let spans = semantic::overlay(spans, self.semantic.get(first..last).unwrap_or(&[]));
             self.highlights = Some(HighlightCache {
                 buffer_version: version,
                 lines: start..end,
