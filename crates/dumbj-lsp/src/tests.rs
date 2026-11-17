@@ -1,5 +1,4 @@
-use std::io::{BufReader, PipeReader, PipeWriter};
-use std::sync::mpsc::{self, Receiver, Sender};
+use std::sync::mpsc::{self, Receiver};
 use std::time::Duration;
 
 use lsp_types::request::{GotoDefinition, Request};
@@ -7,54 +6,15 @@ use lsp_types::{GotoDefinitionParams, GotoDefinitionResponse, Position, TextDocu
 use lsp_types::{TextDocumentPositionParams, Uri};
 use serde_json::{Value, json};
 
-use crate::frame::{read_frame, write_frame};
+use crate::testing::{Mock, WAIT, mock_pair};
 use crate::{LspError, Server, ServerCommand, ServerEvent};
 
-const WAIT: Duration = Duration::from_secs(5);
-
-struct Mock {
-    incoming: Receiver<Value>,
-    to_client: PipeWriter,
-}
-
-impl Mock {
-    fn recv(&self) -> Value {
-        self.incoming.recv_timeout(WAIT).unwrap()
-    }
-
-    fn send(&mut self, value: &Value) {
-        write_frame(&mut self.to_client, &serde_json::to_vec(value).unwrap()).unwrap();
-    }
-
-    fn reply(&mut self, id: &Value, result: &Value) {
-        self.send(&json!({"jsonrpc": "2.0", "id": id, "result": result}));
-    }
-}
-
 fn connect() -> (Server, Mock, Receiver<ServerEvent>) {
-    let (client_in, to_client) = std::io::pipe().unwrap();
-    let (from_client, client_out): (PipeReader, PipeWriter) = std::io::pipe().unwrap();
     let (events_tx, events) = mpsc::channel();
-    let server = Server::connect(client_in, client_out, move |event| {
+    let (server, mock) = mock_pair(move |event| {
         let _ = events_tx.send(event);
     });
-    let (tx, incoming): (Sender<Value>, _) = mpsc::channel();
-    std::thread::spawn(move || {
-        let mut reader = BufReader::new(from_client);
-        while let Ok(Some(body)) = read_frame(&mut reader) {
-            if tx.send(serde_json::from_slice(&body).unwrap()).is_err() {
-                break;
-            }
-        }
-    });
-    (
-        server,
-        Mock {
-            incoming,
-            to_client,
-        },
-        events,
-    )
+    (server, mock, events)
 }
 
 fn definition_params() -> GotoDefinitionParams {

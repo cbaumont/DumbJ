@@ -1,35 +1,15 @@
-use std::io::{BufReader, PipeWriter};
 use std::path::Path;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::mpsc::{self, Receiver};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use serde_json::{Value, json};
+use serde_json::json;
 
 use super::*;
-use crate::frame::{read_frame, write_frame};
-
-const WAIT: Duration = Duration::from_secs(5);
-
-struct Mock {
-    incoming: Receiver<Value>,
-    to_client: PipeWriter,
-}
+use crate::testing::{Mock, WAIT, mock_pair};
 
 impl Mock {
-    fn recv(&self) -> Value {
-        self.incoming.recv_timeout(WAIT).unwrap()
-    }
-
-    fn send(&mut self, value: &Value) {
-        write_frame(&mut self.to_client, &serde_json::to_vec(value).unwrap()).unwrap();
-    }
-
-    fn notify(&mut self, method: &str, params: &Value) {
-        self.send(&json!({"jsonrpc": "2.0", "method": method, "params": params}));
-    }
-
     fn handshake(&mut self) {
         let request = self.recv();
         assert_eq!(request["method"], "initialize");
@@ -47,28 +27,6 @@ impl Mock {
         }
         self.notify("$/progress", &json!({"token": token, "value": value}));
     }
-}
-
-fn mock_pair(sink: EventSink) -> (Server, Mock) {
-    let (client_in, to_client) = std::io::pipe().unwrap();
-    let (from_client, client_out) = std::io::pipe().unwrap();
-    let server = Server::connect(client_in, client_out, sink);
-    let (tx, incoming) = mpsc::channel();
-    std::thread::spawn(move || {
-        let mut reader = BufReader::new(from_client);
-        while let Ok(Some(body)) = read_frame(&mut reader) {
-            if tx.send(serde_json::from_slice(&body).unwrap()).is_err() {
-                break;
-            }
-        }
-    });
-    (
-        server,
-        Mock {
-            incoming,
-            to_client,
-        },
-    )
 }
 
 fn timing() -> Timing {

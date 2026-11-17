@@ -10,6 +10,8 @@ mod position;
 mod preset;
 mod server;
 mod session;
+#[cfg(test)]
+mod testing;
 mod tokens;
 mod uri;
 mod watch;
