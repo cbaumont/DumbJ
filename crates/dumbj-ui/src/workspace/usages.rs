@@ -64,24 +64,25 @@ impl FindWindow {
 
     /// Moves the selection by `delta` result rows, skipping the file headings.
     pub(super) fn step_selection(&mut self, delta: isize) {
-        let usages: Vec<usize> = self
-            .rows
-            .iter()
-            .enumerate()
-            .filter(|(_, row)| matches!(row, FindRow::Usage { .. }))
-            .map(|(index, _)| index)
-            .collect();
-        let current = usages.iter().position(|row| *row >= self.selected);
-        let target = current.map_or(0, |position| {
-            position
-                .saturating_add_signed(delta)
-                .min(usages.len().saturating_sub(1))
-        });
-        if let Some(row) = usages.get(target) {
-            self.selected = *row;
-            self.scroll
-                .scroll_to_item(self.selected.saturating_sub(1), ScrollStrategy::Nearest);
+        let is_usage = |index: &usize| matches!(self.rows[*index], FindRow::Usage { .. });
+        let Some(mut row) = (self.selected..self.rows.len())
+            .find(is_usage)
+            .or_else(|| (0..self.rows.len()).find(is_usage))
+        else {
+            return;
+        };
+        for _ in 0..delta.unsigned_abs() {
+            let next = if delta > 0 {
+                (row + 1..self.rows.len()).find(is_usage)
+            } else {
+                (0..row).rev().find(is_usage)
+            };
+            let Some(next) = next else { break };
+            row = next;
         }
+        self.selected = row;
+        self.scroll
+            .scroll_to_item(self.selected.saturating_sub(1), ScrollStrategy::Nearest);
     }
 
     pub(super) fn selected_location(&self) -> Option<Location> {
