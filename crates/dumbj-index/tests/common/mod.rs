@@ -62,6 +62,37 @@ pub(crate) fn caret_in(root: &Path, file: &str, snippet: &str) -> Caret {
     }
 }
 
+/// A project written to a temporary directory, removed on drop.
+pub(crate) struct Project {
+    pub(crate) root: PathBuf,
+    pub(crate) index: Index,
+}
+
+impl Project {
+    pub(crate) fn new(files: &[(&str, &str)]) -> Self {
+        static COUNTER: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+        let root = std::env::temp_dir().join(format!(
+            "dumbj-project-{}-{}",
+            std::process::id(),
+            COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        for (relative, text) in files {
+            let path = root.join(relative);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, text).unwrap();
+        }
+        let index = index_project(&root, &AtomicBool::new(false), |_| {}).unwrap();
+        Self { root, index }
+    }
+}
+
+impl Drop for Project {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.root);
+    }
+}
+
 pub(crate) fn shop_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/shop")
 }
