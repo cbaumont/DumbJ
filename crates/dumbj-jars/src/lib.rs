@@ -370,3 +370,65 @@ pub fn locate(source: &str, language: Language, class: &str, member: Option<&str
         .or_else(|| owner.and_then(|owner| facts.symbols.get(owner)))
         .map_or(ByteOffset(0), |symbol| symbol.name_range.start)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn source_entries_name_classes_and_skip_package_and_module_info() {
+        assert_eq!(stem_of("okio/Buffer.kt"), Some("okio/Buffer"));
+        assert_eq!(stem_of("java/util/List.java"), Some("java/util/List"));
+        assert_eq!(stem_of("okio/package-info.java"), None);
+        assert_eq!(stem_of("module-info.java"), None);
+        assert_eq!(stem_of("okio/-Platform.kt"), None);
+        assert_eq!(stem_of("okio/Buffer.class"), None);
+    }
+
+    #[test]
+    fn the_class_name_comes_from_the_package_line() {
+        let java = "// licence\npackage okio.internal;\n\nclass Buffer {}";
+        assert_eq!(
+            class_from_source(java, "x/Buffer").as_deref(),
+            Some("okio.internal.Buffer")
+        );
+        assert_eq!(
+            class_from_source("class Buffer {}", "Buffer").as_deref(),
+            Some("Buffer")
+        );
+        assert_eq!(
+            class_from_source("package ;\n", "x/Buffer").as_deref(),
+            Some("Buffer")
+        );
+    }
+
+    #[test]
+    fn versions_compare_by_their_numbers() {
+        assert!(version_key("1.10.0") > version_key("1.9.3"));
+        assert!(version_key("2.0") > version_key("1.99"));
+        assert!(version_key("3.2.1") > version_key("3.2.0"));
+        assert_eq!(
+            version_key("1.0-rc1"),
+            [
+                (1, String::new()),
+                (0, String::new()),
+                (0, "rc1".to_owned())
+            ]
+        );
+    }
+
+    #[test]
+    fn only_paths_through_a_jar_are_virtual() {
+        assert!(is_virtual_path(Path::new(
+            "/m2/okio-sources.jar!/okio/Buffer.kt"
+        )));
+        assert!(!is_virtual_path(Path::new("/project/src/Buffer.kt")));
+    }
+
+    #[test]
+    fn a_member_is_looked_up_in_its_own_class() {
+        let source = "package p\nclass First {\n    fun read() {}\n}\nclass Second {\n    fun read() {}\n}\n";
+        let offset = locate(source, Language::Kotlin, "Second", Some("read")).get();
+        assert_eq!(offset, source.rfind("read").unwrap_or_default());
+    }
+}
