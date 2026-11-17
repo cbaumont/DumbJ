@@ -12,6 +12,7 @@ use gpui::{
 };
 
 use super::diff::DiffSides;
+use super::popup::{popup_box, popup_layer};
 use super::review_tree::{self, Node, Row};
 use super::{LeftTool, ToolWindowState, Workspace};
 use crate::file_tree::status_role;
@@ -1078,18 +1079,12 @@ impl Workspace {
         )
         .track_scroll(&prompt.scroll)
         .h(list_height);
-        let popup = div()
+        let popup = popup_box(cx)
             .w(px(640.))
             .flex()
             .flex_col()
             .gap(px(8.))
             .p(px(10.))
-            .rounded(px(8.))
-            .bg(theme::ui(cx, UiRole::PopupBackground))
-            .border_1()
-            .border_color(theme::ui(cx, UiRole::PopupBorder))
-            .shadow_lg()
-            .text_color(theme::ui(cx, UiRole::Text))
             .child(
                 div()
                     .flex()
@@ -1113,23 +1108,13 @@ impl Workspace {
                     .child(self.review_input.clone()),
             )
             .child(rows);
-        div()
-            .id("review-prompt-layer")
-            .absolute()
-            .inset_0()
-            .flex()
-            .justify_center()
-            .pt(px(140.))
-            .occlude()
-            .on_mouse_down(
-                MouseButton::Left,
-                cx.listener(|this, _, window, cx| this.close_review_prompt(window, cx)),
-            )
-            .child(
-                div()
-                    .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                    .child(popup),
-            )
+        popup_layer(
+            "review-prompt-layer",
+            140.,
+            Workspace::close_review_prompt,
+            popup,
+            cx,
+        )
     }
 }
 

@@ -7,11 +7,12 @@ use dumbj_settings::UiRole;
 use dumbj_syntax::ReferenceRole;
 use dumbj_text::{Buffer, ByteOffset};
 use gpui::{
-    AppContext, Context, IntoElement, MouseButton, ScrollStrategy, UniformListScrollHandle, Window,
-    div, prelude::*, px, uniform_list,
+    AppContext, Context, IntoElement, ScrollStrategy, UniformListScrollHandle, Window, div,
+    prelude::*, px, uniform_list,
 };
 
 use super::Workspace;
+use super::popup::{popup_box, popup_layer};
 use super::smart_nav::DUMB_AFTER;
 use crate::assets::EDITOR_FONT;
 use crate::theme;
@@ -410,38 +411,23 @@ impl Workspace {
                     .text_size(px(11.))
                     .child(if peek.exact { "exact" } else { "best guess" }),
             );
-        let popup = div()
+        let popup = popup_box(cx)
             .w(px(820.))
             .flex()
             .flex_col()
             .p(px(8.))
-            .rounded(px(8.))
-            .bg(theme::ui(cx, UiRole::PopupBackground))
-            .border_1()
-            .border_color(theme::ui(cx, UiRole::PopupBorder))
-            .shadow_lg()
             .text_size(px(13.))
             .text_color(theme::ui(cx, UiRole::TextMuted))
             .overflow_hidden()
             .child(header)
             .child(rows);
-        div()
-            .id("peek-layer")
-            .absolute()
-            .inset_0()
-            .flex()
-            .justify_center()
-            .pt(px(140.))
-            .occlude()
-            .on_mouse_down(
-                MouseButton::Left,
-                cx.listener(|this, _, window, cx| this.peek_action(Action::Escape, window, cx)),
-            )
-            .child(
-                div()
-                    .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                    .child(popup),
-            )
+        popup_layer(
+            "peek-layer",
+            140.,
+            |this, window, cx| this.peek_action(Action::Escape, window, cx),
+            popup,
+            cx,
+        )
     }
 }
 

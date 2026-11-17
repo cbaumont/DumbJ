@@ -6,9 +6,10 @@ use std::path::PathBuf;
 use dumbj_actions::Action;
 use dumbj_review::{DiffSide, NewThread, Outgoing, OutgoingComment, ReviewEvent};
 use dumbj_settings::{DraftComment, NoteSide, UiRole};
-use gpui::{AppContext, Context, IntoElement, MouseButton, Window, div, prelude::*, px};
+use gpui::{AppContext, Context, IntoElement, Window, div, prelude::*, px};
 
 use super::Workspace;
+use super::popup::{popup_box, popup_layer};
 use crate::theme;
 
 const EDITOR_HEIGHT: f32 = 220.;
@@ -439,18 +440,12 @@ impl Workspace {
                 keys(Action::SendCommentNow)
             ),
         };
-        let popup = div()
+        let popup = popup_box(cx)
             .w(px(760.))
             .flex()
             .flex_col()
             .gap(px(8.))
             .p(px(12.))
-            .rounded(px(8.))
-            .bg(theme::ui(cx, UiRole::PopupBackground))
-            .border_1()
-            .border_color(theme::ui(cx, UiRole::PopupBorder))
-            .shadow_lg()
-            .text_color(theme::ui(cx, UiRole::Text))
             .child(
                 div()
                     .text_color(theme::ui(cx, UiRole::TextMuted))
@@ -470,23 +465,7 @@ impl Workspace {
                     .text_color(theme::ui(cx, UiRole::TextFaint))
                     .child(hint),
             );
-        div()
-            .id("compose-layer")
-            .absolute()
-            .inset_0()
-            .flex()
-            .justify_center()
-            .pt(px(140.))
-            .occlude()
-            .on_mouse_down(
-                MouseButton::Left,
-                cx.listener(|this, _, window, cx| this.close_compose(window, cx)),
-            )
-            .child(
-                div()
-                    .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                    .child(popup),
-            )
+        popup_layer("compose-layer", 140., Workspace::close_compose, popup, cx)
     }
 }
 

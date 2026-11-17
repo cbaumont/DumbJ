@@ -17,6 +17,7 @@ use gpui::{
 
 use super::Workspace;
 use super::navigation::Location;
+use super::popup::{popup_box, popup_layer};
 use crate::theme;
 
 const ROW_HEIGHT: f32 = 26.;
@@ -607,18 +608,12 @@ impl Workspace {
             .h(list_height);
             Some(rows.into_any_element())
         };
-        let panel = div()
+        let panel = popup_box(cx)
             .w(px(680.))
             .flex()
             .flex_col()
             .gap(px(8.))
             .p(px(10.))
-            .rounded(px(8.))
-            .bg(theme::ui(cx, UiRole::PopupBackground))
-            .border_1()
-            .border_color(theme::ui(cx, UiRole::PopupBorder))
-            .shadow_lg()
-            .text_color(theme::ui(cx, UiRole::Text))
             .child(
                 div()
                     .flex()
@@ -634,23 +629,7 @@ impl Workspace {
             )
             .child(field)
             .children(results);
-        div()
-            .id("search-layer")
-            .absolute()
-            .inset_0()
-            .flex()
-            .justify_center()
-            .pt(px(110.))
-            .occlude()
-            .on_mouse_down(
-                MouseButton::Left,
-                cx.listener(|this, _, window, cx| this.close_search(window, cx)),
-            )
-            .child(
-                div()
-                    .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                    .child(panel),
-            )
+        popup_layer("search-layer", 110., Workspace::close_search, panel, cx)
     }
 }
 

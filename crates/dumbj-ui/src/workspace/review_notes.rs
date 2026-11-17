@@ -2,9 +2,10 @@ use std::path::PathBuf;
 
 use dumbj_actions::Action;
 use dumbj_settings::{NoteSide, ReviewNote, UiRole};
-use gpui::{ClipboardItem, Context, Entity, IntoElement, MouseButton, Window, div, prelude::*, px};
+use gpui::{ClipboardItem, Context, Entity, IntoElement, Window, div, prelude::*, px};
 
 use super::Workspace;
+use super::popup::{popup_box, popup_layer};
 use crate::editor::EditorView;
 use crate::theme;
 
@@ -168,18 +169,12 @@ impl Workspace {
             NoteSide::Base => " (base)",
             NoteSide::Head => "",
         };
-        let popup = div()
+        let popup = popup_box(cx)
             .w(px(640.))
             .flex()
             .flex_col()
             .gap(px(8.))
             .p(px(12.))
-            .rounded(px(8.))
-            .bg(theme::ui(cx, UiRole::PopupBackground))
-            .border_1()
-            .border_color(theme::ui(cx, UiRole::PopupBorder))
-            .shadow_lg()
-            .text_color(theme::ui(cx, UiRole::Text))
             .child(
                 div()
                     .flex()
@@ -202,22 +197,12 @@ impl Workspace {
                     .bg(theme::ui(cx, UiRole::InputBackground))
                     .child(self.note_input.clone()),
             );
-        div()
-            .id("note-prompt-layer")
-            .absolute()
-            .inset_0()
-            .flex()
-            .justify_center()
-            .pt(px(140.))
-            .occlude()
-            .on_mouse_down(
-                MouseButton::Left,
-                cx.listener(|this, _, window, cx| this.close_note_prompt(window, cx)),
-            )
-            .child(
-                div()
-                    .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                    .child(popup),
-            )
+        popup_layer(
+            "note-prompt-layer",
+            140.,
+            Workspace::close_note_prompt,
+            popup,
+            cx,
+        )
     }
 }

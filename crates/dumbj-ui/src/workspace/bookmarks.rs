@@ -2,10 +2,11 @@ use std::path::{Path, PathBuf};
 
 use dumbj_actions::Action;
 use dumbj_settings::{Bookmark, UiRole};
-use gpui::{Context, IntoElement, Keystroke, MouseButton, Window, div, prelude::*, px};
+use gpui::{Context, IntoElement, Keystroke, Window, div, prelude::*, px};
 
 use super::Workspace;
 use super::navigation::{Chooser, ChooserItem};
+use super::popup::{popup_box, popup_layer};
 use super::state::is_project_file;
 use crate::editor::BookmarkMark;
 use crate::theme;
@@ -225,18 +226,12 @@ impl Workspace {
             .iter()
             .filter_map(|bookmark| bookmark.mnemonic)
             .collect();
-        let popup = div()
+        let popup = popup_box(cx)
             .w(px(380.))
             .flex()
             .flex_col()
             .gap(px(8.))
             .p(px(12.))
-            .rounded(px(8.))
-            .bg(theme::ui(cx, UiRole::PopupBackground))
-            .border_1()
-            .border_color(theme::ui(cx, UiRole::PopupBorder))
-            .shadow_lg()
-            .text_color(theme::ui(cx, UiRole::Text))
             .child(
                 div()
                     .text_color(theme::ui(cx, UiRole::TextMuted))
@@ -257,23 +252,13 @@ impl Workspace {
                         format!("In use: {used}")
                     }),
             );
-        div()
-            .id("mnemonic-layer")
-            .absolute()
-            .inset_0()
-            .flex()
-            .justify_center()
-            .pt(px(140.))
-            .occlude()
-            .on_mouse_down(
-                MouseButton::Left,
-                cx.listener(|this, _, window, cx| this.close_mnemonic_prompt(window, cx)),
-            )
-            .child(
-                div()
-                    .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                    .child(popup),
-            )
+        popup_layer(
+            "mnemonic-layer",
+            140.,
+            Workspace::close_mnemonic_prompt,
+            popup,
+            cx,
+        )
     }
 }
 

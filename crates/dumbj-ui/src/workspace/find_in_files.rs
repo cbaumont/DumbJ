@@ -13,6 +13,7 @@ use gpui::{
 
 use super::Workspace;
 use super::navigation::Location;
+use super::popup::{popup_box, popup_layer};
 use super::usages::{FindRow, FindWindow};
 use crate::text_input::TextInput;
 use crate::theme;
@@ -429,18 +430,12 @@ impl Workspace {
             .directory
             .as_ref()
             .map(|directory| Self::render_find_scope(directory, open.toggles, cx));
-        let panel = div()
+        let panel = popup_box(cx)
             .w(px(680.))
             .flex()
             .flex_col()
             .gap(px(8.))
             .p(px(10.))
-            .rounded(px(8.))
-            .bg(theme::ui(cx, UiRole::PopupBackground))
-            .border_1()
-            .border_color(theme::ui(cx, UiRole::PopupBorder))
-            .shadow_lg()
-            .text_color(theme::ui(cx, UiRole::Text))
             .child(
                 div()
                     .flex()
@@ -478,23 +473,13 @@ impl Workspace {
                     .text_color(theme::ui(cx, role))
                     .child(status),
             );
-        div()
-            .id("find-in-files-layer")
-            .absolute()
-            .inset_0()
-            .flex()
-            .justify_center()
-            .pt(px(110.))
-            .occlude()
-            .on_mouse_down(
-                MouseButton::Left,
-                cx.listener(|this, _, window, cx| this.close_find_in_files(window, cx)),
-            )
-            .child(
-                div()
-                    .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                    .child(panel),
-            )
+        popup_layer(
+            "find-in-files-layer",
+            110.,
+            Workspace::close_find_in_files,
+            panel,
+            cx,
+        )
     }
 }
 

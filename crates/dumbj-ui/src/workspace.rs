@@ -31,6 +31,7 @@ mod menu;
 mod navigation;
 mod overview;
 mod peek;
+mod popup;
 mod pulls;
 mod review;
 mod review_notes;
@@ -52,6 +53,7 @@ use find_in_files::FindInFiles;
 use git_log::GitWindow;
 use hierarchy::HierarchyWindow;
 use navigation::{Chooser, Indexing, NavigationHistory};
+use popup::{popup_box, popup_layer};
 use review::{ReviewPrompt, ReviewWindow};
 use review_notes::NotePrompt;
 use search_popup::{RecentKind, SearchMode, SearchPopup};
@@ -1588,18 +1590,12 @@ impl Workspace {
     fn render_goto_line_popup(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let valid = parse_line_column(self.goto_line.read(cx).text()).is_some();
         let border = if valid { UiRole::Accent } else { UiRole::Error };
-        let popup = div()
+        let popup = popup_box(cx)
             .w(px(340.))
             .flex()
             .flex_col()
             .gap(px(8.))
             .p(px(12.))
-            .rounded(px(8.))
-            .bg(theme::ui(cx, UiRole::PopupBackground))
-            .border_1()
-            .border_color(theme::ui(cx, UiRole::PopupBorder))
-            .shadow_lg()
-            .text_color(theme::ui(cx, UiRole::Text))
             .child(
                 div()
                     .text_color(theme::ui(cx, UiRole::TextMuted))
@@ -1617,27 +1613,17 @@ impl Workspace {
                     .child(self.goto_line.clone()),
             );
         // A full-window layer: it centres the popup and swallows clicks outside it.
-        div()
-            .id("popup-layer")
-            .absolute()
-            .inset_0()
-            .flex()
-            .justify_center()
-            .pt(px(140.))
-            .occlude()
-            .on_mouse_down(
-                MouseButton::Left,
-                cx.listener(|this, _, window, cx| {
-                    this.goto_line_open = false;
-                    this.focus_fallback(window, cx);
-                    cx.notify();
-                }),
-            )
-            .child(
-                div()
-                    .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                    .child(popup),
-            )
+        popup_layer(
+            "popup-layer",
+            140.,
+            |this, window, cx| {
+                this.goto_line_open = false;
+                this.focus_fallback(window, cx);
+                cx.notify();
+            },
+            popup,
+            cx,
+        )
     }
 }
 

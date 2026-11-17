@@ -11,6 +11,7 @@ use gpui::{
 
 use super::Workspace;
 use super::git_log::format_time;
+use super::popup::{popup_box, popup_layer};
 use crate::editor::EditorView;
 use crate::theme;
 
@@ -312,18 +313,12 @@ impl Workspace {
         )
         .track_scroll(&popup.scroll)
         .h(list_height);
-        let body = div()
+        let body = popup_box(cx)
             .w(px(560.))
             .flex()
             .flex_col()
             .gap(px(8.))
             .p(px(10.))
-            .rounded(px(8.))
-            .bg(theme::ui(cx, UiRole::PopupBackground))
-            .border_1()
-            .border_color(theme::ui(cx, UiRole::PopupBorder))
-            .shadow_lg()
-            .text_color(theme::ui(cx, UiRole::Text))
             .child(
                 div()
                     .text_color(theme::ui(cx, UiRole::TextMuted))
@@ -339,23 +334,13 @@ impl Workspace {
                     .child(self.branch_input.clone()),
             )
             .child(list);
-        div()
-            .id("branch-popup-layer")
-            .absolute()
-            .inset_0()
-            .flex()
-            .justify_center()
-            .pt(px(140.))
-            .occlude()
-            .on_mouse_down(
-                MouseButton::Left,
-                cx.listener(|this, _, window, cx| this.close_branch_popup(window, cx)),
-            )
-            .child(
-                div()
-                    .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                    .child(body),
-            )
+        popup_layer(
+            "branch-popup-layer",
+            140.,
+            Workspace::close_branch_popup,
+            body,
+            cx,
+        )
     }
 
     fn render_branch_row(
