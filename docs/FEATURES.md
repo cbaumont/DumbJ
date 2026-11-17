@@ -3,9 +3,9 @@
 `[x]` done · `[~]` partial · `[ ]` not started. Sections follow `docs/BRIEF.md`.
 
 ## 4.1 Workspace and window layout
-- [~] Open a folder as a project — CLI path, Open Folder; no recent projects or saved state
+- [~] Open a folder as a project — CLI path, Open Folder; per-project state (recent files, bookmarks, review, drafts) is kept; no recent-projects list, layout not saved
 - [~] Editor tabs — open, close, next/previous; no splits or drag
-- [~] Tool windows with stripe — Project only, left side
+- [~] Tool windows with stripe — Project, Review, Pull Requests (left stripe); Git, Find and Hierarchy below; no docking choice
 - [ ] Navigation bar
 - [~] Status bar — breadcrumb, branch, line:col, language
 - [~] Project tool window — tree with git status colours on files; folders are not coloured
@@ -30,15 +30,16 @@
 - [~] Scope-aware highlighting (locals) — parameters and their uses; locals keep the default colour
 - [~] Semantic tokens (LSP) — laid over tree-sitter colours for known token types
 - [~] Gutter — line numbers, fold markers, implements/overrides icons, bookmarks, change markers against HEAD
-- [~] Inlay hints — from the server, whole file, faint text; no toggle
+- [~] Inlay hints — from the server, whole file, faint text; no toggle; tab stops after an inlay count its width
+- [~] Diagnostics (LSP) — underlines, message at the caret in the status bar, F2 / Shift+F2; hints left out; no gutter or scrollbar marks
 - [~] Inline blame / Annotate — gutter column with date and author at HEAD, edited lines blank; no age colouring, no popup with the commit, no inline (end-of-line) blame
 - [x] Sticky lines
 - [ ] Indent guides, bracket matching, whitespace, right margin, soft wrap
 - [~] Code folding — no "fold all comments" action
 - [x] Highlight usages at caret
 - [~] Scrollbar — draggable thumb; no marks
-- [ ] Hover popups
-- [~] Editing — typing (IME), undo/redo with typing groups, Enter with auto-indent, Tab/Shift+Tab, cut/paste, duplicate/delete/move line, line comments; no multi-caret, column selection, move statement, block comments, bracket auto-close, EditorConfig or encodings other than UTF-8
+- [ ] Hover popups — no mouse hover; Quick Documentation is Ctrl+J
+- [~] Editing — typing (IME), undo/redo with typing groups, Enter with auto-indent, Tab/Shift+Tab, cut/paste, duplicate/delete/move line, line comments; no multi-caret, column selection, move statement, block comments, bracket auto-close, EditorConfig or encodings other than UTF-8; navigation in an edited file uses its index entry from the last save
 - [x] Autosave — atomic; on tab switch, focus loss, close, quit and 15 s idle
 - [~] Files changed on disk — reload when unmodified, reload/keep prompt when modified (mouse-only); no merge
 - [x] Caret movement, selection, copy, mouse selection
@@ -50,25 +51,25 @@
 - [x] Go to File / Class / Symbol
 - [x] Go to Line:Column
 - [ ] Find Action
-- [~] Go to Declaration / Type Declaration / Implementation / Super Method / Test — Type Declaration in smart mode only; no Test
+- [~] Go to Declaration / Type Declaration / Implementation / Super Method / Test — Type Declaration in smart mode only; an exact target in a file with unsaved edits is placed by its text on disk; no Test
 - [~] Go to Implementation — project sources only, from supertypes in the index (best guess); no implementations inside libraries
 - [~] Library sources — Go to Declaration opens classes from Gradle/Maven source jars and the JDK `src.zip`, read in place; no navigation inside library files, no decompiler
-- [x] Find Usages / Show Usages
-- [~] Quick Definition / Quick Documentation — plain-text popup; hover in smart mode, else the comment above the best-guess target
+- [x] Find Usages / Show Usages — exact usages in smart mode have no read/write split
+- [~] Quick Definition / Quick Documentation — hover in smart mode, else the comment above the best-guess target; plain text (Markdown emphasis stripped, long lines cut), not selectable; cannot open targets in jars or revisions
 - [x] File Structure popup
-- [~] Call Hierarchy / Type Hierarchy — exact from the server with callers and callees, class hierarchy and supertypes; dumb mode has callers and the class hierarchy only
+- [~] Call Hierarchy / Type Hierarchy — exact from the server with callers and callees, class hierarchy and supertypes; dumb mode has callers and the class hierarchy only; call sites are not listed per caller; Call Hierarchy cannot be cancelled
 - [x] Navigate Back / Forward
 - [~] Recent Files, Recent Locations — per project, kept in the state dir; no Last Edit Location or Switcher
 - [~] Find in Files — regex, case, whole word, file mask, directory scope, gitignore; toggles are mouse-only; no Replace in Files
 - [~] Bookmarks — anonymous and mnemonic, gutter markers, list popup, kept per project in the state dir; no tool window
-- [ ] Copy Reference / Path / permalink
+- [~] Copy Reference / Path / permalink — Copy Permalink in a review only
 - [ ] Navigation bar jump
 
 ## 4.3.1 Dumb and smart navigation
 - [x] Scope-aware resolution
 - [x] Import following (Java, Kotlin)
 - [x] Candidate ranking and chooser
-- [~] Member access heuristics — lambda parameter types, indexing (`a[i].b`), smart casts and scope functions stay guesses
+- [~] Member access heuristics — indexing (`a[i].b`), smart casts, named-lambda parameters of other calls and Java `Class` arguments against Kotlin `Type` parameters still end in a chooser
 - [x] Java ↔ Kotlin interop — property accessors, file facade classes, `@JvmName`, `INSTANCE`, companion members
 - [x] Gradle version catalog — `libs.x.y` accessors jump to `libs.versions.toml`
 - [x] Dumb Find Usages
@@ -81,21 +82,21 @@
 - [~] Change markers — added/modified/deleted against HEAD, Next/Previous Change, Rollback Lines; no marker popup with the old text
 - [~] Git log tool window — graph (lanes, no compaction), ref labels, filter field (`text`, `author:`, `path:`, `branch:`, `since:`, `until:`, `lines:`), commit message and changed files, Enter opens a file's diff against the first parent; first 2000 commits; dates in UTC
 - [~] Branch popup — local and remote-tracking branches with a filter, checkout, fetch; no compare with current branch or merge base (use Start Review with `branch...`)
-- [~] Diff viewer — side by side against HEAD from the Project tree, word-level highlighting, next/previous difference, ignore whitespace (mouse-only), synchronised scrolling, editable right side, any two revisions through a review, next/previous file within a review; no unified view or collapse unchanged
-- [~] Local review mode — Start Review takes `base`, `base..head` or `base...head` (merge base) with branch suggestions; changed-file list on the left, diff on the right; F7/Shift+F7 continue into the next/previous file; viewed tracking that resets when a file's head content changes; single-line notes on a line or selection of either side, marked in the gutter, shown in the status bar and copied as Markdown; the file list is flat, not a tree, and one review is remembered per project
+- [~] Diff viewer — side by side against HEAD from the Project tree, word-level highlighting, next/previous difference, ignore whitespace (mouse-only), synchronised scrolling, editable right side, any two revisions through a review, next/previous file within a review; no unified view or collapse unchanged; the base side navigates in the working-tree index
+- [~] Local review mode — Start Review takes `base`, `base..head` or `base...head` (merge base) with branch suggestions; changed-file list on the left, diff on the right; F7/Shift+F7 continue into the next/previous file; viewed tracking that resets when a file's head content changes; single-line notes on a line or selection of either side, marked in the gutter, shown in the status bar and copied as Markdown; one review is remembered per project and not reopened on start
 - [x] File history — Show History and Show History for Selection, in the Git tool window
 - [x] Checkout / fetch — checkout saves every file first and refuses when git would overwrite local changes; fetch prunes and never prompts for credentials
 
 ## 4.5 Remote code review
-- [~] Sign in — the `gh` CLI's token; no own sign-in
+- [~] Sign in — the `gh` CLI's token; no own sign-in; one GitHub remote per project (`origin` preferred); GitHub calls cannot be cancelled (30 s timeout)
 - [~] PR list — Pull Requests tool window (review requested, assigned, mine, all; search), open PRs only, first 50
 - [x] Open PR into private refs — navigation across the whole head from git objects; Prune Review Refs
-- [~] Inline threads — folded/expanded blocks in the diff wrapped to the pane, resolved/outdated/pending state, next/previous, code fences and suggested changes set apart; inline Markdown not rendered
+- [~] Inline threads — folded/expanded blocks in the diff wrapped to the pane, resolved/outdated/pending state, next/previous, code fences and suggested changes set apart; inline Markdown not rendered, text not selectable; outdated threads sit on their original line
 - [x] Mouse: `+` in the gutter of a review diff to comment on the hovered line, editor context menu
-- [x] Comments, pending review, suggestions — line or range, reply, resolve/unresolve, suggestion block from the selected lines
-- [x] Submit review — comment, approve, request changes, with a summary
+- [x] Comments, pending review, suggestions — line or range, reply, resolve/unresolve, suggestion block from the selected lines; a line outside the diff's hunks is refused before writing
+- [x] Submit review — comment, approve, request changes, with a summary (approve and request changes checked with mocks only)
 - [x] Viewed sync
-- [~] Description, timeline, checks, commits — overview page (state, checks, commits, description as Markdown source); no timeline, no commit-by-commit review (Start Review takes `sha^..sha`)
+- [~] Description, timeline, checks, commits — overview page (state, checks, commits, description as Markdown source); checks have no links; no timeline, no commit-by-commit review (Start Review takes `sha^..sha`)
 - [x] Pending comments survive restart — drafts in the project state until GitHub confirms; then GitHub's pending review holds them
 
 ## 4.6 Settings and keymap
@@ -139,8 +140,8 @@ Code navigation
 - [ ] JumpToLastChange
 - [ ] ShowNavBar
 - [ ] SelectIn
-- [~] GotoNextError — F2 / Shift+F2 through server diagnostics
-- [ ] GotoPreviousError
+- [x] GotoNextError — F2, through server diagnostics
+- [x] GotoPreviousError — Shift+F2
 - [ ] EditSource
 
 Find
@@ -182,7 +183,7 @@ Windows & tabs
 - [x] ActivateProjectToolWindow
 - [~] ActivateFindToolWindow — available once Find Usages has produced results
 - [ ] ActivateStructureToolWindow
-- [ ] ActivateVersionControlToolWindow
+- [x] ActivateVersionControlToolWindow — the Git tool window
 - [ ] ActivateBookmarksToolWindow
 - [ ] ActivateProblemsViewToolWindow
 - [x] HideAllWindows
