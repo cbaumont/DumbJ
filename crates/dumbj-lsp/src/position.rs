@@ -36,11 +36,6 @@ pub fn from_lsp(buffer: &Buffer, position: Position) -> ByteOffset {
 }
 
 #[must_use]
-pub fn to_lsp_range(buffer: &Buffer, range: std::ops::Range<ByteOffset>) -> Range {
-    Range::new(to_lsp(buffer, range.start), to_lsp(buffer, range.end))
-}
-
-#[must_use]
 pub fn from_lsp_range(buffer: &Buffer, range: Range) -> std::ops::Range<ByteOffset> {
     from_lsp(buffer, range.start)..from_lsp(buffer, range.end)
 }

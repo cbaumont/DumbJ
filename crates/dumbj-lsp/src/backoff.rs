@@ -5,18 +5,18 @@ const MAX_FAILURES: u32 = 5;
 
 /// Restart delays for a server that keeps dying: 1 s doubling, then give up after five failures.
 #[derive(Debug, Clone, Default)]
-pub struct Backoff {
+pub(crate) struct Backoff {
     failures: u32,
 }
 
 impl Backoff {
     #[must_use]
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self::default()
     }
 
     /// Records a failure and returns how long to wait before restarting, or `None` to give up.
-    pub fn next_delay(&mut self) -> Option<Duration> {
+    pub(crate) fn next_delay(&mut self) -> Option<Duration> {
         if self.failures >= MAX_FAILURES {
             return None;
         }
@@ -26,7 +26,7 @@ impl Backoff {
     }
 
     /// Call once a server has stayed up long enough to count as healthy.
-    pub fn reset(&mut self) {
+    pub(crate) fn reset(&mut self) {
         self.failures = 0;
     }
 }

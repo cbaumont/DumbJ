@@ -330,7 +330,7 @@ fn capabilities() -> ClientCapabilities {
 
 #[must_use]
 #[allow(deprecated)]
-pub fn initialize_params(kind: ServerKind, root: &Path) -> InitializeParams {
+pub(crate) fn initialize_params(kind: ServerKind, root: &Path) -> InitializeParams {
     let uri = path_to_uri(root);
     let name = root
         .file_name()

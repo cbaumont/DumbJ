@@ -10,7 +10,7 @@ use lsp_types::{DidChangeWatchedFilesParams, FileChangeType, FileEvent};
 use crate::{LspError, Server, path_to_uri};
 
 /// A file's modification time in nanoseconds and its length.
-pub type Stamp = (u128, u64);
+pub(crate) type Stamp = (u128, u64);
 
 /// The files a Java or Kotlin server reads: sources and build files.
 #[must_use]
