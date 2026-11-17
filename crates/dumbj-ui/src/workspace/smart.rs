@@ -287,7 +287,7 @@ impl Workspace {
     }
 
     /// Gives each open working file the diagnostics its server last published, and asks
-    /// for the semantic tokens of files whose text the server has not coloured yet.
+    /// for the semantic tokens and inlay hints of files not yet fetched at their current text.
     fn refresh_from_servers(&mut self, cx: &mut Context<Self>) {
         self.sync_watched_files(cx);
         let mut wanted = Vec::new();
@@ -305,8 +305,7 @@ impl Workspace {
                 continue;
             };
             let version = tab.editor.read(cx).document_version();
-            if let (Some(version), Some(server), Some(legend)) =
-                (version, session.server(), session.semantic_legend())
+            if let (Some(version), Some(server)) = (version, session.server())
                 && self.smart.sent.get(&tab.path) == Some(&version)
                 && self.smart.tokens.get(&tab.path) != Some(&version)
             {
@@ -316,7 +315,7 @@ impl Workspace {
                     version,
                     tab.editor.clone(),
                     server,
-                    legend,
+                    session.semantic_legend(),
                     end,
                 ));
             }
@@ -324,7 +323,9 @@ impl Workspace {
         for (path, version, editor, server, legend, end) in wanted {
             self.smart.tokens.insert(path.clone(), version);
             let found = cx.background_spawn(async move {
-                let tokens = dumbj_lsp::semantic_tokens(&server, &path, &legend, TOKENS_TIMEOUT);
+                let tokens = legend.map(|legend| {
+                    dumbj_lsp::semantic_tokens(&server, &path, &legend, TOKENS_TIMEOUT)
+                });
                 let inlays = dumbj_lsp::inlay_hints(&server, &path, end, TOKENS_TIMEOUT);
                 (tokens, inlays)
             });
@@ -332,8 +333,9 @@ impl Workspace {
                 let (tokens, inlays) = found.await;
                 editor.update(cx, |editor, cx| {
                     match tokens {
-                        Ok(tokens) => editor.set_semantic_tokens(version, &tokens, cx),
-                        Err(error) => tracing::debug!(%error, "no semantic tokens"),
+                        Some(Ok(tokens)) => editor.set_semantic_tokens(version, &tokens, cx),
+                        Some(Err(error)) => tracing::debug!(%error, "no semantic tokens"),
+                        None => {}
                     }
                     match inlays {
                         Ok(inlays) => editor.set_inlays(version, &inlays, cx),
