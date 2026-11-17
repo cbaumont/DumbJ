@@ -13,16 +13,14 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
-use common::{shop_index, shop_root};
+use common::{MONEY, RECEIPT, shop_index, shop_root};
 use dumbj_index::{
     FileReader, Index, RevisionSource, Site, find_usages, index_revision, usage_target_at,
 };
 use dumbj_syntax::{Language, parse};
 use dumbj_text::{Buffer, ByteOffset};
 
-const MONEY: &str = "core/src/main/java/com/shop/core/Money.java";
 const REFUND: &str = "core/src/main/java/com/shop/core/Refund.java";
-const RECEIPT: &str = "core/src/main/java/com/shop/core/Receipt.java";
 const REFUND_TEXT: &str = "package com.shop.core;\n\npublic class Refund {\n    \
     Money owed() {\n        return Money.ZERO.negate();\n    }\n}\n";
 

@@ -10,16 +10,10 @@ mod common;
 use std::path::Path;
 use std::sync::atomic::AtomicBool;
 
-use common::{shop_index, shop_root};
+use common::{CART, CHECKOUT, MONEY, PRICED, PRODUCT, caret_in, shop_index, shop_root};
 use dumbj_index::{Certainty, Index, Site, find_usages, usage_target_at};
 use dumbj_syntax::{Language, parse};
 use dumbj_text::{Buffer, ByteOffset};
-
-const CART: &str = "app/src/main/java/com/shop/app/Cart.java";
-const CHECKOUT: &str = "app/src/main/kotlin/com/shop/app/Checkout.kt";
-const MONEY: &str = "core/src/main/java/com/shop/core/Money.java";
-const PRICED: &str = "core/src/main/java/com/shop/core/Priced.java";
-const PRODUCT: &str = "core/src/main/kotlin/com/shop/core/Product.kt";
 
 /// The usages of whatever is at the caret, as `File:line text` with `?` for a maybe.
 fn usages(index: &Index, file: &str, snippet: &str) -> Vec<String> {
@@ -27,26 +21,9 @@ fn usages(index: &Index, file: &str, snippet: &str) -> Vec<String> {
 }
 
 fn usages_in(root: &Path, index: &Index, file: &str, snippet: &str) -> Vec<String> {
-    let path = root.join(file);
-    let source = std::fs::read_to_string(&path).unwrap();
-    let plain = snippet.replacen('§', "", 1);
-    assert_eq!(
-        source.matches(&plain).count(),
-        1,
-        "`{plain}` must occur once in {file}"
-    );
-    let offset = source.find(&plain).unwrap() + snippet.find('§').unwrap();
-    let buffer = Buffer::new(&source);
-    let tree = parse(Language::from_path(&path).unwrap(), &buffer, || false)
-        .unwrap()
-        .unwrap();
-    let site = Site {
-        index,
-        file: index.file_by_path(&path).unwrap(),
-        tree: &tree,
-        buffer: &buffer,
-    };
-    let target = usage_target_at(site, ByteOffset(offset)).unwrap();
+    let caret = caret_in(root, file, snippet);
+    let site = caret.site(index);
+    let target = usage_target_at(site, caret.offset).unwrap();
     find_usages(index, &target, &AtomicBool::new(false))
         .unwrap()
         .into_iter()

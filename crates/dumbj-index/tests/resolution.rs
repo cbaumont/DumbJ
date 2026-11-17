@@ -12,17 +12,14 @@ use std::fmt::Write as _;
 
 use std::path::Path;
 
-use common::{freight_index, freight_root, shop_index, shop_root};
+use common::{
+    CART, CHECKOUT, MONEY, PRICED, PRODUCT, RECEIPT, caret_in, freight_index, freight_root,
+    shop_index, shop_root,
+};
 use dumbj_index::{Decision, Index, Site, resolve};
 use dumbj_syntax::{Language, parse};
 use dumbj_text::{Buffer, ByteOffset};
 
-const CART: &str = "app/src/main/java/com/shop/app/Cart.java";
-const CHECKOUT: &str = "app/src/main/kotlin/com/shop/app/Checkout.kt";
-const MONEY: &str = "core/src/main/java/com/shop/core/Money.java";
-const PRICED: &str = "core/src/main/java/com/shop/core/Priced.java";
-const RECEIPT: &str = "core/src/main/java/com/shop/core/Receipt.java";
-const PRODUCT: &str = "core/src/main/kotlin/com/shop/core/Product.kt";
 const SHIPPING: &str = "src/main/kotlin/freight/Shipping.kt";
 const DISPATCH: &str = "src/main/java/freight/app/Dispatch.java";
 
@@ -34,26 +31,9 @@ fn go(index: &Index, file: &str, snippet: &str) -> String {
 
 /// Like [`go`], in the project at `root`.
 fn go_in(root: &Path, index: &Index, file: &str, snippet: &str) -> String {
-    let path = root.join(file);
-    let source = std::fs::read_to_string(&path).unwrap();
-    let plain = snippet.replacen('§', "", 1);
-    assert_eq!(
-        source.matches(&plain).count(),
-        1,
-        "`{plain}` must occur once in {file}"
-    );
-    let offset = source.find(&plain).unwrap() + snippet.find('§').unwrap();
-    let buffer = Buffer::new(&source);
-    let tree = parse(Language::from_path(&path).unwrap(), &buffer, || false)
-        .unwrap()
-        .unwrap();
-    let site = Site {
-        index,
-        file: index.file_by_path(&path).unwrap(),
-        tree: &tree,
-        buffer: &buffer,
-    };
-    let Some(resolution) = resolve(site, ByteOffset(offset)) else {
+    let caret = caret_in(root, file, snippet);
+    let site = caret.site(index);
+    let Some(resolution) = resolve(site, caret.offset) else {
         return "none".to_owned();
     };
     let describe = |target: &dumbj_index::Target| {

@@ -11,11 +11,9 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
-use common::shop_root;
+use common::{MONEY, shop_root};
 use dumbj_index::{CacheStamp, Index, IndexStore, cache_path, index_project, index_project_cached};
 use dumbj_syntax::{FileFacts, Language};
-
-const MONEY: &str = "core/src/main/java/com/shop/core/Money.java";
 
 /// A scratch directory that is removed when dropped.
 struct Scratch(PathBuf);
