@@ -48,32 +48,26 @@ fn usage_in(path: PathBuf, buffer: &Buffer, place: &Place) -> ExactUsage {
     }
 }
 
-fn rows(root: Option<&Path>, usages: Vec<ExactUsage>) -> Vec<FindRow> {
-    let mut rows = Vec::new();
-    let mut usages = usages.into_iter().peekable();
-    while let Some(first) = usages.peek() {
-        let path = first.location.path.clone();
+fn rows(root: Option<&Path>, usages: &[ExactUsage]) -> Vec<FindRow> {
+    let mut rows = Vec::with_capacity(usages.len());
+    for group in usages.chunk_by(|a, b| a.location.path == b.location.path) {
+        let path = &group[0].location.path;
         let relative = root
             .and_then(|root| path.strip_prefix(root).ok())
-            .unwrap_or(&path)
+            .unwrap_or(path)
             .display()
             .to_string();
-        let heading = rows.len();
-        rows.push(FindRow::File { relative, count: 0 });
-        let mut found = 0;
-        while let Some(usage) = usages.next_if(|usage| usage.location.path == path) {
-            found += 1;
-            rows.push(FindRow::Usage {
-                location: usage.location,
-                line: usage.line,
-                text: usage.text,
-                maybe: false,
-                ranges: Vec::new(),
-            });
-        }
-        if let Some(FindRow::File { count, .. }) = rows.get_mut(heading) {
-            *count = found;
-        }
+        rows.push(FindRow::File {
+            relative,
+            count: group.len(),
+        });
+        rows.extend(group.iter().map(|usage| FindRow::Usage {
+            location: usage.location.clone(),
+            line: usage.line,
+            text: usage.text.clone(),
+            maybe: false,
+            ranges: Vec::new(),
+        }));
     }
     rows
 }
@@ -122,7 +116,7 @@ impl Workspace {
             self.chooser = Some(Chooser::smart(title, items));
         } else {
             let root = self.project.as_ref().map(|project| project.root.as_path());
-            self.find_window = Some(FindWindow::new(title, rows(root, usages), true));
+            self.find_window = Some(FindWindow::new(title, rows(root, &usages), true));
         }
         self.pending_focus = Some(super::PendingFocus::Results);
         cx.notify();
@@ -154,7 +148,7 @@ mod tests {
             usage("/p/a/A.java", 4),
             usage("/q/B.java", 2),
         ];
-        let rows = rows(Some(Path::new("/p")), usages);
+        let rows = rows(Some(Path::new("/p")), &usages);
         let headings: Vec<_> = rows
             .iter()
             .filter_map(|row| match row {
