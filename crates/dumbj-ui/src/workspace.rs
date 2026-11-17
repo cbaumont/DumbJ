@@ -793,11 +793,11 @@ impl Workspace {
             Action::NextDiff | Action::PreviousDiff | Action::FocusOppositeDiffPane => {
                 self.active_diff().is_some() && !popup_open
             }
-            Action::StartReview | Action::ActivateGitToolWindow | Action::GitBranches => {
-                self.repository.is_some() && !popup_open
-            }
+            Action::StartReview
+            | Action::ActivateGitToolWindow
+            | Action::GitBranches
+            | Action::ActivateReviewToolWindow => self.repository.is_some() && !popup_open,
             _ if action.is_pull_request_action() => self.pull_action_enabled(action, popup_open),
-            Action::ActivateReviewToolWindow => self.repository.is_some() && !popup_open,
             Action::NextUnviewedFile => self.review.is_some() && !popup_open,
             Action::ToggleFileViewed => self.can_mark_viewed(window) && !popup_open,
             Action::AddReviewNote => self.can_add_note() && !popup_open,
