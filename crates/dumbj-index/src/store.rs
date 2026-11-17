@@ -69,12 +69,12 @@ pub enum StoreError {
 /// The modification time and size of a file; when both match the stored values the file is
 /// assumed unchanged.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct FileStamp {
+pub struct CacheStamp {
     pub mtime_ns: i64,
     pub size: u64,
 }
 
-impl FileStamp {
+impl CacheStamp {
     #[must_use]
     pub fn of(path: &Path) -> Option<Self> {
         let meta = fs::metadata(path).ok()?;
@@ -160,8 +160,8 @@ impl IndexStore {
 
     /// Every cached file by relative path. Files whose rows cannot be understood (an
     /// unknown kind or language) are left out, so they are parsed again.
-    pub fn load(&self) -> Result<HashMap<String, (FileStamp, StoredFile)>, StoreError> {
-        let mut files: HashMap<i64, (String, FileStamp, Option<StoredFile>)> = HashMap::new();
+    pub fn load(&self) -> Result<HashMap<String, (CacheStamp, StoredFile)>, StoreError> {
+        let mut files: HashMap<i64, (String, CacheStamp, Option<StoredFile>)> = HashMap::new();
         {
             let mut statement = self.connection.prepare(
                 "SELECT id, path, mtime_ns, size, language, package, jvm_name FROM files",
@@ -171,7 +171,7 @@ impl IndexStore {
                 let id: i64 = row.get(0)?;
                 let path: String = row.get(1)?;
                 let size: i64 = row.get(3)?;
-                let stamp = FileStamp {
+                let stamp = CacheStamp {
                     mtime_ns: row.get(2)?,
                     size: u64::try_from(size).unwrap_or(0),
                 };
@@ -239,7 +239,7 @@ impl IndexStore {
 
     pub fn save(
         &mut self,
-        changed: &[(&IndexedFile, FileStamp)],
+        changed: &[(&IndexedFile, CacheStamp)],
         removed: &[String],
     ) -> Result<(), StoreError> {
         let transaction = self.connection.transaction()?;

@@ -25,7 +25,7 @@ pub use resolve::{
 };
 pub use revision::{RevisionSource, index_revision};
 pub use search::{HitTarget, SearchHit, SearchScope, file_structure, search};
-pub use store::{FileStamp, IndexStore, StoreError, StoredFile};
+pub use store::{CacheStamp, IndexStore, StoreError, StoredFile};
 pub use usages::{
     Certainty, Usage, UsageHighlight, UsageTarget, find_usages, usage_highlights, usage_target_at,
 };

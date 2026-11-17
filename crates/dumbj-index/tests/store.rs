@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 use common::shop_root;
-use dumbj_index::{FileStamp, Index, IndexStore, cache_path, index_project, index_project_cached};
+use dumbj_index::{CacheStamp, Index, IndexStore, cache_path, index_project, index_project_cached};
 use dumbj_syntax::{FileFacts, Language};
 
 const MONEY: &str = "core/src/main/java/com/shop/core/Money.java";
@@ -209,8 +209,8 @@ fn file_stamp_reflects_size_and_missing_files() {
     let scratch = Scratch::new("stamp");
     let file = scratch.0.join("a.txt");
     fs::write(&file, "four").unwrap();
-    assert_eq!(FileStamp::of(&file).unwrap().size, 4);
-    assert!(FileStamp::of(&scratch.0.join("missing")).is_none());
+    assert_eq!(CacheStamp::of(&file).unwrap().size, 4);
+    assert!(CacheStamp::of(&scratch.0.join("missing")).is_none());
 }
 
 #[test]

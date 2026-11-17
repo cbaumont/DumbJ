@@ -8,7 +8,7 @@ use dumbj_text::Buffer;
 use ignore::{WalkBuilder, WalkState};
 
 use crate::index::{Index, IndexedFile};
-use crate::store::{FileStamp, IndexStore};
+use crate::store::{CacheStamp, IndexStore};
 
 const MAX_INDEXED_FILE_BYTES: u64 = 4 * 1024 * 1024;
 
@@ -131,7 +131,7 @@ pub fn index_project(
     Some(Index::new(files))
 }
 
-/// Like [`index_project`], but files whose [`FileStamp`] matches the one in `store` reuse
+/// Like [`index_project`], but files whose [`CacheStamp`] matches the one in `store` reuse
 /// the stored facts instead of being read and parsed. Afterwards the store is updated with
 /// the files that were parsed and the paths that no longer exist. A failure to save is
 /// logged and does not affect the result. When cancelled, nothing is saved.
@@ -145,14 +145,14 @@ pub fn index_project_cached(
         tracing::warn!(%error, "cannot read the index cache; indexing from scratch");
         HashMap::new()
     });
-    let changed = Mutex::new(HashMap::<String, FileStamp>::new());
+    let changed = Mutex::new(HashMap::<String, CacheStamp>::new());
     let files = walk_files(root, cancelled, progress, |path| {
         if !Language::from_path(path).is_some_and(Language::has_structure) {
             // Nothing is read from these, so there is nothing worth caching.
             return index_file(root, path, cancelled);
         }
         // Taken before reading, so an edit during parsing is noticed next time.
-        let stamp = FileStamp::of(path);
+        let stamp = CacheStamp::of(path);
         let relative = relative_path(root, path);
         if let (Some(stamp), Some((old, file))) = (stamp, stored.get(&relative))
             && *old == stamp
@@ -173,7 +173,7 @@ pub fn index_project_cached(
     let changed = changed
         .into_inner()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
-    let changed_files: Vec<(&IndexedFile, FileStamp)> = files
+    let changed_files: Vec<(&IndexedFile, CacheStamp)> = files
         .iter()
         .filter_map(|file| Some((file, *changed.get(&file.relative)?)))
         .collect();
