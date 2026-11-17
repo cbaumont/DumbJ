@@ -63,6 +63,8 @@ pub(super) struct HierarchyWindow {
     server: Option<dumbj_lsp::Server>,
     direction: exact::Direction,
     rows: Vec<Row>,
+    /// The rows of the exact view not shown now.
+    stash: Vec<Row>,
     selected: usize,
     scroll: UniformListScrollHandle,
     pub(super) visible: bool,
@@ -79,15 +81,13 @@ struct Prepared {
 
 impl HierarchyWindow {
     fn title(&self) -> String {
-        match (self.kind, self.direction) {
-            (HierarchyKind::Type, _) => format!("Type hierarchy of {}", self.name),
-            (HierarchyKind::Calls, exact::Direction::Callers) => {
-                format!("Callers of {}", self.name)
-            }
-            (HierarchyKind::Calls, exact::Direction::Callees) => {
-                format!("Callees of {}", self.name)
-            }
-        }
+        let view = match (self.kind, self.direction) {
+            (HierarchyKind::Type, exact::Direction::Inward) => "Type hierarchy",
+            (HierarchyKind::Type, exact::Direction::Outward) => "Supertypes",
+            (HierarchyKind::Calls, exact::Direction::Inward) => "Callers",
+            (HierarchyKind::Calls, exact::Direction::Outward) => "Callees",
+        };
+        format!("{view} of {}", self.name)
     }
 }
 
@@ -529,8 +529,9 @@ impl Workspace {
             name,
             exact: false,
             server: None,
-            direction: exact::Direction::Callers,
+            direction: exact::Direction::Inward,
             rows,
+            stash: Vec::new(),
             selected,
             scroll,
             visible: true,
@@ -652,7 +653,7 @@ impl Workspace {
             }
             Action::Enter => self.open_hierarchy_row(selected, window, cx),
             Action::Escape => self.focus_fallback(window, cx),
-            Action::Tab | Action::Unindent => self.switch_call_direction(cx),
+            Action::Tab | Action::Unindent => self.switch_direction(cx),
             _ => {}
         }
         cx.notify();

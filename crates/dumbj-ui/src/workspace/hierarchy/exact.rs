@@ -51,10 +51,13 @@ impl Item {
     }
 }
 
+/// Which neighbours of an item its children are.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum Direction {
-    Callers,
-    Callees,
+    /// Callers or subtypes, the view a hierarchy opens with.
+    Inward,
+    /// Callees or supertypes.
+    Outward,
 }
 
 /// File texts read while building rows, so several rows in one file read it once.
@@ -114,7 +117,15 @@ fn row(item: Item, depth: usize, expansion: Expansion, texts: &mut Texts) -> Row
     }
 }
 
-/// The supertype chain down to the type at the caret, which is emphasised and
+/// The superclass in a server's list of supertypes, as IntelliJ's class hierarchy shows
+/// it; interfaces are left to the Supertypes view.
+fn superclass(supertypes: Vec<TypeItem>) -> Option<TypeItem> {
+    supertypes
+        .into_iter()
+        .find(|item| item.kind != lsp_types::SymbolKind::INTERFACE)
+}
+
+/// The superclass chain down to the type at the caret, which is emphasised and
 /// expanded once shown.
 fn type_tree(
     server: &Server,
@@ -133,7 +144,7 @@ fn type_tree(
         };
         let parent = supertypes(server, last, GIVE_UP_AFTER)
             .ok()
-            .and_then(|found| found.into_iter().next());
+            .and_then(superclass);
         match parent {
             Some(parent)
                 if !chain
@@ -187,14 +198,17 @@ fn call_tree(
 
 fn children(server: &Server, item: Item, direction: Direction, depth: usize) -> Vec<Row> {
     let items: Vec<Item> = match item {
-        Item::Type(item) => subtypes(server, item, GIVE_UP_AFTER)
-            .unwrap_or_default()
-            .into_iter()
-            .map(Item::Type)
-            .collect(),
+        Item::Type(item) => match direction {
+            Direction::Inward => subtypes(server, item, GIVE_UP_AFTER),
+            Direction::Outward => supertypes(server, item, GIVE_UP_AFTER),
+        }
+        .unwrap_or_default()
+        .into_iter()
+        .map(Item::Type)
+        .collect(),
         Item::Call(item) => match direction {
-            Direction::Callers => incoming_calls(server, item, GIVE_UP_AFTER),
-            Direction::Callees => outgoing_calls(server, item, GIVE_UP_AFTER),
+            Direction::Inward => incoming_calls(server, item, GIVE_UP_AFTER),
+            Direction::Outward => outgoing_calls(server, item, GIVE_UP_AFTER),
         }
         .unwrap_or_default()
         .into_iter()
@@ -208,12 +222,26 @@ fn children(server: &Server, item: Item, direction: Direction, depth: usize) -> 
         .collect()
 }
 
-/// Keeps only the root and folds it, so it can be expanded the other way.
-fn reset_to_root(rows: &mut Vec<Row>) {
-    rows.truncate(1);
-    if let Some(root) = rows.first_mut() {
-        root.expansion = Expansion::Collapsed;
+/// The rows of the other view: those it showed last, or only the emphasised item, folded,
+/// as its root. Returns the row to select and whether it needs expanding.
+fn other_view(rows: &mut Vec<Row>, stash: &mut Vec<Row>) -> (usize, bool) {
+    if stash.is_empty() {
+        let root = rows.iter().find(|row| row.emphasised).or(rows.first());
+        stash.extend(root.cloned().map(|mut root| {
+            root.depth = 0;
+            root.expansion = Expansion::Collapsed;
+            root
+        }));
     }
+    std::mem::swap(rows, stash);
+    for row in rows.iter_mut() {
+        if row.expansion == Expansion::Loading {
+            row.expansion = Expansion::Collapsed;
+        }
+    }
+    let selected = rows.iter().position(|row| row.emphasised).unwrap_or(0);
+    let fresh = rows.len() == 1;
+    (selected, fresh)
 }
 
 impl Workspace {
@@ -317,22 +345,28 @@ impl Workspace {
         .detach();
     }
 
-    /// Shows the callees of an exact call hierarchy instead of its callers, or back.
-    pub(super) fn switch_call_direction(&mut self, cx: &mut Context<Self>) {
+    /// Switches an exact hierarchy between callers and callees, or between the class
+    /// hierarchy and supertypes, keeping each view's rows.
+    pub(super) fn switch_direction(&mut self, cx: &mut Context<Self>) {
         let Some(hierarchy) = self
             .hierarchy_window
             .as_mut()
-            .filter(|hierarchy| hierarchy.exact && hierarchy.kind == HierarchyKind::Calls)
+            .filter(|hierarchy| hierarchy.exact)
         else {
             return;
         };
         hierarchy.direction = match hierarchy.direction {
-            Direction::Callers => Direction::Callees,
-            Direction::Callees => Direction::Callers,
+            Direction::Inward => Direction::Outward,
+            Direction::Outward => Direction::Inward,
         };
-        reset_to_root(&mut hierarchy.rows);
-        hierarchy.selected = 0;
-        self.expand_exact_row(0, cx);
+        let (selected, fresh) = other_view(&mut hierarchy.rows, &mut hierarchy.stash);
+        hierarchy.selected = selected;
+        hierarchy
+            .scroll
+            .scroll_to_item(selected, gpui::ScrollStrategy::Nearest);
+        if fresh {
+            self.expand_exact_row(selected, cx);
+        }
         cx.notify();
     }
 
@@ -340,10 +374,14 @@ impl Workspace {
         hierarchy: &HierarchyWindow,
         cx: &Context<Self>,
     ) -> Option<impl IntoElement + use<>> {
-        if !hierarchy.exact || hierarchy.kind != HierarchyKind::Calls {
+        if !hierarchy.exact {
             return None;
         }
-        let option = |label: &'static str, on: bool| {
+        let (inward, outward) = match hierarchy.kind {
+            HierarchyKind::Calls => ("Callers", "Callees"),
+            HierarchyKind::Type => ("Classes", "Supertypes"),
+        };
+        let option = move |label: &'static str, on: bool| {
             div()
                 .id(label)
                 .px(px(6.))
@@ -361,22 +399,22 @@ impl Workspace {
                         let current = this
                             .hierarchy_window
                             .as_ref()
-                            .is_some_and(|h| h.direction == Direction::Callers);
-                        if current != (label == "Callers") {
-                            this.switch_call_direction(cx);
+                            .is_some_and(|h| h.direction == Direction::Inward);
+                        if current != (label == inward) {
+                            this.switch_direction(cx);
                         }
                     }),
                 )
                 .child(label)
         };
-        let callers = hierarchy.direction == Direction::Callers;
+        let on_inward = hierarchy.direction == Direction::Inward;
         Some(
             div()
                 .flex()
                 .gap(px(4.))
                 .text_size(px(11.))
-                .child(option("Callers", callers))
-                .child(option("Callees", !callers)),
+                .child(option(inward, on_inward))
+                .child(option(outward, !on_inward)),
         )
     }
 }
@@ -427,25 +465,56 @@ mod tests {
         assert!(!a.same(&c));
     }
 
+    fn type_item(name: &str, kind: SymbolKind) -> TypeItem {
+        let at = Position::new(0, 0);
+        TypeItem {
+            name: name.to_owned(),
+            kind,
+            tags: None,
+            detail: None,
+            uri: "file:///a/T.java".parse().unwrap(),
+            range: Range::new(at, at),
+            selection_range: Range::new(at, at),
+            data: None,
+        }
+    }
+
     #[test]
-    fn switching_direction_keeps_only_the_folded_root() {
+    fn the_chain_follows_the_superclass_past_interfaces() {
+        let found = superclass(vec![
+            type_item("Runnable", SymbolKind::INTERFACE),
+            type_item("Base", SymbolKind::CLASS),
+        ]);
+        assert_eq!(found.map(|item| item.name).as_deref(), Some("Base"));
+        assert!(superclass(vec![type_item("Runnable", SymbolKind::INTERFACE)]).is_none());
+    }
+
+    #[test]
+    fn switching_views_starts_the_other_one_at_the_emphasised_item_and_keeps_both() {
         let mut texts = Texts::default();
-        let mut rows = vec![
-            row(
-                call("greet", "file:///a/G.java", 3),
-                0,
-                Expansion::Expanded,
-                &mut texts,
-            ),
-            row(
-                call("main", "file:///a/M.java", 5),
-                1,
-                Expansion::Collapsed,
-                &mut texts,
-            ),
-        ];
-        reset_to_root(&mut rows);
+        let base = row(
+            call("Base", "file:///a/B.java", 1),
+            0,
+            Expansion::Expanded,
+            &mut texts,
+        );
+        let mut own = row(
+            call("Own", "file:///a/O.java", 2),
+            1,
+            Expansion::Loading,
+            &mut texts,
+        );
+        own.emphasised = true;
+        let mut rows = vec![base, own];
+        let mut stash = Vec::new();
+
+        assert_eq!(other_view(&mut rows, &mut stash), (0, true));
         assert_eq!(rows.len(), 1);
+        assert_eq!((rows[0].label.as_str(), rows[0].depth), ("Own", 0));
         assert_eq!(rows[0].expansion, Expansion::Collapsed);
+
+        assert_eq!(other_view(&mut rows, &mut stash), (1, false));
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[1].expansion, Expansion::Collapsed);
     }
 }
