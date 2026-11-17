@@ -24,6 +24,17 @@ fn is_word(c: char) -> bool {
     c.is_alphanumeric() || c == '_'
 }
 
+pub(crate) fn utf16_to_byte(text: &str, units: usize) -> usize {
+    let mut seen = 0;
+    for (index, c) in text.char_indices() {
+        if seen >= units {
+            return index;
+        }
+        seen += c.len_utf16();
+    }
+    text.len()
+}
+
 impl LineEdit {
     pub(crate) fn text(&self) -> &str {
         &self.text
@@ -181,23 +192,12 @@ impl LineEdit {
             .map_or(0, |prefix| prefix.encode_utf16().count())
     }
 
-    pub(crate) fn utf16_to_offset(&self, offset_utf16: usize) -> usize {
-        let mut units = 0;
-        for (index, c) in self.text.char_indices() {
-            if units >= offset_utf16 {
-                return index;
-            }
-            units += c.len_utf16();
-        }
-        self.text.len()
-    }
-
     pub(crate) fn range_to_utf16(&self, range: &Range<usize>) -> Range<usize> {
         self.offset_to_utf16(range.start)..self.offset_to_utf16(range.end)
     }
 
     pub(crate) fn utf16_to_range(&self, range: &Range<usize>) -> Range<usize> {
-        self.utf16_to_offset(range.start)..self.utf16_to_offset(range.end)
+        utf16_to_byte(&self.text, range.start)..utf16_to_byte(&self.text, range.end)
     }
 }
 
@@ -323,8 +323,8 @@ mod tests {
         assert_eq!(e.offset_to_utf16(1), 1);
         assert_eq!(e.offset_to_utf16(5), 3, "𝄞 is two UTF-16 units");
         assert_eq!(e.offset_to_utf16(7), 4);
-        assert_eq!(e.utf16_to_offset(3), 5);
-        assert_eq!(e.utf16_to_offset(99), 7);
+        assert_eq!(utf16_to_byte(e.text(), 3), 5);
+        assert_eq!(utf16_to_byte(e.text(), 99), 7);
         assert_eq!(e.utf16_to_range(&e.range_to_utf16(&(1..5))), 1..5);
     }
 

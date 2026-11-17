@@ -14,7 +14,7 @@ use gpui::{
     prelude::*, px, relative, size,
 };
 
-use crate::line_edit::{LineEdit, LineMotion};
+use crate::line_edit::{LineEdit, LineMotion, utf16_to_byte};
 use crate::theme;
 
 pub(crate) struct TextChanged;
@@ -199,11 +199,7 @@ impl EntityInputHandler for TextInput {
         let range = range_utf16.map(|range| self.edit.utf16_to_range(&range));
         // The new selection is in UTF-16 units relative to the start of `new_text`.
         let selected = new_selected_range_utf16.map(|selected| {
-            let to_utf8 = |units: usize| {
-                let prefix: Vec<u16> = new_text.encode_utf16().take(units).collect();
-                String::from_utf16_lossy(&prefix).len().min(new_text.len())
-            };
-            to_utf8(selected.start)..to_utf8(selected.end)
+            utf16_to_byte(new_text, selected.start)..utf16_to_byte(new_text, selected.end)
         });
         self.edit.replace_and_mark(range, new_text, selected);
         Self::changed(window, cx);

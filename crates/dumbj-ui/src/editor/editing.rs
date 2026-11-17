@@ -11,6 +11,8 @@ use gpui::{
     Window, point,
 };
 
+use crate::line_edit::utf16_to_byte;
+
 use super::{EditorView, LINE_HEIGHT, LoadState, Reveal, fold_regions};
 
 /// How long after the last edit an unsaved file is written, as IDEA's autosave does.
@@ -35,17 +37,6 @@ pub(crate) enum EditorEvent {
 
 fn utf16_len(text: &str) -> usize {
     text.encode_utf16().count()
-}
-
-fn utf16_to_byte(text: &str, units: usize) -> usize {
-    let mut seen = 0;
-    for (index, c) in text.char_indices() {
-        if seen >= units {
-            return index;
-        }
-        seen += c.len_utf16();
-    }
-    text.len()
 }
 
 impl EditorView {
@@ -502,20 +493,5 @@ impl EntityInputHandler for EditorView {
     ) -> Option<usize> {
         let offset = self.offset_at(point)?;
         Some(self.input_range_utf16(&(offset..offset)).start)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn utf16_offsets_map_to_bytes() {
-        let text = "a😀é";
-        assert_eq!(utf16_len(text), 4);
-        assert_eq!(utf16_to_byte(text, 0), 0);
-        assert_eq!(utf16_to_byte(text, 1), 1);
-        assert_eq!(utf16_to_byte(text, 3), 5);
-        assert_eq!(utf16_to_byte(text, 9), text.len());
     }
 }
