@@ -37,6 +37,8 @@ Linux uses the `DumbJ` keymap (IntelliJ's `macOS For All` plus DumbJ's own actio
 | Go to Type Declaration | `navigate.goto-type-declaration` | `GotoTypeDeclaration` | `Ctrl+Shift+B` / `Ctrl+Shift+Click` | `⇧⌘B` / `⌃⇧B` / `⇧⌘Click` |
 | Quick Documentation | `navigate.quick-documentation` | `QuickJavaDoc` | `F1` / `Ctrl+J` / `Ctrl+Middle Click` | `F1` / `⌃J` / `⌃Middle Click` |
 | Quick Definition | `navigate.quick-definition` | `QuickImplementations` | `Alt+Space` / `Ctrl+Y` | `⌥Space` / `⌘Y` |
+| Next Highlighted Error | `navigate.next-problem` | `GotoNextError` | `F2` | `F2` |
+| Previous Highlighted Error | `navigate.previous-problem` | `GotoPreviousError` | `Shift+F2` | `⇧F2` |
 | Go to Super Method | `navigate.goto-super-method` | `GotoSuperMethod` | `Ctrl+U` | `⌘U` |
 | Type Hierarchy | `navigate.type-hierarchy` | `TypeHierarchy` | `Ctrl+H` | `⌃H` |
 | Call Hierarchy | `navigate.call-hierarchy` | `CallHierarchy` | `Ctrl+Alt+H` | `⌃⌥H` |

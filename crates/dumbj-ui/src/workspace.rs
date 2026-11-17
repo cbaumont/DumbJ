@@ -474,7 +474,7 @@ impl Workspace {
         self.index = None;
         self.head_index = None;
         self.session = pulls::Session::default();
-        self.reset_smart();
+        self.reset_smart(cx);
         self.start_indexing(root.clone(), cx);
         self.load_project_state(root.clone(), cx);
         self.start_jar_indexing(cx);
@@ -720,7 +720,9 @@ impl Workspace {
             Action::ShowContextMenu => {
                 !popup_open && self.focus_area(window, cx) == FocusArea::Editor
             }
-            Action::CloseTab => has_editor && !popup_open,
+            Action::CloseTab | Action::NextProblem | Action::PreviousProblem => {
+                has_editor && !popup_open
+            }
             Action::NextTab | Action::PreviousTab => self.tabs.len() > 1 && !popup_open,
             Action::ActivateProjectToolWindow
             | Action::HideAllToolWindows
@@ -849,6 +851,8 @@ impl Workspace {
             Action::ActivateFindToolWindow => self.toggle_find_window(window, cx),
             Action::GotoImplementation => self.goto_implementation_with(true, window, cx),
             Action::GotoTypeDeclaration => self.goto_type_declaration(window, cx),
+            Action::NextProblem => self.go_to_problem(true, cx),
+            Action::PreviousProblem => self.go_to_problem(false, cx),
             Action::QuickDocumentation => self.quick_peek(peek::PeekKind::Documentation, cx),
             Action::QuickDefinition => self.quick_peek(peek::PeekKind::Definition, cx),
             Action::GotoSuperMethod => self.goto_super_method(window, cx),
@@ -1549,6 +1553,7 @@ impl Workspace {
             right.push("Waiting for second key…".to_owned());
         }
         right.extend(self.status_message.clone());
+        right.extend(self.problem_at_caret(cx));
         right.extend(self.note_at_caret(cx));
         right.extend(self.index_status());
         right.extend(self.head_index_status());

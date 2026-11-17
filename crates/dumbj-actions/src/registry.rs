@@ -41,6 +41,8 @@ pub enum Action {
     GotoTypeDeclaration,
     QuickDocumentation,
     QuickDefinition,
+    NextProblem,
+    PreviousProblem,
     GotoSuperMethod,
     TypeHierarchy,
     CallHierarchy,
@@ -339,6 +341,18 @@ const REGISTRY: &[ActionInfo] = &[
         Action::QuickDefinition,
         "navigate.quick-definition",
         "Quick Definition",
+        Scope::Editor,
+    ),
+    info(
+        Action::NextProblem,
+        "navigate.next-problem",
+        "Next Highlighted Error",
+        Scope::Editor,
+    ),
+    info(
+        Action::PreviousProblem,
+        "navigate.previous-problem",
+        "Previous Highlighted Error",
         Scope::Editor,
     ),
     info(

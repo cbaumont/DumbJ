@@ -82,6 +82,8 @@ const NAVIGATE: Entries = &[
     Some(Action::GotoImplementation),
     Some(Action::QuickDefinition),
     Some(Action::QuickDocumentation),
+    Some(Action::NextProblem),
+    Some(Action::PreviousProblem),
     Some(Action::GotoSuperMethod),
     Some(Action::FindUsages),
     Some(Action::ShowUsages),

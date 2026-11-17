@@ -1,15 +1,18 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc::{self, RecvTimeoutError};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
-use lsp_types::notification::{DidChangeTextDocument, DidCloseTextDocument, DidOpenTextDocument};
+use lsp_types::notification::{
+    DidChangeTextDocument, DidCloseTextDocument, DidOpenTextDocument, Notification,
+    PublishDiagnostics,
+};
 use lsp_types::{
-    DidChangeTextDocumentParams, DidCloseTextDocumentParams, DidOpenTextDocumentParams,
-    TextDocumentContentChangeEvent, TextDocumentIdentifier, TextDocumentItem,
-    VersionedTextDocumentIdentifier,
+    Diagnostic, DidChangeTextDocumentParams, DidCloseTextDocumentParams, DidOpenTextDocumentParams,
+    PublishDiagnosticsParams, TextDocumentContentChangeEvent, TextDocumentIdentifier,
+    TextDocumentItem, VersionedTextDocumentIdentifier,
 };
 use serde_json::Value;
 
@@ -17,7 +20,7 @@ use crate::backoff::Backoff;
 use crate::error::LspError;
 use crate::preset::{ServerKind, initialize_params};
 use crate::server::{Server, ServerCommand, ServerEvent};
-use crate::uri::path_to_uri;
+use crate::uri::{path_to_uri, uri_to_path};
 
 const POLL: Duration = Duration::from_millis(20);
 
@@ -127,6 +130,8 @@ struct Shared {
     state: Mutex<SessionState>,
     server: Mutex<Option<Server>>,
     documents: Mutex<HashMap<PathBuf, (i32, String)>>,
+    diagnostics: Mutex<HashMap<PathBuf, Arc<Vec<Diagnostic>>>>,
+    diagnostics_version: AtomicU64,
     stopped: AtomicBool,
 }
 
@@ -156,6 +161,39 @@ impl Shared {
             *state = new;
         }
         (self.on_change)();
+    }
+
+    fn publish_diagnostics(&self, params: Value) {
+        let params = match serde_json::from_value::<PublishDiagnosticsParams>(params) {
+            Ok(params) => params,
+            Err(error) => {
+                tracing::debug!(%error, "unreadable diagnostics");
+                return;
+            }
+        };
+        let Some(path) = uri_to_path(&params.uri) else {
+            return;
+        };
+        {
+            let mut diagnostics = lock(&self.diagnostics);
+            if params.diagnostics.is_empty() {
+                if diagnostics.remove(&path).is_none() {
+                    return;
+                }
+            } else {
+                diagnostics.insert(path, Arc::new(params.diagnostics));
+            }
+        }
+        self.diagnostics_version.fetch_add(1, Ordering::SeqCst);
+        (self.on_change)();
+    }
+
+    fn clear_diagnostics(&self) {
+        let had = !std::mem::take(&mut *lock(&self.diagnostics)).is_empty();
+        if had {
+            self.diagnostics_version.fetch_add(1, Ordering::SeqCst);
+            (self.on_change)();
+        }
     }
 
     fn stopped(&self) -> bool {
@@ -258,6 +296,7 @@ impl Shared {
             self.set_state(progress.state(self.kind));
             let stopped = self.run(&rx, &mut progress, &mut backoff);
             lock(&self.server).take();
+            self.clear_diagnostics();
             if stopped {
                 server.shutdown(Duration::from_secs(2));
                 return;
@@ -280,6 +319,11 @@ impl Shared {
     ) -> bool {
         loop {
             match events.recv_timeout(POLL) {
+                Ok(ServerEvent::Notification { method, params })
+                    if method == PublishDiagnostics::METHOD =>
+                {
+                    self.publish_diagnostics(params);
+                }
                 Ok(ServerEvent::Notification { method, params }) => {
                     progress.apply(&method, &params);
                     let state = progress.state(self.kind);
@@ -362,6 +406,8 @@ impl Session {
             state: Mutex::new(SessionState::Starting),
             server: Mutex::new(None),
             documents: Mutex::new(HashMap::new()),
+            diagnostics: Mutex::new(HashMap::new()),
+            diagnostics_version: AtomicU64::new(0),
             stopped: AtomicBool::new(false),
         });
         let thread_shared = Arc::clone(&shared);
@@ -391,6 +437,21 @@ impl Session {
     #[must_use]
     pub fn server(&self) -> Option<Server> {
         lock(&self.shared.server).clone()
+    }
+
+    /// What the server last reported for `path`; empty while no server runs.
+    #[must_use]
+    pub fn diagnostics(&self, path: &Path) -> Arc<Vec<Diagnostic>> {
+        lock(&self.shared.diagnostics)
+            .get(path)
+            .cloned()
+            .unwrap_or_default()
+    }
+
+    /// Changes whenever any file's diagnostics change.
+    #[must_use]
+    pub fn diagnostics_version(&self) -> u64 {
+        self.shared.diagnostics_version.load(Ordering::SeqCst)
     }
 
     pub fn open_document(&self, path: &Path, text: String) {

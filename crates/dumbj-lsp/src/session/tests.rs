@@ -375,3 +375,31 @@ fn on_change_fires_only_on_transitions() {
     h.wait_for(&SessionState::Ready);
     assert_eq!(h.changes.try_iter().count(), 1);
 }
+
+#[test]
+fn diagnostics_are_kept_per_file_and_dropped_with_the_server() {
+    let harness = harness(ServerKind::KotlinLsp, timing());
+    let mut mock = harness.ready_mock();
+    let path = Path::new("/work/proj/A.kt");
+    let diagnostic = json!({"range": {"start": {"line": 1, "character": 2}, "end": {"line": 1, "character": 5}}, "severity": 1, "message": "Unresolved reference"});
+    mock.notify(
+        "textDocument/publishDiagnostics",
+        &json!({"uri": "file:///work/proj/A.kt", "diagnostics": [diagnostic]}),
+    );
+    let deadline = Instant::now() + WAIT;
+    while harness.session.diagnostics(path).is_empty() && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    assert_eq!(
+        harness.session.diagnostics(path)[0].message,
+        "Unresolved reference"
+    );
+    let version = harness.session.diagnostics_version();
+    drop(mock);
+    let deadline = Instant::now() + WAIT;
+    while !harness.session.diagnostics(path).is_empty() && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    assert!(harness.session.diagnostics(path).is_empty());
+    assert!(harness.session.diagnostics_version() > version);
+}

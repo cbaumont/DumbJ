@@ -31,6 +31,7 @@ use crate::theme;
 mod annotate;
 mod blocks;
 mod changes;
+mod diagnostics;
 mod diff_marks;
 mod editing;
 
@@ -275,6 +276,7 @@ pub(crate) struct EditorView {
     bookmarks: Vec<BookmarkMark>,
     changes: changes::Changes,
     diff_marks: DiffMarks,
+    problems: Arc<Vec<diagnostics::Problem>>,
     note_lines: Vec<(usize, usize)>,
     annotations: Option<Arc<Vec<String>>>,
     read_only: bool,
@@ -441,6 +443,7 @@ impl EditorView {
             bookmarks: Vec::new(),
             changes: changes::Changes::default(),
             diff_marks: DiffMarks::default(),
+            problems: Arc::new(Vec::new()),
             note_lines: Vec::new(),
             annotations: None,
             read_only: true,
@@ -1254,6 +1257,7 @@ impl EditorView {
         let mut match_index = matches.partition_point(|found| found.end <= visible_start);
         let usages = self.usages.clone();
         let mut usage_index = usages.partition_point(|usage| usage.range.end <= visible_start);
+        let problems = self.problems.clone();
         let usage_read_color = theme::ui(cx, UiRole::EditorUsageRead);
         let usage_write_color = theme::ui(cx, UiRole::EditorUsageWrite);
 
@@ -1404,6 +1408,20 @@ impl EditorView {
                 };
                 backgrounds.push(band(x(usage.range.start), x(usage.range.end), color));
                 usage_index += 1;
+            }
+            for problem in problems
+                .iter()
+                .filter(|p| p.range.start <= line_end && p.range.end >= line_start)
+            {
+                let from = x(problem.range.start.max(line_start));
+                let to = x(problem.range.end.min(line_end)).max(from + px(6.));
+                backgrounds.push(fill(
+                    Bounds::new(
+                        point(from, top + LINE_HEIGHT - px(2.5)),
+                        size(to - from, px(1.5)),
+                    ),
+                    theme::ui(cx, problem.role),
+                ));
             }
             while let Some(found) = matches
                 .get(match_index)

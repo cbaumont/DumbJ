@@ -88,9 +88,13 @@ impl Workspace {
             .flatten()
     }
 
-    pub(super) fn reset_smart(&mut self) {
+    pub(super) fn reset_smart(&mut self, cx: &mut Context<Self>) {
         for session in self.smart.sessions.values() {
             session.stop();
+        }
+        for tab in &self.tabs {
+            tab.editor
+                .update(cx, |editor, cx| editor.set_diagnostics(&[], cx));
         }
         self.smart = Smart {
             generation: self.smart.generation,
@@ -101,7 +105,7 @@ impl Workspace {
     pub(super) fn toggle_smart_mode(&mut self, cx: &mut Context<Self>) {
         self.state.smart_off = !self.state.smart_off;
         self.save_project_state(cx);
-        self.reset_smart();
+        self.reset_smart(cx);
         self.status_message = Some(
             if self.state.smart_off {
                 "Smart mode is off for this project"
@@ -116,7 +120,7 @@ impl Workspace {
 
     pub(super) fn smart_state_loaded(&mut self, cx: &mut Context<Self>) {
         if self.state.smart_off {
-            self.reset_smart();
+            self.reset_smart(cx);
             cx.notify();
         }
     }
@@ -182,7 +186,12 @@ impl Workspace {
             loop {
                 cx.background_executor().timer(POLL_INTERVAL).await;
                 if changed.swap(false, Ordering::Relaxed)
-                    && this.update(cx, |_, cx| cx.notify()).is_err()
+                    && this
+                        .update(cx, |this, cx| {
+                            this.refresh_problems(cx);
+                            cx.notify();
+                        })
+                        .is_err()
                 {
                     break;
                 }
@@ -228,6 +237,38 @@ impl Workspace {
         }
         if loading {
             self.schedule_smart_sync(cx);
+        }
+        self.refresh_problems(cx);
+    }
+
+    /// Gives each open working file the diagnostics its server last published.
+    fn refresh_problems(&mut self, cx: &mut Context<Self>) {
+        for tab in self.tabs.iter().filter(|tab| tab.shows_working_file()) {
+            let diagnostics = self
+                .smart_kind(&tab.path)
+                .and_then(|kind| self.smart.sessions.get(&kind))
+                .map_or_else(Default::default, |session| session.diagnostics(&tab.path));
+            tab.editor
+                .update(cx, |editor, cx| editor.set_diagnostics(&diagnostics, cx));
+        }
+    }
+
+    pub(super) fn problem_at_caret(&self, cx: &gpui::App) -> Option<String> {
+        let problem = self.active_editor()?.read(cx).problem_at_caret()?;
+        let mut message = problem.message.clone();
+        if message.chars().count() > 120 {
+            message = message.chars().take(119).chain(['…']).collect();
+        }
+        Some(message)
+    }
+
+    pub(super) fn go_to_problem(&mut self, forward: bool, cx: &mut Context<Self>) {
+        let Some(editor) = self.active_editor() else {
+            return;
+        };
+        if !editor.update(cx, |editor, cx| editor.go_to_problem(forward, cx)) {
+            self.status_message = Some("No problems in this file".to_owned());
+            cx.notify();
         }
     }
 
