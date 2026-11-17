@@ -147,20 +147,6 @@ impl Review {
             .sort_by(|a, b| (&a.path, a.side, a.first_line).cmp(&(&b.path, b.side, b.first_line)));
     }
 
-    /// Removes the note on `side` of `path` whose range contains `line`; returns whether one
-    /// was removed.
-    pub fn remove_note(&mut self, path: &Path, side: NoteSide, line: usize) -> bool {
-        let Some(index) = self
-            .notes
-            .iter()
-            .position(|note| note.contains(path, side, line))
-        else {
-            return false;
-        };
-        self.notes.remove(index);
-        true
-    }
-
     #[must_use]
     pub fn note_at(&self, path: &Path, side: NoteSide, line: usize) -> Option<&ReviewNote> {
         self.notes
@@ -361,7 +347,7 @@ mod tests {
     }
 
     #[test]
-    fn note_at_and_remove_use_range_containment() {
+    fn note_at_uses_range_containment_and_empty_text_removes() {
         let mut review = Review::new("main", None);
         review.set_note(note("a", NoteSide::Head, 4, 6, "x"));
         let path = Path::new("a");
@@ -370,8 +356,7 @@ mod tests {
         assert!(review.note_at(path, NoteSide::Head, 6).is_some());
         assert!(review.note_at(path, NoteSide::Head, 7).is_none());
         assert!(review.note_at(path, NoteSide::Base, 5).is_none());
-        assert!(!review.remove_note(path, NoteSide::Base, 5));
-        assert!(review.remove_note(path, NoteSide::Head, 5));
+        review.set_note(note("a", NoteSide::Head, 4, 6, " "));
         assert_eq!(review.notes(), []);
     }
 
