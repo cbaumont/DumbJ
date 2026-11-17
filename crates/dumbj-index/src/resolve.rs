@@ -613,7 +613,7 @@ fn scalar_group(name: &str) -> Option<u8> {
     }
 }
 
-fn simple_name(type_name: &str) -> &str {
+pub(crate) fn simple_name(type_name: &str) -> &str {
     type_name.rsplit('.').next().unwrap_or(type_name)
 }
 
@@ -1998,10 +1998,7 @@ impl Lookup<'_> {
                     Receiver::External(type_name) => Some(type_name),
                     Receiver::Unknown => match qualifier {
                         Qualifier::Name(name) | Qualifier::Path(name)
-                            if name
-                                .rsplit('.')
-                                .next()
-                                .is_some_and(|last| last.starts_with(char::is_uppercase)) =>
+                            if simple_name(name).starts_with(char::is_uppercase) =>
                         {
                             Some(name.clone())
                         }

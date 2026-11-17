@@ -5,7 +5,7 @@ use dumbj_syntax::{Symbol, SymbolKind};
 use dumbj_text::ByteRange;
 
 use crate::index::{FileId, Index, SymbolId};
-use crate::resolve::resolve_supertypes;
+use crate::resolve::{resolve_supertypes, simple_name};
 use crate::usages::{Usage, UsageTarget, find_usages};
 
 const MAX_DEPTH: usize = 32;
@@ -92,13 +92,13 @@ fn same_signature(candidate: &Symbol, base: &Symbol) -> bool {
     match (&candidate.parameters, &base.parameters) {
         (Some(ours), Some(theirs)) => {
             ours.len() == theirs.len()
-                && ours.iter().zip(theirs).all(|(a, b)| {
-                    let simple = |name: &str| name.rsplit('.').next().unwrap_or(name).to_owned();
-                    match (&a.type_name, &b.type_name) {
-                        (Some(a), Some(b)) => simple(a) == simple(b),
+                && ours
+                    .iter()
+                    .zip(theirs)
+                    .all(|(a, b)| match (&a.type_name, &b.type_name) {
+                        (Some(a), Some(b)) => simple_name(a) == simple_name(b),
                         _ => true,
-                    }
-                })
+                    })
         }
         _ => true,
     }

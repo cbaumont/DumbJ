@@ -5,6 +5,7 @@ use std::sync::{Arc, OnceLock};
 use dumbj_syntax::{FileFacts, Language, Symbol};
 
 use crate::project::{ModuleId, ProjectModel};
+use crate::resolve::simple_name;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct FileId(pub(crate) u32);
@@ -246,8 +247,7 @@ impl Index {
 
     #[must_use]
     pub fn symbols_by_fqn(&self, fqn: &str) -> Vec<SymbolId> {
-        let name = fqn.rsplit('.').next().unwrap_or(fqn);
-        self.symbols_named(name)
+        self.symbols_named(simple_name(fqn))
             .iter()
             .copied()
             .filter(|id| self.fqn(*id) == fqn)
