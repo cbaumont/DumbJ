@@ -73,7 +73,7 @@
 - [x] Java ↔ Kotlin interop — property accessors, file facade classes, `@JvmName`, `INSTANCE`, companion members
 - [x] Gradle version catalog — `libs.x.y` accessors jump to `libs.versions.toml`
 - [x] Dumb Find Usages
-- [x] Dumb implementations / hierarchy
+- [~] Dumb implementations / hierarchy — Java primitive parameter types are not recorded, so `send(String)` counts as overriding `send(int)`
 - [~] Exact / best-guess labelling — chooser headed "best guess", usages marked "maybe"; direct jumps say exact / best guess in the status bar while a server is used; status bar shows dumb / smart (indexing…) / smart
 - [x] Language-server lifecycle — start on first file of the language, restart with backoff, per-project off switch, files changed on disk reported; checked with jdtls and kotlin-lsp
 - [x] Accuracy benchmark — 287 cases, nightly in CI
