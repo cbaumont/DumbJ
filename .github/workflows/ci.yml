@@ -38,7 +38,7 @@ jobs:
 
       - uses: taiki-e/install-action@v2
         with:
-          tool: cargo-nextest,cargo-deny
+          tool: cargo-nextest,cargo-deny,cargo-shear
 
       - name: Format
         run: cargo fmt --all --check
@@ -49,6 +49,14 @@ jobs:
       # Includes the check that docs/KEYMAP.md matches the vendored keymaps.
       - name: Tests
         run: cargo nextest run --workspace --locked
+
+      - name: Docs
+        run: cargo doc --workspace --no-deps --document-private-items --locked
+        env:
+          RUSTDOCFLAGS: -D warnings
+
+      - name: Unused dependencies
+        run: cargo shear
 
       - name: Licences, advisories and sources
         run: cargo deny check
