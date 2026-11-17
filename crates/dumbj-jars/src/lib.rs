@@ -217,14 +217,13 @@ impl JarIndex {
             if cancelled.load(Ordering::Relaxed) {
                 return None;
             }
-            let archive = match open(&jar.path) {
+            let mut archive = match open(&jar.path) {
                 Ok(archive) => archive,
                 Err(error) => {
                     tracing::debug!(%error, "skipping source jar");
                     continue;
                 }
             };
-            let mut archive = archive;
             let entries: Vec<String> = archive
                 .file_names()
                 .filter_map(Result::ok)
@@ -328,7 +327,7 @@ pub fn is_virtual_path(path: &Path) -> bool {
     split_virtual_path(path).is_some()
 }
 
-pub fn read_entry(jar: &Path, entry: &str) -> Result<String, JarError> {
+fn read_entry(jar: &Path, entry: &str) -> Result<String, JarError> {
     let mut archive = open(jar)?;
     let mut file = archive
         .by_name(entry)

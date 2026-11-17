@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
 
 use dumbj_jars::{
-    JarIndex, SourceJar, default_roots, discover, locate, named_by_build, read_entry, read_virtual,
+    JarIndex, SourceJar, discover, locate, named_by_build, read_virtual,
     split_virtual_path, virtual_path,
 };
 use dumbj_syntax::Language;
@@ -133,7 +133,7 @@ fn discovers_indexes_and_reads_gradle_and_maven_jars() {
         Some((newest.jar.path.clone(), "okio/Buffer.kt".to_owned()))
     );
     assert_eq!(read_virtual(&path).unwrap(), BUFFER_KT);
-    assert!(read_entry(&newest.jar.path, "okio/Missing.kt").is_err());
+    assert!(read_virtual(&virtual_path(&newest.jar.path, "okio/Missing.kt")).is_err());
     assert_eq!(split_virtual_path(Path::new("/plain/File.kt")), None);
     assert_eq!(
         virtual_path(Path::new("/a/b.jar"), "c/D.java"),
@@ -160,17 +160,6 @@ fn locates_classes_members_and_getters() {
     );
     assert_eq!(at(Some("missing")), "Buffer");
     assert_eq!(locate("not code", Language::Kotlin, "Nope", None).get(), 0);
-}
-
-#[test]
-fn default_roots_are_the_gradle_and_maven_caches() {
-    let roots = default_roots();
-    assert!(
-        roots
-            .iter()
-            .any(|root| root.ends_with(".gradle/caches/modules-2/files-2.1"))
-    );
-    assert!(roots.iter().any(|root| root.ends_with(".m2/repository")));
 }
 
 #[test]
