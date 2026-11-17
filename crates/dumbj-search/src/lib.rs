@@ -10,6 +10,7 @@ use thiserror::Error;
 
 /// Files larger than this are skipped: they are generated or data, and reading them would
 /// stall the search.
+const CANCEL_INTERVAL: usize = 1024;
 const MAX_FILE_BYTES: u64 = 5 * 1024 * 1024;
 /// How much of a file is checked for NUL bytes to tell binary files from text.
 const BINARY_SNIFF_BYTES: usize = 8192;
@@ -45,7 +46,6 @@ pub struct Outcome {
     pub matches: Vec<Match>,
     /// More matches exist than `matches` holds.
     pub capped: bool,
-    pub files_searched: usize,
 }
 
 #[derive(Debug, Error, PartialEq, Eq)]
@@ -198,11 +198,7 @@ pub fn find_in_files(
     let mut matches: Vec<Match> = results.into_iter().flat_map(|(_, found)| found).collect();
     let capped = matches.len() > max_matches;
     matches.truncate(max_matches);
-    Ok(Outcome {
-        matches,
-        capped,
-        files_searched: next.load(Ordering::Relaxed).min(files.len()),
-    })
+    Ok(Outcome { matches, capped })
 }
 
 fn search_file(path: &Path, pattern: &Regex, cancelled: &AtomicBool) -> Vec<Match> {
@@ -224,7 +220,7 @@ fn search_file(path: &Path, pattern: &Regex, cancelled: &AtomicBool) -> Vec<Matc
     let mut matches = Vec::new();
     let mut line_start = 0;
     for (line, raw) in text.split('\n').enumerate() {
-        if line % 1024 == 0 && cancelled.load(Ordering::Relaxed) {
+        if line % CANCEL_INTERVAL == 0 && cancelled.load(Ordering::Relaxed) {
             return Vec::new();
         }
         let next_start = line_start + raw.len() + 1;

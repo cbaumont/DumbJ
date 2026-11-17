@@ -507,7 +507,6 @@ mod tests {
                 found("/p/B.kt", 0),
             ],
             capped: false,
-            files_searched: 2,
         };
         let rows: Vec<String> = find_rows(Path::new("/p"), &outcome)
             .iter()
