@@ -1,5 +1,3 @@
-//! The pull request's overview page, permalinks and pruning the fetched refs.
-
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
@@ -63,7 +61,6 @@ fn overview_text(pull: &PullRequestDetails) -> String {
     text
 }
 
-/// The address of lines of a file at a commit on a GitHub host; lines are one-based.
 fn permalink(repo: &RepoId, commit: &str, path: &Path, first: usize, last: usize) -> String {
     let path = path
         .components()
@@ -86,8 +83,6 @@ impl Workspace {
         self.session.pull_threads.as_ref()?.details.as_ref()
     }
 
-    /// Opens, or refreshes, the page with the pull request's state, checks, commits and
-    /// description.
     pub(super) fn open_overview(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some(details) = self.pull_details() else {
             self.status_message = Some("The pull request is not loaded yet".to_owned());
@@ -122,8 +117,6 @@ impl Workspace {
         self.activate_tab(index, window, cx);
     }
 
-    /// Copies the GitHub address of the caret line, or the selected lines, of the active
-    /// file: at the commit a revision tab shows, otherwise at HEAD.
     pub(super) fn copy_permalink(&mut self, cx: &mut Context<Self>) {
         let (Some(repository), Some(editor)) = (self.repository.clone(), self.active_editor())
         else {
@@ -172,7 +165,6 @@ impl Workspace {
         .detach();
     }
 
-    /// Deletes the refs of fetched pull requests, except the one under review.
     pub(super) fn prune_review_refs(&mut self, cx: &mut Context<Self>) {
         let Some(repository) = self.repository.clone() else {
             return;

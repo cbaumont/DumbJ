@@ -50,7 +50,6 @@ fn spans(buffer: &Buffer, tokens: &[SemanticToken]) -> Vec<HighlightSpan> {
     spans
 }
 
-/// `base` with the parts under `top` cut out and `top`'s spans put in their place.
 pub(super) fn overlay(base: Vec<HighlightSpan>, top: &[HighlightSpan]) -> Vec<HighlightSpan> {
     if top.is_empty() {
         return base;
@@ -89,7 +88,6 @@ pub(super) fn overlay(base: Vec<HighlightSpan>, top: &[HighlightSpan]) -> Vec<Hi
     result
 }
 
-/// `runs` with the drawn text in `inlays` faint on a background of its own.
 pub(super) fn mark_inlays(
     runs: Vec<TextRun>,
     inlays: &[Range<usize>],
@@ -140,7 +138,6 @@ pub(super) fn shifted(range: &Range<ByteOffset>, edits: &[Edit]) -> Option<Range
 }
 
 impl EditorView {
-    /// Takes the server's tokens if they describe the buffer as it is now.
     pub(crate) fn set_semantic_tokens(
         &mut self,
         version: u64,
@@ -155,7 +152,6 @@ impl EditorView {
         cx.notify();
     }
 
-    /// Takes the server's inlay hints if they describe the buffer as it is now.
     pub(crate) fn set_inlays(&mut self, version: u64, inlays: &[Inlay], cx: &mut Context<Self>) {
         if !self.is_ready() || self.model.buffer().version() != version {
             return;
@@ -181,7 +177,6 @@ impl EditorView {
         dumbj_lsp::to_lsp(self.model.buffer(), self.model.buffer().len())
     }
 
-    /// The inlays of the line from `start` to `end`, as columns of that line.
     pub(super) fn inlays_in(&self, start: ByteOffset, end: ByteOffset) -> Vec<(usize, &str)> {
         let first = self.inlays.partition_point(|(at, _)| *at < start);
         self.inlays[first..]

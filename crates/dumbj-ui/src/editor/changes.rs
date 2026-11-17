@@ -8,10 +8,8 @@ use gpui::{AppContext, Context, Task};
 
 use super::{EditorView, Reveal};
 
-/// Typing pauses this long before the change markers are recomputed.
 const TYPING_DELAY: Duration = Duration::from_millis(200);
 
-/// How the text differs from the file's content in the HEAD commit.
 #[derive(Default)]
 pub(super) struct Changes {
     base: Option<Arc<String>>,
@@ -19,14 +17,11 @@ pub(super) struct Changes {
     task: Option<Task<()>>,
 }
 
-/// What the gutter draws beside a line.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum ChangeMark {
     Added,
     Modified,
-    /// Lines were removed just above this line.
     DeletedAbove,
-    /// Lines were removed after this line, the last one.
     DeletedBelow,
 }
 
@@ -135,7 +130,6 @@ impl EditorView {
         }));
     }
 
-    /// Recomputes the markers once the file has loaded, if a base arrived before it.
     pub(super) fn changes_loaded(&mut self, cx: &mut Context<Self>) {
         self.refresh_changes(Duration::ZERO, cx);
     }
@@ -162,7 +156,6 @@ impl EditorView {
         cx.notify();
     }
 
-    /// Puts the changed lines around the caret back as they are in HEAD.
     pub(super) fn rollback_change(&mut self, cx: &mut Context<Self>) {
         let buffer = self.model.buffer();
         let line_count = buffer.line_count();

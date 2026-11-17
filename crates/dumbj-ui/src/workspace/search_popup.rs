@@ -150,7 +150,6 @@ fn row(index: &Index, hit: SearchHit, structure: bool) -> Option<Row> {
     }
 }
 
-/// Which engine the rows come from; recent lists are not index results.
 fn source_label(mode: SearchMode) -> &'static str {
     match mode {
         SearchMode::Recent(_) => "",
@@ -199,7 +198,6 @@ fn recent_file_row(
             String::new(),
         ),
     };
-    // Reopen where the caret was last, as IDEA does.
     let offset = state
         .recent_locations
         .iter()

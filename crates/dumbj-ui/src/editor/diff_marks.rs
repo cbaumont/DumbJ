@@ -6,14 +6,12 @@ use gpui::Context;
 
 use super::{EditorView, LoadState};
 
-/// How one side of a diff differs from the other, drawn behind the text.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct DiffMarks {
     /// Changed line ranges and their colour, sorted.
     pub(crate) lines: Vec<(Range<usize>, UiRole)>,
     /// The changed words inside modified lines, sorted.
     pub(crate) words: Vec<ByteRange>,
-    /// Lines above which the other side has lines this side lacks.
     pub(crate) gaps: Vec<usize>,
 }
 
@@ -40,8 +38,6 @@ impl EditorView {
         }
     }
 
-    /// A cheap copy of the text to compare, once loading has finished. A file that cannot
-    /// be read (deleted from the working tree) compares as empty.
     pub(crate) fn diff_snapshot(&self) -> Option<Buffer> {
         match self.state {
             LoadState::Loading => None,

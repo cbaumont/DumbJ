@@ -65,7 +65,6 @@ impl Workspace {
         }
     }
 
-    /// Saves on the calling thread; for quitting, when background work would be cut off.
     pub(super) fn save_all_blocking(&mut self, cx: &mut Context<Self>) {
         for tab in &self.tabs {
             tab.editor.update(cx, |editor, _| editor.save_blocking());
@@ -86,7 +85,6 @@ impl Workspace {
         }
     }
 
-    /// Shown above an editor whose file changed on disk while it has unsaved edits.
     pub(super) fn render_conflict_bar(
         editor: &Entity<EditorView>,
         cx: &mut Context<Self>,

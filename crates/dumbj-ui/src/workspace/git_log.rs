@@ -23,7 +23,6 @@ const LANE_WIDTH: f32 = 12.;
 const MAX_LANES: usize = 12;
 const COMMIT_LIMIT: usize = 2000;
 const SHORT_ID: usize = 10;
-/// The id of git's empty tree, the base of a root commit's diff.
 const EMPTY_TREE: &str = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
 const LANE_ROLES: [UiRole; 5] = [
     UiRole::Info,
@@ -65,7 +64,6 @@ fn parse_filter(text: &str) -> LogOptions {
     options
 }
 
-/// Whether the filtered log is a connected history that a graph can describe.
 fn shows_graph(options: &LogOptions) -> bool {
     options.author.is_none()
         && options.text.is_none()
@@ -137,11 +135,9 @@ pub(super) struct GitWindow {
     selected: usize,
     scroll: UniformListScrollHandle,
     files: Vec<Change>,
-    /// The commit `files` belongs to.
     files_of: Option<String>,
     file_selected: usize,
     files_scroll: UniformListScrollHandle,
-    /// Whether the keys go to the file list, not the commit list.
     in_files: bool,
     loading: bool,
     cancel: Arc<AtomicBool>,
@@ -170,7 +166,6 @@ impl Workspace {
         self.git_window_shown() && self.git_focus.is_focused(window)
     }
 
-    /// Shows the Git window and focuses it, or hides it when it already has focus.
     pub(super) fn toggle_git_window(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.repository.is_none() {
             return;
@@ -195,7 +190,6 @@ impl Workspace {
         cx.notify();
     }
 
-    /// Opens the Git window on the log that `filter` describes.
     fn show_log(&mut self, filter: &str, window: &mut Window, cx: &mut Context<Self>) {
         self.git_filter
             .update(cx, |input, cx| input.set_text(filter, false, cx));
@@ -276,7 +270,6 @@ impl Workspace {
         cx.notify();
     }
 
-    /// Lists the files the selected commit changed against its first parent.
     fn load_commit_files(&mut self, cx: &mut Context<Self>) {
         let (Some(repository), Some(git)) = (self.repository.clone(), self.git_window.as_mut())
         else {
@@ -362,7 +355,6 @@ impl Workspace {
         }
     }
 
-    /// The history of the active file, or of the lines its selection touches.
     pub(super) fn show_file_history(
         &mut self,
         selection: bool,

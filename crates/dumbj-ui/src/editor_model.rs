@@ -9,7 +9,6 @@ pub(crate) enum Motion {
     Right,
     Up,
     Down,
-    /// To the first non-blank character of the line, or to column 0 if already there.
     LineStart,
     LineEnd,
     TextStart,
@@ -24,22 +23,17 @@ pub(crate) enum Motion {
 pub(crate) struct EditorModel {
     buffer: Buffer,
     anchor: ByteOffset,
-    /// The moving end of the selection, where the caret is drawn.
     caret: ByteOffset,
-    /// The character column vertical movement tries to return to.
     goal_column: Option<usize>,
-    /// Each Extend Selection step as (before, after), for Shrink Selection.
     extended: Vec<(ByteRange, ByteRange)>,
     pub(crate) folds: Folds,
     history: History,
     format: Format,
 }
 
-/// How the file is written, so that edits match what is already there.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Format {
     pub(crate) line_ending: LineEnding,
-    /// One level of indentation: a tab or a run of spaces.
     pub(crate) indent: String,
 }
 
@@ -53,7 +47,6 @@ impl Default for Format {
 }
 
 impl Format {
-    /// Reads the line ending and the indentation unit off the first lines of `buffer`.
     pub(crate) fn detect(buffer: &Buffer) -> Self {
         const SAMPLE_LINES: usize = 2000;
         let lines = buffer.line_count().min(SAMPLE_LINES);
@@ -79,7 +72,6 @@ impl Format {
     }
 }
 
-/// Where `position` ends up after `removed` bytes at `offset` were replaced by `inserted`.
 fn shifted(
     position: ByteOffset,
     offset: ByteOffset,
@@ -236,12 +228,10 @@ impl EditorModel {
         self.history.mark_saved();
     }
 
-    /// Ends the current typing group, so the next edit is its own undo step.
     pub(crate) fn seal_history(&mut self) {
         self.history.seal();
     }
 
-    /// Replaces the text with what is on disk now, as one undoable edit that counts as saved.
     pub(crate) fn reload(&mut self, text: &str) -> Vec<Edit> {
         let caret = self.caret.min(ByteOffset(text.len()));
         let mut caret = caret.get();
@@ -284,7 +274,6 @@ impl EditorModel {
             .reveal(self.buffer.point_at(self.caret).line.get());
     }
 
-    /// One edit; the selection becomes `select` (anchor first) afterwards.
     fn replace(
         &mut self,
         range: ByteRange,
@@ -340,19 +329,17 @@ impl EditorModel {
         applied
     }
 
-    /// Types `text` over the selection.
     pub(crate) fn insert(&mut self, text: &str) -> Vec<Edit> {
         self.replace_range(self.selection(), text)
     }
 
-    /// Replaces `range`, which need not be the selection (an input method does this).
+    /// `range` need not be the selection: an input method replaces other text.
     pub(crate) fn replace_range(&mut self, range: ByteRange, text: &str) -> Vec<Edit> {
         let range = self.buffer.clamp(range.start)..self.buffer.clamp(range.end);
         let end = ByteOffset(range.start.get() + text.len());
         self.replace(range, text, EditKind::Insert, end..end)
     }
 
-    /// Inserts clipboard text, with its line breaks turned into the file's.
     pub(crate) fn paste(&mut self, text: &str) -> Vec<Edit> {
         let ending = self.format.line_ending.as_str();
         let text = text.replace("\r\n", "\n").replace('\n', ending);
@@ -408,7 +395,6 @@ impl EditorModel {
         self.replace(caret..end, "", EditKind::DeleteForward, caret..caret)
     }
 
-    /// Breaks the line, keeping its indentation and adding a level after an opening bracket.
     pub(crate) fn newline(&mut self) -> Vec<Edit> {
         let range = self.selection();
         let point = self.buffer.point_at(range.start);
@@ -458,7 +444,6 @@ impl EditorModel {
         first..=last
     }
 
-    /// Tab: indents the selected lines, or moves the caret to the next indentation stop.
     pub(crate) fn indent(&mut self) -> Vec<Edit> {
         let lines = self.selected_lines();
         if !self.has_selection() || lines.start() == lines.end() {
@@ -483,7 +468,6 @@ impl EditorModel {
         self.replace_many(&edits)
     }
 
-    /// Shift+Tab: removes one level of indentation from the selected lines.
     pub(crate) fn unindent(&mut self) -> Vec<Edit> {
         let width = self.format.indent.len();
         let edits: Vec<(ByteRange, String)> = self
@@ -503,7 +487,6 @@ impl EditorModel {
         self.replace_many(&edits)
     }
 
-    /// The selected lines with their line breaks, as a range of whole lines.
     fn line_block(&self, lines: &std::ops::RangeInclusive<usize>) -> ByteRange {
         let start = self.buffer.line_start(LineIndex(*lines.start()));
         let next = LineIndex(lines.end() + 1);
@@ -535,7 +518,6 @@ impl EditorModel {
         self.caret = offset;
     }
 
-    /// Duplicates the selection after itself, or the caret's line below itself.
     pub(crate) fn duplicate(&mut self) -> Vec<Edit> {
         if self.has_selection() {
             let selection = self.selection();
@@ -560,7 +542,6 @@ impl EditorModel {
         self.replace(end..end, &insert, EditKind::Other, caret..caret)
     }
 
-    /// Moves the selected lines one line up or down, with the selection.
     pub(crate) fn move_lines(&mut self, down: bool) -> Vec<Edit> {
         let lines = self.selected_lines();
         let last = self.buffer.line_count() - 1;
@@ -600,8 +581,6 @@ impl EditorModel {
         self.replace(range, &text, EditKind::Other, select)
     }
 
-    /// Comments the selected lines with `prefix`, or uncomments them if all are commented.
-    /// Without a selection the caret then moves down a line, as IDEA's does.
     pub(crate) fn toggle_line_comment(&mut self, prefix: &str) -> Vec<Edit> {
         let lines: Vec<usize> = self
             .selected_lines()
@@ -668,7 +647,6 @@ impl EditorModel {
         edits
     }
 
-    /// Puts the caret at a one-based line and optional one-based character column.
     pub(crate) fn go_to(&mut self, line: usize, column: Option<usize>) {
         let line = LineIndex(line.saturating_sub(1).min(self.buffer.line_count() - 1));
         let column = column.unwrap_or(1).saturating_sub(1);
@@ -760,8 +738,6 @@ impl EditorModel {
         })
     }
 
-    /// Moves the caret. Without `extend`, Left and Right collapse a selection to its near
-    /// edge instead of moving past it.
     pub(crate) fn apply_motion(&mut self, motion: Motion, extend: bool) {
         let selection = self.selection();
         let collapse = !extend && self.has_selection();
@@ -789,7 +765,6 @@ impl EditorModel {
 
 pub(crate) use dumbj_syntax::FoldKind;
 
-/// Lines `start..=end`; folded, `start` stays visible and the rest are hidden.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) struct FoldRegion {
     pub(crate) header: usize,
@@ -806,10 +781,8 @@ impl FoldRegion {
 
 #[derive(Debug, Default)]
 pub(crate) struct Folds {
-    /// One region per start line (the largest), sorted by start.
     regions: Vec<FoldRegion>,
     collapsed: std::collections::BTreeSet<usize>,
-    /// Hidden line ranges, sorted and merged.
     hidden: Vec<std::ops::Range<usize>>,
 }
 
@@ -843,9 +816,6 @@ impl Folds {
         self.hidden = merged;
     }
 
-    /// Follows an edit that replaced lines `start..=old_end` with lines `start..=new_end`:
-    /// regions below move with their text, regions around the edit grow or shrink, and
-    /// regions that began inside the replaced lines are dropped until the next parse.
     pub(crate) fn apply_edit(&mut self, start: usize, old_end: usize, new_end: usize) {
         if old_end == new_end {
             return;
@@ -914,7 +884,6 @@ impl Folds {
         true
     }
 
-    /// Collapses the innermost expanded region around `line`.
     pub(crate) fn collapse_at(&mut self, line: usize) -> bool {
         let innermost = self
             .regions
@@ -925,7 +894,6 @@ impl Folds {
         innermost.is_some_and(|region| self.toggle(region.start))
     }
 
-    /// Expands the collapsed region that starts on `line`, else the innermost one around it.
     pub(crate) fn expand_at(&mut self, line: usize) -> bool {
         let target = self
             .regions
@@ -952,7 +920,6 @@ impl Folds {
         self.recompute();
     }
 
-    /// Unfolds whatever hides `line`.
     pub(crate) fn reveal(&mut self, line: usize) -> bool {
         if !self.is_hidden(line) {
             return false;
@@ -972,7 +939,6 @@ impl Folds {
         self.hidden.iter().any(|range| range.contains(&line))
     }
 
-    /// The display row of `line`; a hidden line maps to the row of its fold's first line.
     pub(crate) fn row_of(&self, line: usize) -> usize {
         let mut hidden_before = 0;
         for range in &self.hidden {
@@ -1008,11 +974,8 @@ impl Folds {
 
 const TAB_WIDTH: usize = 4;
 
-/// Text drawn in place of buffer text: an expanded tab, or an inlay hint, which replaces
-/// nothing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct Insert {
-    /// Byte column in the buffer line.
     at: usize,
     replaced: usize,
     width: usize,
@@ -1023,8 +986,6 @@ impl Insert {
         self.replaced == 0
     }
 
-    /// Whether the insert is drawn before buffer column `column`. A caret at an inlay's
-    /// column is drawn after the inlay.
     fn before(&self, column: usize) -> bool {
         if self.is_inlay() {
             self.at <= column
@@ -1041,14 +1002,12 @@ pub(crate) struct DisplayLine {
 }
 
 impl DisplayLine {
-    /// Expands the tabs of `line`. At most `max_bytes` of the line are kept, so that a
-    /// minified file cannot make shaping a single line arbitrarily slow.
+    /// At most `max_bytes` are kept, so that a minified file cannot make shaping a
+    /// single line arbitrarily slow.
     pub(crate) fn new(line: &str, max_bytes: usize) -> Self {
         Self::with_inlays(line, max_bytes, &[])
     }
 
-    /// Like `new`, and draws each inlay's text before the byte column it is attached to.
-    /// `inlays` are sorted by column.
     pub(crate) fn with_inlays(line: &str, max_bytes: usize, inlays: &[(usize, &str)]) -> Self {
         let mut end = line.len().min(max_bytes);
         while !line.is_char_boundary(end) {
@@ -1109,9 +1068,6 @@ impl DisplayLine {
         (column + extra).min(self.text.len())
     }
 
-    /// Maps a byte column of the drawn text back to the buffer line. A position inside an
-    /// expanded tab maps to the nearer side of the tab, one inside an inlay to the column
-    /// the inlay is attached to.
     pub(crate) fn to_buffer(&self, display_column: usize) -> usize {
         let mut extra = 0;
         for insert in &self.inserts {
@@ -1131,7 +1087,6 @@ impl DisplayLine {
         display_column - extra
     }
 
-    /// Where the inlays are in the drawn text.
     pub(crate) fn inlay_ranges(&self) -> impl Iterator<Item = std::ops::Range<usize>> + '_ {
         let mut extra = 0;
         self.inserts.iter().filter_map(move |insert| {
@@ -1142,7 +1097,6 @@ impl DisplayLine {
     }
 }
 
-/// Parses the text of the Go to Line popup: `line` or `line:column`, both one-based.
 pub(crate) fn parse_line_column(text: &str) -> Option<(usize, Option<usize>)> {
     let (line, column) = match text.split_once(':') {
         Some((line, column)) => (line, Some(column)),
@@ -1316,7 +1270,6 @@ mod tests {
     #[test]
     fn extend_and_shrink_selection_step_through_enclosing_ranges() {
         let mut m = model("call(one, two)");
-        // A stand-in for the syntax tree: the arguments, then the whole call.
         let enclosing = |range: ByteRange| match (range.start.get(), range.end.get()) {
             (5, 8) => Some(ByteOffset(4)..ByteOffset(14)),
             (4, 14) => Some(ByteOffset(0)..ByteOffset(14)),
@@ -1513,8 +1466,6 @@ mod tests {
         assert!((scroll_to_center(11.0, 99, 100) - 94.0).abs() < 1e-9);
         assert!((scroll_to_center(11.0, 0, 0) - 0.0).abs() < 1e-9);
     }
-    /// Runs `edit` on `text`, where `|` marks the caret (or `[` and `]` the selection),
-    /// and renders the result the same way.
     fn edited(text: &str, edit: impl FnOnce(&mut EditorModel)) -> String {
         let mut model = marked(text);
         edit(&mut model);

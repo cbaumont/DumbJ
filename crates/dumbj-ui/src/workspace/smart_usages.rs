@@ -73,8 +73,6 @@ fn rows(root: Option<&Path>, usages: &[ExactUsage]) -> Vec<FindRow> {
 }
 
 impl Workspace {
-    /// Asks the language server of the active file for the references of the symbol at
-    /// the caret; `None` when there is no server to ask.
     pub(super) fn ask_exact_usages(
         &self,
         cx: &mut Context<Self>,

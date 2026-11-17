@@ -1,5 +1,3 @@
-//! The pull request list and opening a pull request as a review.
-
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::time::Duration;
@@ -26,7 +24,6 @@ const FILTERS: [PrFilter; 4] = [
     PrFilter::All,
 ];
 
-/// The GitHub repository behind one of the project's remotes, and a signed-in client.
 #[derive(Debug)]
 pub(super) struct GitHub {
     remote: String,
@@ -50,14 +47,11 @@ pub(super) fn connect(repository: &Repository) -> Result<GitHub, String> {
     })
 }
 
-/// What is known about GitHub and the pull request under review.
 #[derive(Default)]
 pub(super) struct Session {
     pub(super) github: Option<Arc<GitHub>>,
     pub(super) pull_threads: Option<super::threads::PullThreads>,
-    /// Draft comments are on their way to GitHub.
     pub(super) sending: bool,
-    /// The width the threads of each open diff side were last wrapped at.
     pub(super) wrapped_at: Vec<usize>,
 }
 
@@ -110,7 +104,6 @@ pub(super) struct PullList {
     scroll: UniformListScrollHandle,
     task: Option<Task<()>>,
     asked: bool,
-    /// The list is shown although a pull request is under review.
     pub(super) browsing: bool,
 }
 
@@ -162,7 +155,6 @@ impl Workspace {
         }
     }
 
-    /// Shows the list in place of the files of the pull request under review, or back.
     pub(super) fn browse_pulls(
         &mut self,
         browsing: bool,
@@ -174,7 +166,6 @@ impl Workspace {
         cx.notify();
     }
 
-    /// Asks GitHub for the list again, after a pause when the user is typing.
     pub(super) fn load_pulls(&mut self, debounce: bool, cx: &mut Context<Self>) {
         let text = self.pull_input.read(cx).text().to_owned();
         let Some(repository) = self.repository.clone() else {
@@ -271,7 +262,6 @@ impl Workspace {
         cx.notify();
     }
 
-    /// Fetches the pull request into `refs/dumbj/pr/` and starts its review.
     fn open_pull(&mut self, pull: PullRequestSummary, window: &mut Window, cx: &mut Context<Self>) {
         let (Some(repository), Some(github)) =
             (self.repository.clone(), self.session.github.clone())
@@ -315,7 +305,6 @@ impl Workspace {
         cx.notify();
     }
 
-    /// The pull request under review, if the review is of one.
     pub(super) fn review_pull(&self) -> Option<&PullRequestRef> {
         self.review.as_ref()?;
         self.state.review.as_ref()?.pull.as_ref()

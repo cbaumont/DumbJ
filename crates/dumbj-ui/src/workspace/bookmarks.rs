@@ -12,7 +12,6 @@ use super::state::is_project_file;
 use crate::editor::BookmarkMark;
 use crate::theme;
 
-/// The caret line waiting for the user to press the mnemonic to give its bookmark.
 pub(super) struct MnemonicPrompt {
     path: PathBuf,
     line: usize,
@@ -23,7 +22,6 @@ fn is_mnemonic(key: char) -> bool {
     key.is_ascii_alphanumeric()
 }
 
-/// The mnemonic a key press types: an unmodified digit or letter (Shift is allowed).
 fn typed_mnemonic(keystroke: &Keystroke) -> Option<char> {
     let modifiers = &keystroke.modifiers;
     if modifiers.control || modifiers.alt || modifiers.platform || modifiers.function {
@@ -46,7 +44,6 @@ fn chooser_item(bookmark: &Bookmark) -> ChooserItem {
 }
 
 impl Workspace {
-    /// The file, line and line text under the caret, when a bookmark can be set there.
     fn bookmark_site(&self, cx: &Context<Self>) -> Option<(PathBuf, usize, String)> {
         let tab = self.active_tab().filter(|_| !self.in_revision())?;
         if self.project.is_none() || !is_project_file(&tab.path) {
@@ -57,7 +54,6 @@ impl Workspace {
         Some((tab.path.clone(), editor.caret_line_column().0, text))
     }
 
-    /// Updates the gutter markers of every open editor and saves the bookmarks.
     pub(super) fn bookmarks_changed(&mut self, cx: &mut Context<Self>) {
         self.refresh_bookmark_marks(cx);
         self.save_project_state(cx);
@@ -93,7 +89,6 @@ impl Workspace {
         self.bookmarks_changed(cx);
     }
 
-    /// Gives the caret line the bookmark `mnemonic`, or removes it when it already has it.
     pub(super) fn toggle_bookmark_mnemonic(&mut self, mnemonic: char, cx: &mut Context<Self>) {
         let Some((path, line, text)) = self.bookmark_site(cx) else {
             return;
@@ -152,7 +147,6 @@ impl Workspace {
         cx.notify();
     }
 
-    /// Opens `path` and puts the caret on `line`, recording the jump for Back and Forward.
     pub(super) fn navigate_to_line(
         &mut self,
         path: PathBuf,
@@ -171,8 +165,6 @@ impl Workspace {
         }
     }
 
-    /// Handles the keys that pick a bookmark by its mnemonic: in the mnemonic prompt and in
-    /// the bookmark list. Returns whether the key was consumed.
     pub(super) fn handle_bookmark_key(
         &mut self,
         keystroke: &Keystroke,

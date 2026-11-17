@@ -52,7 +52,6 @@ fn named_key(name: &str) -> Option<Key> {
     Some(key)
 }
 
-/// Converts a GPUI keystroke. Returns `None` for keys no keymap can name.
 pub(crate) fn stroke_from_gpui(keystroke: &gpui::Keystroke) -> Option<KeyStroke> {
     let mut modifiers = modifiers_from_gpui(keystroke.modifiers);
     let mut chars = keystroke.key.chars();

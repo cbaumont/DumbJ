@@ -49,21 +49,17 @@ struct Row {
     expansion: Expansion,
     emphasised: bool,
     maybe: bool,
-    /// The language server's item behind an exact row.
     item: Option<exact::Item>,
 }
 
 pub(super) struct HierarchyWindow {
     kind: HierarchyKind,
-    /// The index the rows' symbols belong to.
     index: Arc<Index>,
     name: String,
-    /// Rows from the language server, whose `server` expands them.
     exact: bool,
     server: Option<dumbj_lsp::Server>,
     direction: exact::Direction,
     rows: Vec<Row>,
-    /// The rows of the exact view not shown now.
     stash: Vec<Row>,
     selected: usize,
     scroll: UniformListScrollHandle,
@@ -150,7 +146,6 @@ fn subtype_rows(
     }
 }
 
-/// The superclass chain down to `id`, then every subtype below it.
 fn type_rows(index: &Index, id: SymbolId) -> Vec<Row> {
     let mut chain = vec![id];
     while let Some(parent) = chain.last().and_then(|last| superclass(index, *last)) {
@@ -232,7 +227,6 @@ fn caller_rows(index: &Index, found: &[Caller], depth: usize) -> Vec<Row> {
         .collect()
 }
 
-/// The index of the row after the subtree of `row`.
 fn subtree_end(rows: &[Row], row: usize) -> usize {
     let depth = rows.get(row).map_or(0, |r| r.depth);
     rows.iter()
@@ -422,8 +416,6 @@ impl Workspace {
         self.hierarchy(HierarchyKind::Calls, cx);
     }
 
-    /// Asks the language server when there is one; the dumb tree is shown at once
-    /// without one, or after 300 ms if the exact tree has not arrived.
     fn hierarchy(&mut self, kind: HierarchyKind, cx: &mut Context<Self>) {
         let dumb = match kind {
             HierarchyKind::Type => self.dumb_type_hierarchy(cx),

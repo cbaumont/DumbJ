@@ -34,8 +34,6 @@ pub(super) struct NavigationHistory {
 const MAX_HISTORY: usize = 200;
 
 impl NavigationHistory {
-    /// Records a jump from `from` to `to`. Anything that could be reached with Forward is
-    /// dropped, as in a browser.
     pub(super) fn record_jump(&mut self, from: Location, to: Location) {
         self.entries.truncate(self.current + 1);
         if self.entries.last() != Some(&from) {
@@ -76,7 +74,6 @@ pub(super) struct ChooserItem {
     /// A one-based line to jump to instead of `location.offset`, for places that are
     /// remembered by line.
     pub(super) line: Option<usize>,
-    /// A key that picks this item without moving the selection.
     pub(super) key: Option<char>,
 }
 
@@ -121,7 +118,6 @@ pub(super) struct Chooser {
 }
 
 impl Chooser {
-    /// A list of dumb-engine results, labelled "best guess".
     pub(super) fn new(title: String, items: Vec<ChooserItem>) -> Self {
         Self {
             title,
@@ -132,7 +128,6 @@ impl Chooser {
         }
     }
 
-    /// A list of language-server results.
     pub(super) fn smart(title: String, items: Vec<ChooserItem>) -> Self {
         Self {
             badge: Some("exact"),
@@ -140,7 +135,6 @@ impl Chooser {
         }
     }
 
-    /// A list the user made, such as bookmarks.
     pub(super) fn exact(title: String, items: Vec<ChooserItem>) -> Self {
         Self {
             badge: None,
@@ -148,7 +142,6 @@ impl Chooser {
         }
     }
 
-    /// The item that `key` picks.
     pub(super) fn item_for_key(&self, key: char) -> Option<usize> {
         let key = key.to_ascii_uppercase();
         self.items.iter().position(|item| item.key == Some(key))
@@ -258,7 +251,6 @@ impl Workspace {
         })
     }
 
-    /// Opens `location` without touching the history.
     fn show_location(&mut self, location: Location, window: &mut Window, cx: &mut Context<Self>) {
         self.open_file(location.path, window, cx);
         if let Some(editor) = self.active_editor() {
@@ -318,7 +310,6 @@ impl Workspace {
         ChooserItem::new(label, detail, location)
     }
 
-    /// `smart` asks the language server first, when the file has one.
     pub(super) fn goto_declaration_with(
         &mut self,
         smart: bool,
@@ -564,7 +555,6 @@ mod tests {
     fn a_jump_after_moving_the_caret_keeps_both_places() {
         let mut history = NavigationHistory::default();
         history.record_jump(at("a", 1), at("b", 2));
-        // The user moved within b before jumping again.
         history.record_jump(at("b", 50), at("c", 3));
         assert_eq!(history.back(), Some(at("b", 50)));
         assert_eq!(history.back(), Some(at("b", 2)));

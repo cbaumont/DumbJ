@@ -37,7 +37,6 @@ fn problems(buffer: &Buffer, diagnostics: &[lsp_types::Diagnostic]) -> Vec<Probl
     problems
 }
 
-/// The first problem after `caret` (before it, going back), wrapping round the file.
 fn next_problem(problems: &[Problem], caret: ByteOffset, forward: bool) -> Option<ByteOffset> {
     let starts = problems.iter().map(|problem| problem.range.start);
     if forward {
@@ -77,7 +76,6 @@ impl EditorView {
             .min_by_key(|problem| problem.role != UiRole::Error)
     }
 
-    /// Moves the caret to the next or previous problem; false when there is none.
     pub(crate) fn go_to_problem(&mut self, forward: bool, cx: &mut Context<Self>) -> bool {
         let Some(offset) = next_problem(&self.problems, self.model.caret(), forward) else {
             return false;

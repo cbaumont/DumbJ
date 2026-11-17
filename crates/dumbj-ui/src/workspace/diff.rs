@@ -18,25 +18,19 @@ use crate::editor::{
 use crate::theme;
 
 const HEADER_HEIGHT: gpui::Pixels = px(26.);
-/// How many lines stay visible above the first difference when a diff opens.
 const CONTEXT_LINES: usize = 3;
 const RETYPE_DELAY: Duration = Duration::from_millis(150);
 
-/// The left half of a diff tab and what the comparison found. The tab's own editor, the
-/// working file, is the right half.
 pub(super) struct DiffTab {
     left: Entity<EditorView>,
     base: String,
-    /// `None` when the right side is the working file.
     head: Option<String>,
     left_active: bool,
     options: DiffOptions,
     hunks: Arc<Vec<Hunk>>,
     right_marks: DiffMarks,
-    /// The buffer versions of both sides that `hunks` describes.
     computed: Option<(u64, u64)>,
     pending: Option<(u64, u64)>,
-    /// Each side's top line after the last scroll synchronisation.
     tops: (f64, f64),
     task: Option<Task<()>>,
     _subscriptions: Vec<Subscription>,
@@ -80,13 +74,10 @@ impl DiffTab {
     }
 }
 
-/// What a diff tab compares.
 pub(super) struct DiffSides {
     pub(super) path: PathBuf,
-    /// The file's path in the base revision, when it was renamed since.
     pub(super) old_path: Option<PathBuf>,
     pub(super) base: String,
-    /// `None` compares with the working file.
     pub(super) head: Option<String>,
 }
 
@@ -197,8 +188,6 @@ fn opposite_line(hunks: &[Hunk], line: f64, from_old: bool) -> f64 {
     to_at as f64 + (line - from_at as f64)
 }
 
-/// The first line of the nearest difference after (or before) `line` on one side.
-/// GitHub shows this many unchanged lines around a change and takes comments on them too.
 const GITHUB_CONTEXT: usize = 3;
 
 /// Whether GitHub's diff shows the one-based lines `first..=last` of a side in one piece,
@@ -242,7 +231,6 @@ fn neighbour(hunks: &[Hunk], line: usize, old_side: bool, forward: bool) -> Opti
     }
 }
 
-/// How a revision is shown: the private refs of a pull request read as `#7`.
 fn revision_label(revision: &str) -> String {
     let pull = revision
         .strip_prefix("refs/dumbj/pr/")
@@ -274,7 +262,6 @@ impl Workspace {
         self.active_tab()?.diff.as_ref()
     }
 
-    /// Whether the caret that actions act on is in a revision, not in the working file.
     pub(super) fn in_revision(&self) -> bool {
         self.active_diff()
             .is_some_and(|diff| diff.left_active || diff.head.is_some())
@@ -286,8 +273,6 @@ impl Workspace {
         project.tree.read(cx).selected_file().map(Path::to_path_buf)
     }
 
-    /// Opens a tab comparing `sides.path` at the base revision (left) with the head revision
-    /// or the working file (right).
     pub(super) fn show_diff(
         &mut self,
         sides: DiffSides,
@@ -448,8 +433,6 @@ impl Workspace {
         }
     }
 
-    /// Runs when either side of a diff changed: recomputes the differences if the text
-    /// changed and keeps the two sides scrolled level.
     pub(super) fn diff_changed(&mut self, left: EntityId, cx: &mut Context<Self>) {
         let Some(index) = self.diff_index(left) else {
             return;
@@ -591,7 +574,6 @@ impl Workspace {
         if let Some(diff) = diff {
             diff.options.ignore_whitespace = !diff.options.ignore_whitespace;
             diff.pending = None;
-            // Keeps the scroll position: this is not the first comparison.
             diff.computed = Some((u64::MAX, u64::MAX));
             self.diff_changed(left, cx);
         }

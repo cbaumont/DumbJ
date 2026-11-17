@@ -171,7 +171,6 @@ impl Workspace {
         cx.notify();
     }
 
-    /// Saves every file, then switches branch in the background and reloads what changed.
     fn checkout(&mut self, branch: Branch, cx: &mut Context<Self>) {
         let Some(repository) = self.repository.clone() else {
             return;
@@ -229,7 +228,6 @@ impl Workspace {
         cx.notify();
     }
 
-    /// Shows or hides who last changed each line of the active file.
     pub(super) fn toggle_annotate(&mut self, cx: &mut Context<Self>) {
         let Some(tab) = self.active_tab().filter(|tab| tab.shows_working_file()) else {
             return;
@@ -243,8 +241,6 @@ impl Workspace {
         }
     }
 
-    /// Reads the blame of `path` at HEAD into `editor`; called again whenever HEAD may
-    /// have moved.
     pub(super) fn load_annotations(
         &self,
         editor: &Entity<EditorView>,

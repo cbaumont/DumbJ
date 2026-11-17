@@ -64,8 +64,6 @@ impl TextInput {
         cx.notify();
     }
 
-    /// Runs a text action. Returns `false` if the field has no use for it, so the caller
-    /// can handle it (Enter and Escape, for instance).
     pub(crate) fn handle_action(
         &mut self,
         action: Action,

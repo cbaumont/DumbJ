@@ -7,8 +7,6 @@ pub(crate) struct Entry {
     pub(crate) is_dir: bool,
 }
 
-/// Lists a directory: folders first, then files, each sorted case-insensitively.
-/// The `.git` directory is left out. Entries that cannot be read are skipped.
 pub(crate) fn read_dir_sorted(dir: &Path) -> std::io::Result<Vec<Entry>> {
     let mut entries: Vec<Entry> = std::fs::read_dir(dir)?
         .filter_map(Result::ok)
@@ -60,7 +58,6 @@ impl TreeModel {
             .collect();
     }
 
-    /// The expanded directories, parents before their children.
     pub(crate) fn expanded_dirs(&self) -> Vec<PathBuf> {
         self.rows
             .iter()
@@ -81,8 +78,6 @@ impl TreeModel {
         index + 1 + rest.take_while(|other| other.depth > row.depth).count()
     }
 
-    /// Shows `children` under the directory at `path`. Does nothing if the directory is no
-    /// longer visible (it was collapsed away while its listing was loading).
     pub(crate) fn expand(&mut self, path: &Path, children: Vec<Entry>) {
         let Some(index) = self.position(path) else {
             return;

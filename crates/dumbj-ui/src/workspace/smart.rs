@@ -21,18 +21,14 @@ pub(super) struct Smart {
     sessions: HashMap<ServerKind, Session>,
     unavailable: HashMap<ServerKind, String>,
     detecting: HashSet<ServerKind>,
-    /// The buffer version each open document was last sent at.
     sent: HashMap<PathBuf, u64>,
-    /// The buffer version whose semantic tokens were asked for, per file.
     tokens: HashMap<PathBuf, u64>,
-    /// The index snapshot and server process whose files each server was last told about.
     files_synced: HashMap<ServerKind, (usize, Option<u32>)>,
     changed: Arc<AtomicBool>,
     sync: Option<Task<()>>,
     poll: Option<Task<()>>,
     pub(super) nav: Option<super::smart_nav::SmartNav>,
     pub(super) generation: u64,
-    /// The hierarchy request whose dumb tree waits for the exact one.
     pub(super) hierarchy_waiting: Option<u64>,
     pub(super) peek: Option<super::peek::Peek>,
     /// The generation of the peek the user closed, so a late exact answer stays away.
@@ -188,7 +184,6 @@ impl Workspace {
         .detach();
     }
 
-    /// Sessions report changes from their own threads; this turns them into repaints.
     fn start_smart_poll(&mut self, cx: &mut Context<Self>) {
         if self.smart.poll.is_some() {
             return;
@@ -253,8 +248,6 @@ impl Workspace {
         self.refresh_from_servers(cx);
     }
 
-    /// Tells each connected server which source and build files changed on disk since it
-    /// was last told, as an editor's file watcher would.
     pub(super) fn sync_watched_files(&mut self, cx: &mut Context<Self>) {
         let (Some(index), Some(root)) = (
             self.index.clone(),
@@ -293,8 +286,6 @@ impl Workspace {
         }
     }
 
-    /// Gives each open working file the diagnostics its server last published, and asks
-    /// for the semantic tokens and inlay hints of files not yet fetched at their current text.
     fn refresh_from_servers(&mut self, cx: &mut Context<Self>) {
         self.sync_watched_files(cx);
         let mut wanted = Vec::new();

@@ -26,7 +26,6 @@ const DEBOUNCE: Duration = Duration::from_millis(200);
 enum SearchScope {
     #[default]
     Project,
-    /// The directory of the file that was open when the popup opened.
     Directory,
 }
 
@@ -49,7 +48,6 @@ enum Status {
 
 pub(super) struct FindInFiles {
     toggles: Toggles,
-    /// The directory of the file that was open when the popup opened.
     directory: Option<PathBuf>,
     status: Status,
     cancel: Arc<AtomicBool>,
@@ -156,7 +154,6 @@ impl Workspace {
         cx.notify();
     }
 
-    /// Searches again after the typing pause, cancelling the search that is running.
     pub(super) fn schedule_find_in_files(&mut self, cx: &mut Context<Self>) {
         let Some(open) = self.find_in_files.as_mut() else {
             return;

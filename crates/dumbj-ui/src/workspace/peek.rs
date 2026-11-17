@@ -50,7 +50,6 @@ fn code(lines: Vec<String>) -> Vec<PeekLine> {
         .collect()
 }
 
-/// The declaration that starts on `line`, to the end of its block or statement.
 fn definition_lines(buffer: &Buffer, line: usize) -> Vec<String> {
     let mut lines = Vec::new();
     let mut depth = 0_i32;
@@ -86,7 +85,6 @@ fn definition_lines(buffer: &Buffer, line: usize) -> Vec<String> {
         .collect()
 }
 
-/// The comment written right above the declaration on `line`, without its markers.
 fn doc_lines(buffer: &Buffer, line: usize) -> Vec<String> {
     let mut lines = Vec::new();
     for index in (0..line).rev() {
@@ -124,8 +122,6 @@ fn doc_lines(buffer: &Buffer, line: usize) -> Vec<String> {
     }
 }
 
-/// A line of Markdown prose as plain text: list markers become bullets, links their
-/// text, and emphasis and code marks go.
 fn plain(line: &str) -> String {
     let line = line.trim_start_matches('#').trim_start();
     let (bullet, line) = match line.strip_prefix("* ").or_else(|| line.strip_prefix("- ")) {
@@ -200,7 +196,6 @@ impl Workspace {
         self.smart.peek.is_some()
     }
 
-    /// Where the dumb engine thinks the symbol at the caret is declared.
     fn dumb_peek_target(&self, cx: &Context<Self>) -> Option<(PathBuf, ByteOffset)> {
         let index = self.active_index(cx)?;
         let editor = self.active_editor()?.read(cx);

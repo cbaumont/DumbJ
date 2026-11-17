@@ -9,7 +9,6 @@ use super::Workspace;
 use super::file_name;
 use super::navigation::{Chooser, ChooserItem, Location};
 
-/// How long the exact answer may take before the dumb one is shown in its place.
 pub(super) const DUMB_AFTER: Duration = Duration::from_millis(300);
 const GIVE_UP_AFTER: Duration = Duration::from_secs(10);
 
@@ -21,17 +20,13 @@ struct ExactTarget {
 
 enum Exact {
     Targets(Vec<ExactTarget>),
-    /// The server points into a class file or another document that is not a file on disk.
     NotAFile,
     Failed(String),
 }
 
 enum Phase {
     Waiting,
-    /// The dumb result was shown; `landed` is where it jumped, if it did.
-    DumbShown {
-        landed: Option<Location>,
-    },
+    DumbShown { landed: Option<Location> },
 }
 
 pub(super) struct SmartNav {
@@ -83,8 +78,6 @@ fn title(kind: GotoKind) -> &'static str {
 }
 
 impl Workspace {
-    /// Asks the language server of the active file. Returns false when there is none to
-    /// ask, so the caller answers from the index.
     pub(super) fn smart_goto(
         &mut self,
         kind: GotoKind,

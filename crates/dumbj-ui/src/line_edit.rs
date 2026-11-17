@@ -2,7 +2,6 @@ use std::ops::Range;
 
 use dumbj_text::is_word_char;
 
-/// A caret movement within one line of text.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum LineMotion {
     Left,
@@ -13,7 +12,7 @@ pub(crate) enum LineMotion {
     End,
 }
 
-/// Single-line editable text. Offsets are UTF-8 byte offsets on `char` boundaries.
+/// Offsets are UTF-8 byte offsets on `char` boundaries.
 #[derive(Debug, Default, Clone)]
 pub(crate) struct LineEdit {
     text: String,
@@ -122,8 +121,6 @@ impl LineEdit {
         }
     }
 
-    /// Moves the caret. Without `extend`, a horizontal move collapses a selection to its
-    /// near edge instead of moving past it.
     pub(crate) fn apply_motion(&mut self, motion: LineMotion, extend: bool) {
         let selection = self.selection();
         let target = match motion {
@@ -134,8 +131,6 @@ impl LineEdit {
         self.move_to(target, extend);
     }
 
-    /// Replaces `range` (or the composition, or the selection) with `text` and puts the
-    /// caret after it. Line breaks become spaces. Ends any composition.
     pub(crate) fn replace(&mut self, range: Option<Range<usize>>, text: &str) -> Range<usize> {
         let range = range
             .map(|range| self.clamp_range(&range))
@@ -149,8 +144,6 @@ impl LineEdit {
         range.start..self.caret
     }
 
-    /// Like [`replace`](Self::replace), but the inserted text stays marked as an in-progress
-    /// composition. `selected` is relative to the start of the inserted text.
     pub(crate) fn replace_and_mark(
         &mut self,
         range: Option<Range<usize>>,
@@ -164,8 +157,6 @@ impl LineEdit {
         }
     }
 
-    /// Deletes the selection, or the character before the caret (`forward == false`) or
-    /// after it. Returns whether anything changed.
     pub(crate) fn delete(&mut self, forward: bool) -> bool {
         if self.selection().is_empty() {
             let motion = if forward {

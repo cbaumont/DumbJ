@@ -9,7 +9,6 @@ use super::popup::{popup_box, popup_layer};
 use crate::editor::EditorView;
 use crate::theme;
 
-/// The lines a note is being written on.
 pub(super) struct NotePrompt {
     path: PathBuf,
     side: NoteSide,
@@ -19,8 +18,6 @@ pub(super) struct NotePrompt {
 }
 
 impl Workspace {
-    /// The review file, side and editor the caret is in, when the active tab is one of the
-    /// review's diffs.
     pub(super) fn note_site(&self) -> Option<(PathBuf, NoteSide, Entity<EditorView>)> {
         let index = self.active_review_file()?;
         let path = self.review_file_path(index)?;
@@ -42,7 +39,6 @@ impl Workspace {
         self.review.is_some() && saved.is_some_and(|review| !review.notes().is_empty())
     }
 
-    /// The note on the caret's line, for the status bar.
     pub(super) fn note_at_caret(&self, cx: &gpui::App) -> Option<String> {
         let (path, side, editor) = self.note_site()?;
         let line = editor.read(cx).caret_line_column().0;
@@ -121,7 +117,6 @@ impl Workspace {
         }
     }
 
-    /// Shows the noted lines in the gutters of the review's open diffs.
     pub(super) fn refresh_note_marks(&self, cx: &mut Context<Self>) {
         let (Some(review), Some(repository)) = (&self.state.review, &self.repository) else {
             return;

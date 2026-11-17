@@ -88,7 +88,6 @@ struct Tab {
 }
 
 impl Tab {
-    /// Whether `editor` holds the working file, not a revision of it.
     fn shows_working_file(&self) -> bool {
         self.diff.as_ref().is_none_or(DiffTab::shows_working_file)
     }
@@ -108,11 +107,9 @@ impl Workspace {
 enum ToolWindowState {
     Visible,
     Hidden,
-    /// Hidden by Hide All Tool Windows, which restores it when invoked again.
     HiddenByHideAll,
 }
 
-/// Which tool window the left side shows.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum LeftTool {
     Project,
@@ -157,7 +154,6 @@ pub(crate) struct Workspace {
     project: Option<Project>,
     tabs: Vec<Tab>,
     active: Option<usize>,
-    /// Whether the left tool window is shown; `left_tool` says which one it is.
     project_window: ToolWindowState,
     left_tool: LeftTool,
     review: Option<ReviewWindow>,
@@ -178,7 +174,6 @@ pub(crate) struct Workspace {
     find_open: bool,
     goto_line: Entity<TextInput>,
     goto_line_open: bool,
-    /// The symbol index; `None` until the first indexing run has finished.
     index: Option<std::sync::Arc<dumbj_index::Index>>,
     head_index: Option<head_index::HeadIndex>,
     jars: Option<std::sync::Arc<dumbj_jars::JarIndex>>,
@@ -196,7 +191,6 @@ pub(crate) struct Workspace {
     find_query: Entity<TextInput>,
     find_mask: Entity<TextInput>,
     state: ProjectState,
-    /// Where `state` is saved; known once the background lookup has finished.
     state_dir: Option<PathBuf>,
     state_save: StateSave,
     find_window: Option<FindWindow>,
@@ -207,9 +201,7 @@ pub(crate) struct Workspace {
     git_filter: Entity<TextInput>,
     hierarchy_window_focus: FocusHandle,
     usages_cancel: std::sync::Arc<std::sync::atomic::AtomicBool>,
-    /// Results that arrived since the last render; it moves focus to them.
     pending_focus: Option<PendingFocus>,
-    /// A one-off notice in the status bar, cleared by the next action.
     status_message: Option<String>,
     subscriptions: Vec<Subscription>,
 }
@@ -274,7 +266,6 @@ pub(crate) fn open_window(
     }
 }
 
-/// Actions on the symbol at the caret, which need an editor and the index.
 fn starts_at_the_caret_symbol(action: Action) -> bool {
     matches!(
         action,
@@ -532,7 +523,6 @@ impl Workspace {
         self.schedule_smart_sync(cx);
     }
 
-    /// The editor of `path`: the one a tab already shows, or a new one.
     fn editor_for(
         &mut self,
         path: &Path,
@@ -826,7 +816,6 @@ impl Workspace {
         }
     }
 
-    /// The actions that can run right now, computed before the dispatcher is borrowed.
     fn enabled_actions(&self, window: &Window, cx: &App) -> Vec<Action> {
         Action::all()
             .filter(|action| self.is_enabled(*action, window, cx))
@@ -936,8 +925,6 @@ impl Workspace {
         }
     }
 
-    /// Shows and focuses the Project tool window, or hides it when it already has focus
-    /// (IDEA's behaviour for a tool-window shortcut).
     fn toggle_project_window(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some(project) = &self.project else { return };
         let tree_focus = project.tree.read(cx).focus_handle().clone();
@@ -1242,7 +1229,6 @@ impl Workspace {
                 .when(active, |button| button.bg(theme::ui(cx, UiRole::Selected)))
                 .hover(|style| style.bg(theme::ui(cx, UiRole::Hover)))
                 .on_click(cx.listener(move |this, _, window, cx| {
-                    // A click toggles visibility regardless of focus.
                     let shown =
                         this.project_window == ToolWindowState::Visible && this.left_tool == tool;
                     if shown {
@@ -1625,7 +1611,6 @@ impl Workspace {
                     .border_color(theme::ui(cx, border))
                     .child(self.goto_line.clone()),
             );
-        // A full-window layer: it centres the popup and swallows clicks outside it.
         popup_layer(
             "popup-layer",
             140.,
@@ -1663,7 +1648,6 @@ impl Workspace {
         hierarchy.into_iter().chain(git).chain(find).collect()
     }
 
-    /// The open popup; when several are, the one that takes the keys.
     fn render_popup(&self, window: &Window, cx: &mut Context<Self>) -> Option<AnyElement> {
         if let Some(menu) = &self.menus.open {
             Some(self.render_menu(menu, cx).into_any_element())
@@ -1776,8 +1760,6 @@ impl Render for Workspace {
     }
 }
 
-/// The project folder and the files to open for the paths given on the command line: the
-/// first folder is the project; without one, the folder of the first file is.
 pub(crate) fn resolve_cli_paths(paths: &[PathBuf]) -> (Option<PathBuf>, Vec<PathBuf>) {
     let absolute: Vec<PathBuf> = paths
         .iter()

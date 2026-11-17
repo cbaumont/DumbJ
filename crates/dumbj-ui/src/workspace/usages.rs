@@ -28,7 +28,6 @@ pub(super) enum FindRow {
         line: usize,
         text: String,
         maybe: bool,
-        /// Byte ranges of `text` to highlight.
         ranges: Vec<Range<usize>>,
     },
 }
@@ -38,10 +37,8 @@ pub(super) struct FindWindow {
     rows: Vec<FindRow>,
     selected: usize,
     scroll: UniformListScrollHandle,
-    /// Text matches are exact; usages are the dumb engine's best guess.
     exact: bool,
     pub(super) visible: bool,
-    /// Whether Hide All Tool Windows hid it, so the same action restores it.
     pub(super) hidden_by_hide_all: bool,
 }
 
@@ -62,7 +59,6 @@ impl FindWindow {
         }
     }
 
-    /// Moves the selection by `delta` result rows, skipping the file headings.
     pub(super) fn step_selection(&mut self, delta: isize) {
         let is_usage = |index: &usize| matches!(self.rows[*index], FindRow::Usage { .. });
         let Some(mut row) = (self.selected..self.rows.len())
@@ -147,8 +143,6 @@ pub(super) fn summary(name: &str, usages: usize, files: usize) -> String {
 }
 
 impl Workspace {
-    /// Searches for the usages of the symbol at the caret in the background, then shows
-    /// them in a popup (`in_popup`) or in the Find tool window.
     pub(super) fn find_usages(&mut self, in_popup: bool, cx: &mut Context<Self>) {
         let (Some(index), Some(editor)) = (self.active_index(cx), self.active_editor()) else {
             return;
@@ -294,7 +288,6 @@ impl Workspace {
         cx.notify();
     }
 
-    /// `text` with the byte `ranges` on the search-match background.
     fn highlighted(text: &str, ranges: &[Range<usize>], cx: &Context<Self>) -> gpui::Div {
         let mut parts: Vec<(&str, bool)> = Vec::new();
         let mut at = 0;
@@ -373,7 +366,6 @@ impl Workspace {
                         .child(line.to_string()),
                 )
                 .child(Self::highlighted(text, ranges, cx))
-                // A usage the dumb engine could not pin to this symbol alone.
                 .children(maybe.then(|| {
                     div()
                         .flex_none()

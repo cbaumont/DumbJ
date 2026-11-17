@@ -25,8 +25,6 @@ pub enum UiError {
 
 #[derive(Debug, Default)]
 pub struct RunOptions {
-    /// Paths from the command line: the first folder is opened as the project and files
-    /// are opened in tabs. With only files, the first file's folder becomes the project.
     pub paths: Vec<PathBuf>,
     pub scroll_benchmark: bool,
 }

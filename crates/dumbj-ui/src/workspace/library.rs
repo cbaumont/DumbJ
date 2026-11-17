@@ -83,7 +83,6 @@ impl Workspace {
         .detach();
     }
 
-    /// Go to Declaration found nothing in the project: look in the library sources.
     pub(super) fn goto_library(
         &mut self,
         name: String,

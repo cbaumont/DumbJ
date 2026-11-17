@@ -18,7 +18,6 @@ const INDENT: f32 = 16.;
 
 pub(crate) struct OpenFile(pub(crate) PathBuf);
 
-/// IDEA's file status colours: blue for modified, green for added, red for unversioned.
 pub(crate) fn status_role(status: FileStatus) -> UiRole {
     match status {
         FileStatus::Modified | FileStatus::Renamed => UiRole::Info,
@@ -52,7 +51,6 @@ impl FileTree {
         tree
     }
 
-    /// Sets the git status of the changed files, by absolute path, to colour their names.
     pub(crate) fn set_statuses(
         &mut self,
         statuses: HashMap<PathBuf, FileStatus>,
@@ -96,8 +94,6 @@ impl FileTree {
         .detach();
     }
 
-    /// Lists the root and every expanded folder again, keeping what is expanded and
-    /// selected; for when files changed on disk.
     pub(crate) fn reload(&mut self, cx: &mut Context<Self>) {
         let dirs = self.model.expanded_dirs();
         let selected = self
@@ -196,7 +192,6 @@ impl FileTree {
         let Some(row) = self.model.rows().get(index) else {
             return;
         };
-        // IDEA: a double click opens a file; a single click is enough for a folder's arrow.
         #[expect(clippy::cast_precision_loss, reason = "tree depth is small")]
         let arrow_right = px(8. + INDENT * (row.depth as f32 + 1.));
         let on_arrow = row.entry.is_dir && event.position.x < arrow_right;

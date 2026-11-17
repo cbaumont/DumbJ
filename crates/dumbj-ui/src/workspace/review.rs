@@ -60,7 +60,6 @@ fn parse_spec(text: &str) -> Option<RangeSpec> {
 struct Loaded {
     base: String,
     changes: Vec<Change>,
-    /// What each changed file holds on the head side, to notice when it changes again.
     fingerprints: Vec<String>,
     head_commit: Option<String>,
 }
@@ -120,13 +119,11 @@ fn load(
 pub(super) struct ReviewWindow {
     title: String,
     spec: RangeSpec,
-    /// The revision on the left of every diff: `spec.base`, or the merge base's id.
     base: String,
     changes: Vec<Change>,
     fingerprints: Vec<String>,
     rows: Vec<Row>,
     collapsed: HashSet<PathBuf>,
-    /// A row of `rows`.
     selected: usize,
     scroll: UniformListScrollHandle,
     loading: bool,
@@ -154,7 +151,6 @@ impl ReviewWindow {
             .scroll_to_item(self.selected, ScrollStrategy::Nearest);
     }
 
-    /// Selects the row of a changed file, opening the folders above it.
     fn select_file(&mut self, index: usize) {
         let Some(change) = self.changes.get(index) else {
             return;
@@ -228,8 +224,6 @@ fn suggestions(repository: &Repository) -> Vec<Suggestion> {
     out
 }
 
-/// The specs the prompt offers for `query`: matching suggestions, then the query itself
-/// when it is a range no suggestion spells.
 fn offered(suggestions: &[Suggestion], query: &str) -> Vec<(String, String)> {
     let query = query.trim();
     let needle = query.to_lowercase();
@@ -244,11 +238,9 @@ fn offered(suggestions: &[Suggestion], query: &str) -> Vec<(String, String)> {
     out
 }
 
-/// What the left tool window shows.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(super) enum LeftContent {
     Project,
-    /// The changed files of the review that belongs to the chosen tool window.
     Files,
     NoReview,
     PullList,
@@ -266,7 +258,6 @@ impl Workspace {
         }
     }
 
-    /// The left side shows something that takes the review window's focus.
     pub(super) fn review_shown(&self) -> bool {
         self.project_window == ToolWindowState::Visible
             && matches!(
@@ -371,7 +362,6 @@ impl Workspace {
         self.begin_review(text, None, window, cx);
     }
 
-    /// Starts the review of the range `text`; `pull` is the pull request it belongs to.
     pub(super) fn begin_review(
         &mut self,
         text: &str,
@@ -433,8 +423,6 @@ impl Workspace {
         self.refresh_review(cx);
     }
 
-    /// Makes the viewed marks of a pull request's files those GitHub has. Waits until both
-    /// the file list and GitHub's answer are there.
     pub(super) fn take_viewed_from_github(&mut self, cx: &mut Context<Self>) {
         if self.review.as_ref().is_none_or(|review| review.loading) {
             return;
@@ -464,8 +452,6 @@ impl Workspace {
         file.is_some_and(|(change, fingerprint)| saved.is_viewed(&change.path, fingerprint))
     }
 
-    /// The review file that actions act on: the selected row while the Review window has
-    /// focus, otherwise the file of the active diff.
     fn review_target(&self, window: &Window) -> Option<usize> {
         let review = self.review.as_ref()?;
         if self.review_shown() && self.review_focus.is_focused(window) {
@@ -515,7 +501,6 @@ impl Workspace {
         }
     }
 
-    /// Lists the review's changed files again; the selection stays on its file.
     pub(super) fn refresh_review(&mut self, cx: &mut Context<Self>) {
         let (Some(repository), Some(review)) = (self.repository.clone(), self.review.as_mut())
         else {
@@ -608,7 +593,6 @@ impl Workspace {
         self.apply_thread_blocks(cx);
     }
 
-    /// Lets the gutters of the active diff offer a `+` on the line under the pointer.
     fn offer_line_actions(&self, cx: &mut Context<Self>) {
         let Some((tab, diff)) = self
             .active_tab()
@@ -621,7 +605,6 @@ impl Workspace {
         }
     }
 
-    /// A comment on a pull request's line, a note on a local review's.
     pub(super) fn line_action_clicked(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let action = [Action::AddReviewComment, Action::AddReviewNote]
             .into_iter()
@@ -631,8 +614,6 @@ impl Workspace {
         }
     }
 
-    /// From a diff that belongs to the review, opens the diff of the next (or previous)
-    /// changed file. Returns whether there was one.
     pub(super) fn step_review_file(
         &mut self,
         forward: bool,
@@ -666,7 +647,6 @@ impl Workspace {
         Some(self.review.as_ref()?.changes.get(index)?.path.clone())
     }
 
-    /// The review file whose diff is the active tab.
     pub(super) fn active_review_file(&self) -> Option<usize> {
         let (review, tab) = (self.review.as_ref()?, self.active_tab()?);
         if !self.diff_in_review(tab.diff.as_ref()?) {

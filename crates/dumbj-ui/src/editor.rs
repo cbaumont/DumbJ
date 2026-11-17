@@ -51,7 +51,6 @@ const GUTTER_PADDING_RIGHT: Pixels = px(14.);
 const TEXT_PADDING_LEFT: Pixels = px(4.);
 const SCROLLBAR_WIDTH: Pixels = px(10.);
 const SCROLLBAR_MIN_THUMB: Pixels = px(28.);
-/// Lines of context kept above and below the caret when scrolling to it.
 const REVEAL_MARGIN: f64 = 3.0;
 /// Extra lines highlighted around the viewport so small scrolls reuse the cached spans.
 const HIGHLIGHT_MARGIN: usize = 60;
@@ -158,7 +157,6 @@ struct SearchState {
     query: String,
     matches: Arc<Vec<ByteRange>>,
     current: Option<usize>,
-    /// Set to stop a search that is still running when the query changes.
     cancel: Arc<AtomicBool>,
     task: Option<Task<()>>,
 }
@@ -169,20 +167,16 @@ struct HighlightCache {
     spans: Vec<HighlightSpan>,
 }
 
-/// What the last paint drew, for mapping mouse positions back to text.
 #[derive(Clone)]
 struct PaintedLines {
     bounds: Bounds<Pixels>,
     text_left: Pixels,
     first_line_top: Pixels,
-    /// The buffer line shown in each painted row.
     rows: Vec<usize>,
-    /// For each painted row that belongs to a block, the block's id.
     blocks: Vec<Option<usize>>,
     gutter_right: Pixels,
     visible_lines: f64,
     scroll_x: Pixels,
-    /// How many characters fit between the gutter and the scrollbar.
     columns: usize,
     lines: Arc<Vec<(DisplayLine, ShapedLine)>>,
     scrollbar: Option<Bounds<Pixels>>,
@@ -191,33 +185,23 @@ struct PaintedLines {
 
 struct ScrollBenchmark {
     last_frame: Option<Instant>,
-    /// Time from one frame's layout to the next: what the user sees.
     frame_times: Vec<Duration>,
-    /// Time spent shaping and laying out the visible lines: DumbJ's own share of a frame.
     layout_times: Vec<Duration>,
 }
 
-/// Lines scrolled per frame by the benchmark; fractional so every frame moves the text.
 const BENCHMARK_STEP: f64 = 1.37;
 const BENCHMARK_FRAMES: usize = 600;
 
 #[derive(Clone, Copy)]
 enum Drag {
     Selecting,
-    /// Dragging the scrollbar thumb, grabbed this far below its top.
-    Scrollbar {
-        grab: Pixels,
-    },
+    Scrollbar { grab: Pixels },
 }
 
-/// Emitted for every mouse press in the editor, after the caret has moved there, so the
-/// workspace can run a mouse shortcut bound to it.
 pub(crate) struct MousePressed(pub(crate) MouseStroke);
 
-/// The right button was pressed at this window position; the caret is already there.
 pub(crate) struct ContextMenuRequested(pub(crate) Point<Pixels>);
 
-/// An implements/overrides marker next to a declaration.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct GutterIcon {
     pub(crate) offset: ByteOffset,
@@ -228,8 +212,6 @@ pub(crate) struct GutterIcon {
 
 pub(crate) struct GutterIconClicked(pub(crate) GutterIcon);
 
-/// The `+` the gutter offers on the line under the pointer was clicked; the caret is on
-/// that line.
 pub(crate) struct LineActionClicked;
 
 #[derive(Default)]
@@ -238,10 +220,8 @@ struct LineAction {
     hover: Option<usize>,
 }
 
-/// A click on the block with this id.
 pub(crate) struct BlockClicked(pub(crate) usize);
 
-/// A bookmark marker beside a line number.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct BookmarkMark {
     /// One-based.
@@ -278,22 +258,16 @@ pub(crate) struct EditorView {
     changes: changes::Changes,
     diff_marks: DiffMarks,
     problems: Arc<Vec<diagnostics::Problem>>,
-    /// Colours from the language server, laid over tree-sitter's.
     semantic: Arc<Vec<HighlightSpan>>,
-    /// Inlay hints from the language server, sorted by offset.
     inlays: Arc<Vec<(ByteOffset, String)>>,
     note_lines: Vec<(usize, usize)>,
     annotations: Option<Arc<Vec<String>>>,
     read_only: bool,
-    /// Text that belongs to no file and is never saved.
     scratch: bool,
-    /// What the file looked like on disk when it was last read or written.
     stamp: Option<FileStamp>,
-    /// The file's newer state on disk, while it also has unsaved edits here.
     conflict: Option<FileStamp>,
     saving: bool,
     idle_save: Option<Task<()>>,
-    /// The text an input method is composing.
     marked: Option<ByteRange>,
     reparse_cancel: Arc<AtomicBool>,
     load_cancel: Arc<AtomicBool>,
@@ -321,8 +295,6 @@ impl EditorView {
         Self::open_source(path, None, cx)
     }
 
-    /// Opens `path` as it is in `revision`, read-only. A file that does not exist there
-    /// opens empty.
     pub(crate) fn open_revision(
         path: PathBuf,
         repository: dumbj_vcs::Repository,
@@ -332,8 +304,6 @@ impl EditorView {
         Self::open_source(path, Some((repository, revision)), cx)
     }
 
-    /// An editor for text that belongs to no file (a comment being written): it starts
-    /// empty and editable and is never saved. `name` only picks the language.
     pub(crate) fn scratch(name: &str, cx: &mut Context<Self>) -> Self {
         let mut editor = Self::open_source(PathBuf::from(name), None, cx);
         editor.load_cancel.store(true, Ordering::Relaxed);
@@ -343,7 +313,6 @@ impl EditorView {
         editor
     }
 
-    /// Replaces the text of a scratch editor and puts the caret at its end.
     pub(crate) fn set_scratch_text(&mut self, text: &str, cx: &mut Context<Self>) {
         if !self.scratch {
             return;
@@ -372,7 +341,6 @@ impl EditorView {
         matches!(self.state, LoadState::Ready)
     }
 
-    /// The buffer's version once the file is loaded.
     pub(crate) fn document_version(&self) -> Option<u64> {
         self.is_ready().then(|| self.model.buffer().version())
     }
@@ -530,7 +498,6 @@ impl EditorView {
         self.language
     }
 
-    /// The caret position as shown in the status bar: one-based line and character column.
     pub(crate) fn caret_line_column(&self) -> (usize, usize) {
         let point = self.model.caret_point();
         (
@@ -539,7 +506,6 @@ impl EditorView {
         )
     }
 
-    /// The trimmed text of the caret's line; `None` until the file has loaded.
     pub(crate) fn caret_line_text(&self) -> Option<String> {
         let buffer = self.model.buffer();
         self.is_ready().then(|| {
@@ -557,7 +523,6 @@ impl EditorView {
         &self.search.query
     }
 
-    /// The one-based index of the current match and the number of matches.
     pub(crate) fn search_status(&self) -> (Option<usize>, usize) {
         (
             self.search.current.map(|index| index + 1),
@@ -578,7 +543,6 @@ impl EditorView {
         visible.saturating_sub(1).max(1)
     }
 
-    /// Runs an editor or text action. Returns `false` if the editor has no use for it.
     pub(crate) fn handle_action(&mut self, action: Action, cx: &mut Context<Self>) -> bool {
         if self.handle_edit_action(action, cx) {
             return true;
@@ -720,7 +684,6 @@ impl EditorView {
         cx.notify();
     }
 
-    /// Offers a `+` in the gutter of the line under the pointer.
     pub(crate) fn set_line_action(&mut self, offered: bool, cx: &mut Context<Self>) {
         self.line_action.offered = offered;
         cx.notify();
@@ -742,8 +705,6 @@ impl EditorView {
         self.model.caret()
     }
 
-    /// Moves the caret to `offset` and centres it. If the file is still loading, this
-    /// happens as soon as it has loaded.
     pub(crate) fn go_to_offset(&mut self, offset: ByteOffset, cx: &mut Context<Self>) {
         if matches!(self.state, LoadState::Loading) {
             self.pending_offset = Some(offset);
@@ -763,8 +724,6 @@ impl EditorView {
         })
     }
 
-    /// Resolves the identifier at the caret against `index` (dumb Go to Declaration).
-    /// `None` when the file is not indexed, not parsed, or the caret is not on a name.
     pub(crate) fn resolve_at_caret(&self, index: &Index) -> Option<Resolution> {
         dumbj_index::resolve(self.site(index)?, self.model.caret())
     }
@@ -793,8 +752,6 @@ impl EditorView {
         cx.notify();
     }
 
-    /// Starts searching for `query` in the background and highlights the matches. The match
-    /// at or after the caret becomes current once the search finishes.
     pub(crate) fn set_search_query(&mut self, query: &str, cx: &mut Context<Self>) {
         if query == self.search.query {
             return;
@@ -859,7 +816,6 @@ impl EditorView {
         cx.notify();
     }
 
-    /// The buffer offset under a window position, clamped to the nearest painted line.
     fn offset_at(&self, position: Point<Pixels>) -> Option<ByteOffset> {
         let painted = self.painted.as_ref()?;
         let rows = ((position.y - painted.first_line_top) / LINE_HEIGHT)
@@ -881,12 +837,10 @@ impl EditorView {
         Some(self.model.buffer().offset_at(TextPoint { line, column }))
     }
 
-    /// How many characters fit on a line, once the editor has been painted.
     pub(crate) fn text_columns(&self) -> Option<usize> {
         self.painted.as_ref().map(|painted| painted.columns)
     }
 
-    /// Where a popup for the caret goes: under the caret, if it is on screen.
     pub(crate) fn caret_popup_position(&self) -> Option<Point<Pixels>> {
         let painted = self.painted.as_ref()?;
         let caret = self.model.caret_point();
@@ -901,7 +855,6 @@ impl EditorView {
         Some(gpui::point(x, y))
     }
 
-    /// The id of the block painted under a window position.
     fn block_at(&self, position: Point<Pixels>) -> Option<usize> {
         let painted = self.painted.as_ref()?;
         let rows = ((position.y - painted.first_line_top) / LINE_HEIGHT).floor();
@@ -1207,7 +1160,6 @@ impl EditorView {
         let scroll_before = self.scroll_top;
         self.scroll_top = self.scroll_top.clamp(0.0, self.max_scroll_top());
         if (self.scroll_top - scroll_before).abs() > f64::EPSILON || revealed {
-            // Tells whoever follows this editor's scrolling (a diff's other side).
             cx.on_next_frame(window, |_, _, cx| cx.notify());
         }
 
@@ -1423,7 +1375,6 @@ impl EditorView {
                 match_index += 1;
             }
             if has_selection && selection.start <= line_end && selection.end > line_start {
-                // A selection that runs past the line end also covers the line break.
                 let tail = if selection.end > line_end {
                     digit_width
                 } else {
@@ -1901,7 +1852,7 @@ fn highlight_runs(
             position = end;
         }
         if span.range.end > line_end {
-            break; // The span continues on the next line.
+            break;
         }
         consumed += 1;
     }

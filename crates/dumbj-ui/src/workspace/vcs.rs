@@ -11,8 +11,6 @@ use super::state::is_project_file;
 use crate::editor::EditorView;
 
 impl Workspace {
-    /// Finds the project's repository and its branch in the background, then gives every
-    /// open editor its file's HEAD text. Also picks up a branch switch made elsewhere.
     pub(super) fn refresh_repository(&mut self, cx: &mut Context<Self>) {
         let Some(root) = self.project.as_ref().map(|project| project.root.clone()) else {
             return;

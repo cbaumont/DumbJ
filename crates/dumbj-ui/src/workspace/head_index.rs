@@ -1,6 +1,3 @@
-//! The index of a review's head revision, built from git objects so that navigation covers
-//! the whole head without a checkout.
-
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -17,7 +14,6 @@ use super::Workspace;
 const BLOBS_PER_CALL: usize = 256;
 
 pub(super) struct HeadIndex {
-    /// The head as the review names it (`topic`, `refs/dumbj/pr/7/head`).
     revision: String,
     commit: String,
     index: Option<Arc<Index>>,
@@ -135,7 +131,6 @@ fn build(
 }
 
 impl Workspace {
-    /// The path the review's head side of `path` opens from, when the head is a commit.
     pub(super) fn head_path(&self, head: &str, path: &Path) -> Option<PathBuf> {
         let at = self.head_index.as_ref().filter(|at| at.revision == head)?;
         let workdir = self.repository.as_ref()?.workdir();
@@ -163,8 +158,6 @@ impl Workspace {
         }
     }
 
-    /// Starts indexing `commit`, the review's head, unless that is under way or done.
-    /// Waits for the working-tree index, whose facts it reuses.
     pub(super) fn index_head(&mut self, revision: &str, commit: &str, cx: &mut Context<Self>) {
         let same = self
             .head_index

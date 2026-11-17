@@ -1,5 +1,3 @@
-//! A pull request's review threads, shown as blocks inside the diff.
-
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -20,14 +18,11 @@ const SUMMARY_CHARS: usize = 80;
 pub(super) struct PullThreads {
     pub(super) details: Option<PullRequestDetails>,
     pub(super) threads: Vec<ReviewThread>,
-    /// The files GitHub has as viewed, until they are copied into the review state.
     viewed: Option<Vec<String>>,
-    /// Threads whose fold state the user flipped from the default.
     toggled: HashSet<String>,
     _task: Option<Task<()>>,
 }
 
-/// Breaks `text` into lines of at most `width` characters, at spaces where it can.
 fn wrap(text: &str, width: usize) -> Vec<String> {
     let mut lines = Vec::new();
     for paragraph in text.lines() {
@@ -61,8 +56,6 @@ fn wrap(text: &str, width: usize) -> Vec<String> {
     lines
 }
 
-/// The rows of a comment's Markdown: paragraphs wrapped at `width`, fenced code kept as
-/// written, a suggested change in its own colour.
 fn body_rows(body: &str, width: usize) -> Vec<BlockRow> {
     let row = |text: String, tone| BlockRow { text, tone };
     let mut rows = Vec::new();
@@ -170,7 +163,6 @@ fn draft_block(draft: &DraftComment, width: usize) -> Block {
     }
 }
 
-/// The width comments wrap at in `editor`: what fits beside the indent.
 fn wrap_width(editor: &Entity<EditorView>, cx: &gpui::App) -> usize {
     editor
         .read(cx)
@@ -203,7 +195,6 @@ impl PullThreads {
 }
 
 impl Workspace {
-    /// Reads the pull request under review and its threads from GitHub again.
     pub(super) fn load_pull_threads(&mut self, cx: &mut Context<Self>) {
         let (Some(repository), Some(pull)) = (self.repository.clone(), self.review_pull().cloned())
         else {
@@ -291,7 +282,6 @@ impl Workspace {
             .collect()
     }
 
-    /// Wraps the threads again when a diff pane has changed width.
     pub(super) fn rewrap_threads(&mut self, cx: &mut Context<Self>) {
         if self.session.pull_threads.is_none() {
             return;
@@ -307,7 +297,6 @@ impl Workspace {
         }
     }
 
-    /// Gives every open diff of the review the blocks of its threads and unsent comments.
     pub(super) fn apply_thread_blocks(&self, cx: &mut Context<Self>) {
         let drafts = self
             .state
@@ -332,12 +321,10 @@ impl Workspace {
         }
     }
 
-    /// The viewed marks GitHub sent, once the review's file list is there to apply them to.
     pub(super) fn github_viewed(&mut self) -> Option<Vec<String>> {
         self.session.pull_threads.as_mut()?.viewed.take()
     }
 
-    /// Tells GitHub that the viewer has, or has not, viewed `path`.
     pub(super) fn push_viewed(&mut self, path: &Path, viewed: bool, cx: &mut Context<Self>) {
         let details = self
             .session
@@ -426,7 +413,6 @@ impl Workspace {
         self.apply_thread_blocks(cx);
     }
 
-    /// The threads of the side the caret is in, as (thread index, zero-based line), by line.
     fn threads_here(&self) -> Vec<(usize, usize)> {
         let (Some(pull), Some(editor)) = (&self.session.pull_threads, self.active_editor()) else {
             return Vec::new();

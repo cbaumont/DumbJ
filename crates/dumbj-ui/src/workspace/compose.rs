@@ -1,6 +1,3 @@
-//! Writing to a pull request: comments, replies and the review verdict. A comment is kept
-//! as a draft in the project state before anything is sent, and dropped once GitHub has it.
-
 use std::path::PathBuf;
 
 use dumbj_actions::Action;
@@ -20,9 +17,7 @@ pub(super) enum Purpose {
         side: NoteSide,
         first_line: usize,
         last_line: usize,
-        /// The commented lines, for a suggested change.
         excerpt: String,
-        /// The unsent draft being edited.
         draft: Option<u64>,
     },
     Reply {
@@ -133,7 +128,6 @@ impl Workspace {
         self.review_pull().is_some() && self.note_site().is_some()
     }
 
-    /// Opens the comment field for the selected lines of the diff side the caret is in.
     pub(super) fn compose_comment(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.review_pull().is_none() {
             return;
@@ -184,7 +178,6 @@ impl Workspace {
         self.open_compose(purpose, "", window, cx);
     }
 
-    /// Reopens a comment that was not sent, to change it, send it again or drop it.
     pub(super) fn compose_draft(&mut self, id: u64, window: &mut Window, cx: &mut Context<Self>) {
         let draft = self
             .state

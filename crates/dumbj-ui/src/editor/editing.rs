@@ -15,10 +15,8 @@ use crate::line_edit::utf16_to_byte;
 
 use super::{EditorView, LINE_HEIGHT, Reveal, fold_regions};
 
-/// How long after the last edit an unsaved file is written, as IDEA's autosave does.
 const IDLE_SAVE: Duration = Duration::from_secs(15);
 
-/// One edit as the lines it replaced: `start..=old_end` became `start..=new_end`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct LineChange {
     pub(crate) start: usize,
@@ -27,11 +25,8 @@ pub(crate) struct LineChange {
 }
 
 pub(crate) enum EditorEvent {
-    /// The text changed; the changes are in the order they were made.
     Edited(Vec<LineChange>),
-    /// The modified marker or the disk conflict changed.
     StatusChanged,
-    /// The file was written, or reloaded from disk.
     Synced,
 }
 
@@ -44,12 +39,10 @@ impl EditorView {
         self.model.is_modified()
     }
 
-    /// The file changed on disk while it has unsaved edits here.
     pub(crate) fn has_conflict(&self) -> bool {
         self.conflict.is_some()
     }
 
-    /// Runs an editing action. Returns `false` if `action` is not one.
     pub(super) fn handle_edit_action(&mut self, action: Action, cx: &mut Context<Self>) -> bool {
         let is_edit = matches!(
             action,
@@ -111,7 +104,6 @@ impl EditorView {
         true
     }
 
-    /// Brings everything derived from the text back in line after `edits`.
     pub(super) fn edited(&mut self, edits: &[Edit], cx: &mut Context<Self>) {
         self.reveal = Some(Reveal::Minimal);
         cx.notify();
@@ -154,8 +146,6 @@ impl EditorView {
         cx.emit(EditorEvent::StatusChanged);
     }
 
-    /// Parses the edited text in the background. The tree shifted by `SyntaxTree::edit`
-    /// stays in use until the new one arrives.
     fn start_reparse(&mut self, cx: &mut Context<Self>) {
         self.reparse_cancel.store(true, Ordering::Relaxed);
         let Some(tree) = self.syntax.clone() else {
@@ -197,8 +187,7 @@ impl EditorView {
         }));
     }
 
-    /// Writes unsaved edits to disk in the background. Does nothing for a file that was
-    /// not edited, and refuses to overwrite a file that changed on disk in the meantime.
+    /// Refuses to overwrite a file that changed on disk since it was read.
     pub(crate) fn save(&mut self, cx: &mut Context<Self>) {
         if self.read_only
             || self.scratch
@@ -247,7 +236,6 @@ impl EditorView {
         .detach();
     }
 
-    /// Writes unsaved edits on the calling thread, for when the application is quitting.
     pub(crate) fn save_blocking(&mut self) {
         if self.read_only || self.scratch || self.conflict.is_some() || !self.model.is_modified() {
             return;
@@ -265,8 +253,6 @@ impl EditorView {
         }
     }
 
-    /// Looks whether the file changed on disk: an unmodified file is reloaded, a modified
-    /// one is flagged as a conflict for the user to settle.
     pub(crate) fn check_disk(&mut self, cx: &mut Context<Self>) {
         if self.read_only || self.scratch || self.saving || !self.is_ready() {
             return;
@@ -295,7 +281,6 @@ impl EditorView {
         .detach();
     }
 
-    /// Replaces the text with the file's current content. Undo brings the old text back.
     pub(crate) fn reload_from_disk(&mut self, cx: &mut Context<Self>) {
         let path = self.path.clone();
         cx.spawn(async move |this, cx| {
@@ -321,8 +306,6 @@ impl EditorView {
         .detach();
     }
 
-    /// Settles a conflict in favour of the text in the editor: the next save overwrites
-    /// what is on disk.
     pub(crate) fn keep_local_changes(&mut self, cx: &mut Context<Self>) {
         if let Some(on_disk) = self.conflict.take() {
             self.stamp = Some(on_disk);
@@ -332,7 +315,6 @@ impl EditorView {
         }
     }
 
-    /// The line the input method works on: the one the selection starts in.
     fn input_line(&self) -> (ByteOffset, String) {
         let buffer = self.model.buffer();
         let line = buffer.point_at(self.model.selection().start).line;

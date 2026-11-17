@@ -1,6 +1,3 @@
-//! Rows that are not text: blocks shown below a buffer line (review threads). The fold map
-//! turns buffer lines into text rows; this adds the block rows to get what is on screen.
-
 use super::EditorView;
 use crate::editor_model::Folds;
 
@@ -21,26 +18,19 @@ pub(crate) struct BlockRow {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Block {
-    /// What the block stands for, to tell its owner which one was clicked.
     pub(crate) id: usize,
-    /// The buffer line it sits below.
     pub(crate) line: usize,
     pub(crate) rows: Vec<BlockRow>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Slot {
-    /// A text row of the fold map.
     Text(usize),
-    Block {
-        block: usize,
-        row: usize,
-    },
+    Block { block: usize, row: usize },
 }
 
 #[derive(Debug, Clone, Copy)]
 struct Anchor {
-    /// The text row the block sits below.
     row: usize,
     block: usize,
     rows: usize,
@@ -72,7 +62,6 @@ impl BlockRows {
         text_rows + self.anchors.iter().map(|anchor| anchor.rows).sum::<usize>()
     }
 
-    /// The screen row of a text row.
     pub(crate) fn visual_of(&self, row: usize) -> usize {
         let above: usize = self
             .anchors
@@ -101,7 +90,6 @@ impl BlockRows {
         Slot::Text(visual - above)
     }
 
-    /// The text row at or above a screen row.
     pub(crate) fn text_row(&self, visual: usize) -> usize {
         match self.slot(visual) {
             Slot::Text(row) => row,

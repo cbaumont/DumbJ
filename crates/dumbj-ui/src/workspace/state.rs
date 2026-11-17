@@ -5,12 +5,10 @@ use gpui::{AppContext, Context};
 
 use super::Workspace;
 
-/// Whether the project state is being written.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum StateSave {
     Idle,
     Running,
-    /// The state changed while a save was running, so another save follows it.
     RunningStale,
 }
 
@@ -22,7 +20,6 @@ pub(super) fn is_project_file(path: &Path) -> bool {
         && dumbj_vcs::split_revision_path(path).is_none()
 }
 
-/// Drops entries whose files are gone, so the lists never offer a file that cannot open.
 fn forget_missing_files(state: &mut ProjectState) {
     state.recent_files.retain(|path| path.exists());
     state.recent_locations.retain(|place| place.path.exists());
@@ -30,7 +27,6 @@ fn forget_missing_files(state: &mut ProjectState) {
 }
 
 impl Workspace {
-    /// Finds the project's state directory and reads the state from it in the background.
     pub(super) fn load_project_state(&mut self, root: PathBuf, cx: &mut Context<Self>) {
         self.state = ProjectState::default();
         self.state_dir = None;
@@ -117,7 +113,6 @@ impl Workspace {
         self.save_project_state(cx);
     }
 
-    /// Remembers where the caret of the active editor is, as a place to come back to.
     pub(super) fn record_current_location(&mut self, cx: &mut Context<Self>) {
         let Some(tab) = self.active_tab() else { return };
         if self.project.is_none() || !is_project_file(&tab.path) || self.in_revision() {

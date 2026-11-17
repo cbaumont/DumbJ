@@ -1,5 +1,3 @@
-//! The changed files of a review as a tree: folders first, chains of single folders joined.
-
 use std::cmp::Ordering;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -11,7 +9,6 @@ pub(super) enum Node {
         label: String,
         collapsed: bool,
     },
-    /// Index into the review's changes.
     File(usize),
 }
 
@@ -27,8 +24,6 @@ fn parts(path: &Path) -> Vec<String> {
         .collect()
 }
 
-/// The order of a file tree: at each level folders come before files, names compare
-/// without case first.
 pub(super) fn tree_order(a: &Path, b: &Path) -> Ordering {
     let (a, b) = (parts(a), parts(b));
     for (at, (x, y)) in a.iter().zip(&b).enumerate() {
@@ -107,7 +102,6 @@ fn level(
     }
 }
 
-/// The row of the folder that holds the row at `index`.
 pub(super) fn parent_of(rows: &[Row], index: usize) -> Option<usize> {
     let depth = rows.get(index)?.depth;
     (0..index).rev().find(|at| rows[*at].depth < depth)

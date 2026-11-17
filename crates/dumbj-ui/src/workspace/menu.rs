@@ -1,5 +1,3 @@
-//! The menu bar in the header and the editor's context menu: every entry is an action.
-
 use dumbj_actions::Action;
 use dumbj_settings::UiRole;
 use gpui::{
@@ -199,11 +197,9 @@ pub(super) struct Menu {
     origin: Point<Pixels>,
     rows: Vec<Row>,
     selected: Option<usize>,
-    /// The menu of the bar this one hangs from.
     bar: Option<usize>,
 }
 
-/// The entries that can run, without the separators that would then stand alone.
 fn only_enabled(rows: &[Row]) -> Vec<Row> {
     let mut out: Vec<Row> = Vec::new();
     for row in rows {
@@ -241,7 +237,6 @@ impl Workspace {
         self.menus.open.is_some()
     }
 
-    /// The actions that take keys while a menu is open.
     pub(super) fn menu_keys(action: Action) -> bool {
         KEYS.contains(&action)
     }
@@ -524,7 +519,6 @@ impl Workspace {
 #[derive(Default)]
 pub(super) struct Menus {
     pub(super) open: Option<Menu>,
-    /// Where the labels of the menu bar were painted.
     bar_bounds: std::rc::Rc<std::cell::Cell<[Bounds<Pixels>; BAR_MENUS]>>,
 }
 

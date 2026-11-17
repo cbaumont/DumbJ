@@ -51,12 +51,9 @@ impl Item {
     }
 }
 
-/// Which neighbours of an item its children are.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum Direction {
-    /// Callers or subtypes, the view a hierarchy opens with.
     Inward,
-    /// Callees or supertypes.
     Outward,
 }
 
@@ -117,16 +114,12 @@ fn row(item: Item, depth: usize, expansion: Expansion, texts: &mut Texts) -> Row
     }
 }
 
-/// The superclass in a server's list of supertypes, as IntelliJ's class hierarchy shows
-/// it; interfaces are left to the Supertypes view.
 fn superclass(supertypes: Vec<TypeItem>) -> Option<TypeItem> {
     supertypes
         .into_iter()
         .find(|item| item.kind != lsp_types::SymbolKind::INTERFACE)
 }
 
-/// The superclass chain down to the type at the caret, which is emphasised and
-/// expanded once shown.
 fn type_tree(
     server: &Server,
     path: &Path,
@@ -222,8 +215,6 @@ fn children(server: &Server, item: Item, direction: Direction, depth: usize) -> 
         .collect()
 }
 
-/// The rows of the other view: those it showed last, or only the emphasised item, folded,
-/// as its root. Returns the row to select and whether it needs expanding.
 fn other_view(rows: &mut Vec<Row>, stash: &mut Vec<Row>) -> (usize, bool) {
     if stash.is_empty() {
         let root = rows.iter().find(|row| row.emphasised).or(rows.first());
@@ -245,8 +236,6 @@ fn other_view(rows: &mut Vec<Row>, stash: &mut Vec<Row>) -> (usize, bool) {
 }
 
 impl Workspace {
-    /// Asks the language server of the active file for the hierarchy at the caret.
-    /// Returns false when there is no server to ask.
     pub(super) fn ask_exact_hierarchy(
         &mut self,
         kind: HierarchyKind,
@@ -344,8 +333,6 @@ impl Workspace {
         .detach();
     }
 
-    /// Switches an exact hierarchy between callers and callees, or between the class
-    /// hierarchy and supertypes, keeping each view's rows.
     pub(super) fn switch_direction(&mut self, cx: &mut Context<Self>) {
         let Some(hierarchy) = self
             .hierarchy_window
