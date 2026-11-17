@@ -2,9 +2,13 @@ use tree_sitter::Node;
 
 use crate::reference::{Argument, Binder, Call, Qualifier, ReferenceRole, qualifier_from_text};
 use crate::structure::{
-    Collector, Import, Parameter, Source, SymbolKind, all_children, is_type_parameter,
-    named_children,
+    Collector, Import, Parameter, Source, SymbolKind, all_children, child_of_kind,
+    is_type_parameter, named_children,
 };
+
+fn spread_name(parameter: Node<'_>) -> Option<Node<'_>> {
+    child_of_kind(parameter, "variable_declarator")?.child_by_field_name("name")
+}
 
 fn supertypes(collector: &Collector<'_>, clause: Node<'_>, out: &mut Vec<String>) {
     for child in named_children(clause) {
@@ -50,11 +54,7 @@ fn parameters(source: &Source<'_>, declaration: Node<'_>) -> Option<Vec<Paramete
             }),
             // `String... rest`: the name sits in a variable_declarator.
             "spread_parameter" => Some(Parameter {
-                name: named_children(parameter)
-                    .into_iter()
-                    .find(|part| part.kind() == "variable_declarator")
-                    .and_then(|declarator| declarator.child_by_field_name("name"))
-                    .map_or_else(String::new, |name| source.text(name)),
+                name: spread_name(parameter).map_or_else(String::new, |name| source.text(name)),
                 type_name: named_children(parameter)
                     .into_iter()
                     .find_map(|part| type_name(source, part))
@@ -192,13 +192,9 @@ fn declared_type_argument(source: &Source<'_>, declaration: Node<'_>) -> Option<
     let generic = if written.kind() == "generic_type" {
         written
     } else {
-        named_children(written)
-            .into_iter()
-            .find(|child| child.kind() == "generic_type")?
+        child_of_kind(written, "generic_type")?
     };
-    let arguments = named_children(generic)
-        .into_iter()
-        .find(|child| child.kind() == "type_arguments")?;
+    let arguments = child_of_kind(generic, "type_arguments")?;
     let first = named_children(arguments).into_iter().next()?;
     type_name(source, first).filter(|name| !is_type_parameter(source, declaration, name))
 }
@@ -345,11 +341,7 @@ pub(crate) fn binders<'t>(
             .filter_map(|parameter| match parameter.kind() {
                 "formal_parameter" => named(parameter),
                 // `String... rest`: the name sits in a variable_declarator.
-                "spread_parameter" => named_children(parameter)
-                    .into_iter()
-                    .find(|part| part.kind() == "variable_declarator")
-                    .and_then(|declarator| declarator.child_by_field_name("name"))
-                    .map(|name| Binder::new(name, None)),
+                "spread_parameter" => spread_name(parameter).map(|name| Binder::new(name, None)),
                 _ => None,
             })
             .collect(),
@@ -374,9 +366,7 @@ pub(crate) fn binders<'t>(
             .filter_map(named)
             .collect(),
         "catch_formal_parameter" => {
-            let type_name = named_children(child)
-                .into_iter()
-                .find(|part| part.kind() == "catch_type")
+            let type_name = child_of_kind(child, "catch_type")
                 .and_then(|types| named_children(types).into_iter().next())
                 .and_then(|first| type_name(source, first));
             child
@@ -435,15 +425,8 @@ pub(crate) fn classify(
             }
         })
     };
-    let in_import = {
-        let mut ancestor = Some(parent);
-        std::iter::from_fn(|| {
-            let current = ancestor?;
-            ancestor = current.parent();
-            Some(current)
-        })
-        .any(|ancestor| ancestor.kind() == "import_declaration")
-    };
+    let in_import = std::iter::successors(Some(parent), Node::parent)
+        .any(|ancestor| ancestor.kind() == "import_declaration");
     match parent.kind() {
         "method_invocation" if is_field("name") => {
             (ReferenceRole::Call, qualifier_of("object"), false)
