@@ -490,3 +490,21 @@ fn call_hierarchy_requests() {
         assert_eq!(found[0].name, "g");
     }
 }
+
+#[test]
+fn jdtls_type_items_with_empty_tags_decode() {
+    let items: Vec<crate::TypeItem> = serde_json::from_value(json!([{
+        "name": "Greeter", "detail": "demo", "kind": 5, "tags": [],
+        "uri": "file:///p/Greeter.java",
+        "range": {"start": {"line": 2, "character": 0}, "end": {"line": 17, "character": 1}},
+        "selectionRange": {"start": {"line": 2, "character": 13}, "end": {"line": 2, "character": 20}},
+        "data": {"element": "=demo/src\\/main"}
+    }]))
+    .unwrap();
+    assert_eq!(items[0].name, "Greeter");
+    let sent = serde_json::to_value(&items[0]).unwrap();
+    assert_eq!(
+        sent["data"]["element"], "=demo/src\\/main",
+        "data goes back unchanged"
+    );
+}

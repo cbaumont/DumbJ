@@ -17,7 +17,7 @@ pub use backoff::Backoff;
 pub use error::LspError;
 pub use goto::{GotoKind, Place, goto, hover, references};
 pub use hierarchy::{
-    call_hierarchy_prepare, incoming_calls, outgoing_calls, subtypes, supertypes,
+    TypeItem, call_hierarchy_prepare, incoming_calls, outgoing_calls, subtypes, supertypes,
     type_hierarchy_prepare,
 };
 pub use position::{from_lsp, from_lsp_range, to_lsp, to_lsp_range};

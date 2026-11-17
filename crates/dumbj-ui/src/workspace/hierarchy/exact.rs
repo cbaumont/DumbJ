@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
+use dumbj_lsp::TypeItem;
 use dumbj_lsp::{
     Server, call_hierarchy_prepare, from_lsp, incoming_calls, outgoing_calls, subtypes, supertypes,
     type_hierarchy_prepare, uri_to_path,
@@ -9,7 +10,7 @@ use dumbj_lsp::{
 use dumbj_settings::UiRole;
 use dumbj_text::Buffer;
 use gpui::{AppContext, Context, IntoElement, MouseButton, div, prelude::*, px};
-use lsp_types::{CallHierarchyItem, Position, TypeHierarchyItem, Uri};
+use lsp_types::{CallHierarchyItem, Position, Uri};
 
 use super::super::Workspace;
 use super::super::navigation::Location;
@@ -21,7 +22,7 @@ const MAX_SUPERTYPES: usize = 32;
 
 #[derive(Debug, Clone)]
 pub(super) enum Item {
-    Type(TypeHierarchyItem),
+    Type(TypeItem),
     Call(CallHierarchyItem),
 }
 
@@ -87,7 +88,10 @@ fn row(item: Item, depth: usize, expansion: Expansion, texts: &mut Texts) -> Row
         .as_deref()
         .and_then(Path::file_name)
         .map(|name| name.to_string_lossy().into_owned())
-        .or_else(|| uri.as_str().rsplit('/').next().map(str::to_owned))
+        .or_else(|| {
+            let address = uri.as_str().split('?').next().unwrap_or("");
+            address.rsplit('/').next().map(str::to_owned)
+        })
         .unwrap_or_default();
     let place = format!("{file}:{}", start.line + 1);
     Row {
@@ -400,7 +404,11 @@ mod tests {
     #[test]
     fn a_row_names_the_item_and_where_it_is() {
         let row = row(
-            call("greet", "jdt://contents/rt.jar/Greeter.class", 9),
+            call(
+                "greet",
+                "jdt://contents/java.base/demo/Greeter.class?=demo/%3Cjava.lang%28Greeter.class",
+                9,
+            ),
             2,
             Expansion::Collapsed,
             &mut Texts::default(),
