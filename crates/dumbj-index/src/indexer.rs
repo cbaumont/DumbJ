@@ -80,6 +80,7 @@ fn walk_files(
     // Dotfiles such as `.gitignore` and `.github/` belong in Go to File; only the
     // repository's own `.git` directory is left out.
     let walker = WalkBuilder::new(root)
+        .require_git(false)
         .follow_links(false)
         .hidden(false)
         .filter_entry(|entry| entry.file_name() != ".git")
