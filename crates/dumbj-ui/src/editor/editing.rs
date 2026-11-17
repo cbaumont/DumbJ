@@ -13,7 +13,7 @@ use gpui::{
 
 use crate::line_edit::utf16_to_byte;
 
-use super::{EditorView, LINE_HEIGHT, LoadState, Reveal, fold_regions};
+use super::{EditorView, LINE_HEIGHT, Reveal, fold_regions};
 
 /// How long after the last edit an unsaved file is written, as IDEA's autosave does.
 const IDLE_SAVE: Duration = Duration::from_secs(15);
@@ -71,7 +71,7 @@ impl EditorView {
         if !is_edit {
             return false;
         }
-        if self.read_only || !matches!(self.state, LoadState::Ready) {
+        if self.read_only || !self.is_ready() {
             return true;
         }
         self.marked = None;
@@ -268,8 +268,7 @@ impl EditorView {
     /// Looks whether the file changed on disk: an unmodified file is reloaded, a modified
     /// one is flagged as a conflict for the user to settle.
     pub(crate) fn check_disk(&mut self, cx: &mut Context<Self>) {
-        if self.read_only || self.scratch || self.saving || !matches!(self.state, LoadState::Ready)
-        {
+        if self.read_only || self.scratch || self.saving || !self.is_ready() {
             return;
         }
         let (path, known) = (self.path.clone(), self.stamp);
@@ -407,7 +406,7 @@ impl EntityInputHandler for EditorView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.read_only || !matches!(self.state, LoadState::Ready) {
+        if self.read_only || !self.is_ready() {
             return;
         }
         let range = range_utf16
@@ -430,7 +429,7 @@ impl EntityInputHandler for EditorView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.read_only || !matches!(self.state, LoadState::Ready) {
+        if self.read_only || !self.is_ready() {
             return;
         }
         let range = range_utf16

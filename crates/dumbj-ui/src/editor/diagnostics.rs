@@ -6,7 +6,7 @@ use dumbj_text::{Buffer, ByteOffset};
 use gpui::Context;
 use lsp_types::DiagnosticSeverity;
 
-use super::{EditorView, LoadState};
+use super::EditorView;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Problem {
@@ -59,7 +59,7 @@ impl EditorView {
         diagnostics: &[lsp_types::Diagnostic],
         cx: &mut Context<Self>,
     ) {
-        if !matches!(self.state, LoadState::Ready) {
+        if !self.is_ready() {
             return;
         }
         let problems = problems(self.model.buffer(), diagnostics);

@@ -6,7 +6,7 @@ use dumbj_text::{ByteOffset, LineIndex};
 use dumbj_vcs::diff::{Hunk, HunkKind, line_hunks, old_text};
 use gpui::{AppContext, Context, Task};
 
-use super::{EditorView, LoadState, Reveal};
+use super::{EditorView, Reveal};
 
 /// Typing pauses this long before the change markers are recomputed.
 const TYPING_DELAY: Duration = Duration::from_millis(200);
@@ -114,7 +114,7 @@ impl EditorView {
             cx.notify();
             return;
         };
-        if !matches!(self.state, LoadState::Ready) {
+        if !self.is_ready() {
             return;
         }
         self.changes.task = Some(cx.spawn(async move |this, cx| {

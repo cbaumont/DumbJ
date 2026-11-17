@@ -7,7 +7,7 @@ use dumbj_text::{Buffer, ByteOffset, Edit};
 use gpui::{Context, Hsla, TextRun};
 use lsp_types::Position;
 
-use super::{EditorView, LoadState};
+use super::EditorView;
 
 /// The colour a token type gets; `None` leaves the tree-sitter colour in place.
 fn kind_of(token: &SemanticToken) -> Option<HighlightKind> {
@@ -147,7 +147,7 @@ impl EditorView {
         tokens: &[SemanticToken],
         cx: &mut Context<Self>,
     ) {
-        if !matches!(self.state, LoadState::Ready) || self.model.buffer().version() != version {
+        if !self.is_ready() || self.model.buffer().version() != version {
             return;
         }
         self.semantic = Arc::new(spans(self.model.buffer(), tokens));
@@ -157,7 +157,7 @@ impl EditorView {
 
     /// Takes the server's inlay hints if they describe the buffer as it is now.
     pub(crate) fn set_inlays(&mut self, version: u64, inlays: &[Inlay], cx: &mut Context<Self>) {
-        if !matches!(self.state, LoadState::Ready) || self.model.buffer().version() != version {
+        if !self.is_ready() || self.model.buffer().version() != version {
             return;
         }
         let buffer = self.model.buffer();

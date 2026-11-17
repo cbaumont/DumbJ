@@ -368,14 +368,18 @@ impl EditorView {
         self.read_only = read_only;
     }
 
+    fn is_ready(&self) -> bool {
+        matches!(self.state, LoadState::Ready)
+    }
+
     /// The buffer's version once the file is loaded.
     pub(crate) fn document_version(&self) -> Option<u64> {
-        matches!(self.state, LoadState::Ready).then(|| self.model.buffer().version())
+        self.is_ready().then(|| self.model.buffer().version())
     }
 
     /// The caret as a language server counts it, once the file is loaded.
     pub(crate) fn lsp_caret(&self) -> Option<lsp_types::Position> {
-        matches!(self.state, LoadState::Ready)
+        self.is_ready()
             .then(|| dumbj_lsp::to_lsp(self.model.buffer(), self.caret_offset()))
     }
 
@@ -538,7 +542,7 @@ impl EditorView {
     /// The trimmed text of the caret's line; `None` until the file has loaded.
     pub(crate) fn caret_line_text(&self) -> Option<String> {
         let buffer = self.model.buffer();
-        matches!(self.state, LoadState::Ready).then(|| {
+        self.is_ready().then(|| {
             let line = buffer.line(self.model.caret_point().line);
             line.trim().chars().take(200).collect()
         })
@@ -1673,7 +1677,7 @@ impl EditorView {
 
 impl Render for EditorView {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        if matches!(self.state, LoadState::Ready) {
+        if self.is_ready() {
             self.refresh_usages(cx);
         }
         let message = match &self.state {
