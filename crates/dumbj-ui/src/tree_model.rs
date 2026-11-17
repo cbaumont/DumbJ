@@ -71,10 +71,6 @@ impl TreeModel {
     }
 
     pub(crate) fn position(&self, path: &Path) -> Option<usize> {
-        self.index_of(path)
-    }
-
-    fn index_of(&self, path: &Path) -> Option<usize> {
         self.rows.iter().position(|row| row.entry.path == path)
     }
 
@@ -89,7 +85,7 @@ impl TreeModel {
     /// Shows `children` under the directory at `path`. Does nothing if the directory is no
     /// longer visible (it was collapsed away while its listing was loading).
     pub(crate) fn expand(&mut self, path: &Path, children: Vec<Entry>) {
-        let Some(index) = self.index_of(path) else {
+        let Some(index) = self.position(path) else {
             return;
         };
         let end = self.subtree_end(index);
