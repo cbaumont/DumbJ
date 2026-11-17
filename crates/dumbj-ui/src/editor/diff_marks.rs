@@ -61,15 +61,8 @@ impl EditorView {
     /// The first and last line the selection touches, one-based; the caret's line without
     /// a selection.
     pub(crate) fn selected_lines(&self) -> (usize, usize) {
-        let (buffer, selection) = (self.model.buffer(), self.model.selection());
-        let first = buffer.point_at(selection.start).line.get();
-        let end = buffer.point_at(selection.end);
-        let last = if end.line.get() > first && end.column == 0 {
-            end.line.get() - 1
-        } else {
-            end.line.get()
-        };
-        (first + 1, last + 1)
+        let lines = self.model.selected_lines();
+        (lines.start() + 1, lines.end() + 1)
     }
 
     /// The text of the one-based lines `first..=last`, without the last line break.

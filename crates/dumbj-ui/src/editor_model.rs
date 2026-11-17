@@ -452,7 +452,7 @@ impl EditorModel {
 
     /// The lines the selection touches; a selection ending at the start of a line does
     /// not include that line.
-    fn selected_lines(&self) -> std::ops::RangeInclusive<usize> {
+    pub(crate) fn selected_lines(&self) -> std::ops::RangeInclusive<usize> {
         let selection = self.selection();
         let first = self.buffer.point_at(selection.start).line.get();
         let end = self.buffer.point_at(selection.end);
