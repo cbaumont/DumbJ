@@ -63,6 +63,8 @@ impl ServerKind {
 pub struct Environment {
     pub path: Option<OsString>,
     pub java_home: Option<PathBuf>,
+    /// Directories holding one JDK per subdirectory, such as sdkman's and `/usr/lib/jvm`.
+    pub jdk_dirs: Vec<PathBuf>,
 }
 
 impl Environment {
@@ -71,6 +73,18 @@ impl Environment {
         Self {
             path: std::env::var_os("PATH"),
             java_home: std::env::var_os("JAVA_HOME").map(PathBuf::from),
+            jdk_dirs: [
+                std::env::var_os("SDKMAN_DIR")
+                    .map(PathBuf::from)
+                    .or_else(|| {
+                        std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".sdkman"))
+                    })
+                    .map(|sdkman| sdkman.join("candidates/java")),
+                Some(PathBuf::from("/usr/lib/jvm")),
+            ]
+            .into_iter()
+            .flatten()
+            .collect(),
         }
     }
 }
@@ -122,6 +136,43 @@ fn jdk_major(home: &Path) -> Option<u32> {
     }
 }
 
+/// The JDK homes in `env.jdk_dirs`, by canonical path.
+fn installed_jdks(env: &Environment) -> Vec<PathBuf> {
+    let mut homes: Vec<PathBuf> = env
+        .jdk_dirs
+        .iter()
+        .filter_map(|dir| fs::read_dir(dir).ok())
+        .flatten()
+        .filter_map(Result::ok)
+        .filter_map(|entry| jdk_home(&entry.path().join("bin").join("java")))
+        .collect();
+    homes.sort();
+    homes.dedup();
+    homes
+}
+
+/// The newest JDK of at least `minimum`, or the newest version found when none is.
+fn newest_jdk(
+    env: &Environment,
+    preferred: Option<PathBuf>,
+    minimum: u32,
+) -> Result<Option<PathBuf>, u32> {
+    let mut best: Option<(u32, PathBuf)> = None;
+    for home in preferred.into_iter().chain(installed_jdks(env)) {
+        let Some(major) = jdk_major(&home) else {
+            best.get_or_insert((0, home));
+            continue;
+        };
+        if best.as_ref().is_none_or(|(found, _)| major > *found) {
+            best = Some((major, home));
+        }
+    }
+    match best {
+        Some((major, _)) if major != 0 && major < minimum => Err(major),
+        best => Ok(best.map(|(_, home)| home)),
+    }
+}
+
 #[must_use]
 pub fn detect(kind: ServerKind, root: &Path, data_dir: &Path, env: &Environment) -> Detection {
     let markers: &[&str] = match kind {
@@ -145,18 +196,28 @@ pub fn detect(kind: ServerKind, root: &Path, data_dir: &Path, env: &Environment)
     let Some(program) = find_on_path(label, env) else {
         return Detection::Unavailable(format!("{label} is not on PATH"));
     };
-    let Some(java) = find_java(env) else {
+    let java = find_java(env);
+    if java.is_none() && installed_jdks(env).is_empty() {
         return Detection::Unavailable("no JDK found".to_owned());
-    };
-    let home = jdk_home(&java);
-    if kind == ServerKind::Jdtls
-        && let Some(major) = home.as_deref().and_then(jdk_major)
-        && major < JDTLS_MIN_JAVA
-    {
-        return Detection::Unavailable(format!("jdtls needs JDK {JDTLS_MIN_JAVA}, found {major}"));
     }
+    let preferred = java.as_deref().and_then(jdk_home);
+    // jdtls snapshots move to new JDKs ahead of its stated minimum, so it gets the newest.
+    let home = match kind {
+        ServerKind::Jdtls => match newest_jdk(env, preferred, JDTLS_MIN_JAVA) {
+            Ok(home) => home,
+            Err(major) => {
+                return Detection::Unavailable(format!(
+                    "jdtls needs JDK {JDTLS_MIN_JAVA}, found {major}"
+                ));
+            }
+        },
+        ServerKind::KotlinLsp => preferred.or_else(|| installed_jdks(env).pop()),
+    };
     let args = match kind {
+        // The initialization option alone still lets jdtls write .project, .classpath and
+        // .settings into the project: the redirection is set up when the JVM starts.
         ServerKind::Jdtls => vec![
+            "--jvm-arg=-Djava.import.generatesMetadataFilesAtProjectRoot=false".to_owned(),
             "-data".to_owned(),
             data_dir.join("jdtls").to_string_lossy().into_owned(),
         ],
@@ -369,6 +430,7 @@ mod tests {
         let env = Environment {
             path: Some(dir.0.join("bin").into_os_string()),
             java_home: Some(dir.0.join("jdk")),
+            jdk_dirs: vec![dir.0.join("jdks")],
         };
         Setup {
             root: dir.0.join("project"),
@@ -475,6 +537,41 @@ mod tests {
     }
 
     #[test]
+    fn jdtls_takes_the_newest_installed_jdk() {
+        let s = setup(Some("21.0.8"));
+        s.dir.touch("jdks/25/bin/java", 0o755);
+        s.dir.write("jdks/25/release", "JAVA_VERSION=\"25.0.3\"\n");
+        s.dir.touch("jdks/17/bin/java", 0o755);
+        s.dir.write("jdks/17/release", "JAVA_VERSION=\"17.0.1\"\n");
+        let Detection::Ready(jdtls) = detect(ServerKind::Jdtls, &s.root, &s.data, &s.env) else {
+            panic!("not ready");
+        };
+        let newest = std::fs::canonicalize(s.dir.0.join("jdks/25")).unwrap();
+        assert_eq!(jdtls.env[0].1, newest.to_string_lossy());
+        let Detection::Ready(kotlin) = detect(ServerKind::KotlinLsp, &s.root, &s.data, &s.env)
+        else {
+            panic!("not ready");
+        };
+        assert!(
+            kotlin.env[0].1.ends_with("jdk"),
+            "kotlin-lsp keeps JAVA_HOME"
+        );
+    }
+
+    #[test]
+    fn an_installed_jdk_is_enough_without_java_home_or_path() {
+        let mut s = setup(None);
+        s.env.java_home = None;
+        s.env.path = Some(s.dir.0.join("bin").into_os_string());
+        std::fs::remove_file(s.dir.0.join("jdk/bin/java")).unwrap();
+        s.dir.touch("jdks/25/bin/java", 0o755);
+        assert!(matches!(
+            detect(ServerKind::Jdtls, &s.root, &s.data, &s.env),
+            Detection::Ready(_)
+        ));
+    }
+
+    #[test]
     fn missing_release_file_accepts_the_jdk() {
         let s = setup(None);
         assert!(matches!(
@@ -494,7 +591,11 @@ mod tests {
         assert_eq!(jdtls.program, s.dir.0.join("bin/jdtls"));
         assert_eq!(
             jdtls.args,
-            ["-data".to_owned(), format!("{}/jdtls", s.data.display())]
+            [
+                "--jvm-arg=-Djava.import.generatesMetadataFilesAtProjectRoot=false".to_owned(),
+                "-data".to_owned(),
+                format!("{}/jdtls", s.data.display())
+            ]
         );
         assert_eq!(jdtls.env, std::slice::from_ref(&java_home));
         assert_eq!(jdtls.cwd, s.root);
