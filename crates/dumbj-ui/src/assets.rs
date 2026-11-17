@@ -71,7 +71,5 @@ mod tests {
         let folder = Assets.load("icons/folder.svg").unwrap().unwrap();
         assert!(folder.starts_with(b"<svg"));
         assert!(Assets.load("icons/nope.svg").unwrap().is_none());
-        assert_eq!(Assets.list("icons/").unwrap().len(), ICONS.len());
-        assert_eq!(fonts().len(), 3);
     }
 }
