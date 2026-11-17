@@ -83,8 +83,7 @@ impl Client {
         query: &str,
         variables: Value,
     ) -> Result<T, ReviewError> {
-        let body = serde_json::to_string(&Request { query, variables })
-            .map_err(|e| ReviewError::Decode(e.to_string()))?;
+        let body = serde_json::to_string(&Request { query, variables })?;
         let mut response = self
             .agent
             .post(&self.endpoint)
@@ -108,8 +107,7 @@ impl Client {
                 )));
             }
         }
-        let envelope: Envelope =
-            serde_json::from_str(&text).map_err(|e| ReviewError::Decode(e.to_string()))?;
+        let envelope: Envelope = serde_json::from_str(&text)?;
         if let Some(errors) = envelope.errors.filter(|e| !e.is_empty()) {
             let messages: Vec<_> = errors.into_iter().map(|e| e.message).collect();
             return Err(ReviewError::Api(messages.join("; ")));
@@ -117,6 +115,6 @@ impl Client {
         let data = envelope
             .data
             .ok_or_else(|| ReviewError::Decode("response has no data".to_string()))?;
-        serde_json::from_value(data).map_err(|e| ReviewError::Decode(e.to_string()))
+        Ok(serde_json::from_value(data)?)
     }
 }

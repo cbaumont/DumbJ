@@ -118,8 +118,7 @@ impl Client {
             .into_iter()
             .filter(|n| n.as_object().is_none_or(|o| !o.is_empty()))
             .map(|n| {
-                let n: Node =
-                    serde_json::from_value(n).map_err(|e| ReviewError::Decode(e.to_string()))?;
+                let n: Node = serde_json::from_value(n)?;
                 Ok(PullRequestSummary {
                     number: n.number,
                     title: n.title,

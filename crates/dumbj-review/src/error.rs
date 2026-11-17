@@ -15,3 +15,9 @@ pub enum ReviewError {
     #[error(transparent)]
     Io(#[from] std::io::Error),
 }
+
+impl From<serde_json::Error> for ReviewError {
+    fn from(error: serde_json::Error) -> Self {
+        Self::Decode(error.to_string())
+    }
+}
