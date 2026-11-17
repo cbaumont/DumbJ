@@ -12,6 +12,7 @@ use gpui::{
 };
 
 use super::Workspace;
+use super::file_name;
 use super::navigation::Location;
 use super::popup::{popup_box, popup_layer};
 use super::usages::{FindRow, FindWindow};
@@ -198,9 +199,7 @@ impl Workspace {
         let label = if scope == root {
             "project".to_owned()
         } else {
-            scope
-                .file_name()
-                .map_or_else(String::new, |name| name.to_string_lossy().into_owned())
+            file_name(&scope)
         };
         cx.notify();
         cx.spawn(async move |this, cx| {
@@ -359,9 +358,7 @@ impl Workspace {
         toggles: Toggles,
         cx: &mut Context<Self>,
     ) -> gpui::Div {
-        let name = directory
-            .file_name()
-            .map_or_else(String::new, |name| name.to_string_lossy().into_owned());
+        let name = file_name(directory);
         let chip = |id: &'static str, label: String, scope: SearchScope, cx: &mut Context<Self>| {
             Self::option_chip(id, label.into(), toggles.scope == scope, cx).on_click(
                 cx.listener(move |this, _, _, cx| this.toggle_find_option(|t| t.scope = scope, cx)),

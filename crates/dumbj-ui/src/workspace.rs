@@ -17,6 +17,11 @@ use crate::keys::{modifiers_from_gpui, stroke_from_gpui};
 use crate::text_input::{TextChanged, TextInput};
 use crate::theme;
 
+fn file_name(path: &Path) -> String {
+    path.file_name()
+        .map_or_else(String::new, |name| name.to_string_lossy().into_owned())
+}
+
 mod bookmarks;
 mod branches;
 mod compose;
@@ -1520,9 +1525,7 @@ impl Workspace {
         let library = tab.and_then(|tab| dumbj_jars::split_virtual_path(&tab.path));
         let breadcrumb = match (&self.project, tab) {
             _ if library.is_some() => library.map_or_else(String::new, |(jar, entry)| {
-                let jar = jar
-                    .file_name()
-                    .map_or_else(String::new, |name| name.to_string_lossy().into_owned());
+                let jar = file_name(&jar);
                 std::iter::once(jar)
                     .chain(entry.split('/').map(str::to_owned))
                     .collect::<Vec<_>>()

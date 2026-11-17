@@ -6,6 +6,7 @@ use dumbj_text::Buffer;
 use gpui::{AppContext, Context, Task, Window};
 
 use super::Workspace;
+use super::file_name;
 use super::navigation::{Chooser, ChooserItem, Location};
 
 /// How long the exact answer may take before the dumb one is shown in its place.
@@ -51,9 +52,7 @@ fn exact_target(place: &Place) -> Option<ExactTarget> {
 fn target_in(path: &Path, buffer: &Buffer, place: &Place) -> ExactTarget {
     let offset = from_lsp(buffer, place.range.start);
     let line = buffer.point_at(offset).line;
-    let name = path
-        .file_name()
-        .map_or_else(String::new, |name| name.to_string_lossy().into_owned());
+    let name = file_name(path);
     ExactTarget {
         label: format!("{name}:{}", line.display_number()),
         detail: buffer.line(line).trim().to_owned(),

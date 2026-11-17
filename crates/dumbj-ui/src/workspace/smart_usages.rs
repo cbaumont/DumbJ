@@ -7,6 +7,7 @@ use dumbj_text::Buffer;
 use gpui::{AppContext, Context, Task};
 
 use super::Workspace;
+use super::file_name;
 use super::navigation::{Chooser, ChooserItem, Location};
 use super::usages::{FindRow, FindWindow, summary};
 
@@ -45,11 +46,6 @@ fn usage_in(path: PathBuf, buffer: &Buffer, place: &Place) -> ExactUsage {
         line: line.display_number(),
         location: Location { path, offset },
     }
-}
-
-fn file_name(path: &Path) -> String {
-    path.file_name()
-        .map_or_else(String::new, |name| name.to_string_lossy().into_owned())
 }
 
 fn rows(root: Option<&Path>, usages: Vec<ExactUsage>) -> Vec<FindRow> {

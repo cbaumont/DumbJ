@@ -16,6 +16,7 @@ use gpui::{
 };
 
 use super::Workspace;
+use super::file_name;
 use super::navigation::Location;
 use super::popup::{popup_box, popup_layer};
 use crate::theme;
@@ -220,10 +221,7 @@ fn recent_file_row(
 }
 
 fn recent_location_row(place: &RecentLocation, query: &str) -> Option<(i32, Row)> {
-    let file = place
-        .path
-        .file_name()
-        .map_or_else(String::new, |name| name.to_string_lossy().into_owned());
+    let file = file_name(&place.path);
     let detail = format!("{file}:{}", place.line);
     let (matched, positions) = match fuzzy_match(query, &place.text) {
         Some(found) => {

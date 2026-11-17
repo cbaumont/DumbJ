@@ -1,10 +1,11 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use dumbj_actions::Action;
 use dumbj_settings::{Bookmark, UiRole};
 use gpui::{Context, IntoElement, Keystroke, Window, div, prelude::*, px};
 
 use super::Workspace;
+use super::file_name;
 use super::navigation::{Chooser, ChooserItem};
 use super::popup::{popup_box, popup_layer};
 use super::state::is_project_file;
@@ -16,11 +17,6 @@ pub(super) struct MnemonicPrompt {
     path: PathBuf,
     line: usize,
     text: String,
-}
-
-fn file_name(path: &Path) -> String {
-    path.file_name()
-        .map_or_else(String::new, |name| name.to_string_lossy().into_owned())
 }
 
 fn is_mnemonic(key: char) -> bool {

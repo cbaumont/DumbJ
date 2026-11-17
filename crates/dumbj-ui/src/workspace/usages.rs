@@ -11,6 +11,7 @@ use gpui::{
 };
 
 use super::Workspace;
+use super::file_name;
 use super::navigation::{Chooser, ChooserItem, Location};
 use crate::theme;
 
@@ -89,13 +90,6 @@ impl FindWindow {
             FindRow::File { .. } => None,
         }
     }
-}
-
-fn file_name(usage: &Usage) -> String {
-    usage
-        .path
-        .file_name()
-        .map_or_else(String::new, |name| name.to_string_lossy().into_owned())
 }
 
 fn location(usage: &Usage) -> Location {
@@ -219,7 +213,8 @@ impl Workspace {
                             } else {
                                 ""
                             };
-                            let label = format!("{}:{}{maybe}", file_name(usage), usage.line + 1);
+                            let label =
+                                format!("{}:{}{maybe}", file_name(&usage.path), usage.line + 1);
                             ChooserItem::new(label, usage.line_text.clone(), location(usage))
                         })
                         .collect();

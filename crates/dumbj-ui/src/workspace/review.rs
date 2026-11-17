@@ -12,6 +12,7 @@ use gpui::{
 };
 
 use super::diff::DiffSides;
+use super::file_name;
 use super::popup::{popup_box, popup_layer};
 use super::review_tree::{self, Node, Row};
 use super::{LeftTool, ToolWindowState, Workspace};
@@ -241,11 +242,6 @@ fn offered(suggestions: &[Suggestion], query: &str) -> Vec<(String, String)> {
         out.push((query.to_owned(), "Revision or range as typed".to_owned()));
     }
     out
-}
-
-fn file_name(path: &Path) -> String {
-    path.file_name()
-        .map_or_else(String::new, |name| name.to_string_lossy().into_owned())
 }
 
 /// What the left tool window shows.

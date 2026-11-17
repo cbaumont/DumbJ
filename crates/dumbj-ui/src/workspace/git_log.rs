@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -13,6 +13,7 @@ use gpui::{
 
 use super::Workspace;
 use super::diff::DiffSides;
+use super::file_name;
 use crate::file_tree::status_role;
 use crate::theme;
 
@@ -611,10 +612,6 @@ impl Workspace {
             (true, false) => Some(UiRole::SelectedInactive),
             (false, _) => None,
         };
-        let name = |path: &Path| {
-            path.file_name()
-                .map_or_else(String::new, |name| name.to_string_lossy().into_owned())
-        };
         let folder = change
             .path
             .parent()
@@ -650,7 +647,7 @@ impl Workspace {
                 div()
                     .flex_none()
                     .text_color(theme::ui(cx, status_role(change.status)))
-                    .child(name(&change.path)),
+                    .child(file_name(&change.path)),
             )
             .child(
                 div()
