@@ -342,9 +342,7 @@ impl EditorModel {
 
     /// Types `text` over the selection.
     pub(crate) fn insert(&mut self, text: &str) -> Vec<Edit> {
-        let range = self.selection();
-        let end = ByteOffset(range.start.get() + text.len());
-        self.replace(range, text, EditKind::Insert, end..end)
+        self.replace_range(self.selection(), text)
     }
 
     /// Replaces `range`, which need not be the selection (an input method does this).
