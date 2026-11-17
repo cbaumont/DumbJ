@@ -25,6 +25,8 @@ pub(super) struct Smart {
     sent: HashMap<PathBuf, u64>,
     /// The buffer version whose semantic tokens were asked for, per file.
     tokens: HashMap<PathBuf, u64>,
+    /// The index snapshot and server process whose files each server was last told about.
+    files_synced: HashMap<ServerKind, (usize, Option<u32>)>,
     changed: Arc<AtomicBool>,
     sync: Option<Task<()>>,
     poll: Option<Task<()>>,
@@ -244,9 +246,50 @@ impl Workspace {
         self.refresh_from_servers(cx);
     }
 
+    /// Tells each connected server which source and build files changed on disk since it
+    /// was last told, as an editor's file watcher would.
+    pub(super) fn sync_watched_files(&mut self, cx: &mut Context<Self>) {
+        let (Some(index), Some(root)) = (
+            self.index.clone(),
+            self.project.as_ref().map(|project| project.root.clone()),
+        ) else {
+            return;
+        };
+        let Some(dir) = data_dir(&root) else {
+            return;
+        };
+        let snapshot = Arc::as_ptr(&index) as usize;
+        for (kind, session) in &self.smart.sessions {
+            let Some(server) = session.server() else {
+                continue;
+            };
+            let key = (snapshot, server.pid());
+            if self.smart.files_synced.get(kind) == Some(&key) {
+                continue;
+            }
+            self.smart.files_synced.insert(*kind, key);
+            let (index, record) = (index.clone(), dir.join(format!("{}.files", kind.label())));
+            cx.background_spawn(async move {
+                let files = index
+                    .files()
+                    .map(|(_, file)| file.path.as_path())
+                    .filter(|path| dumbj_lsp::is_watched(path))
+                    .filter_map(|path| Some((path.to_path_buf(), dumbj_lsp::stamp(path)?)))
+                    .collect();
+                match dumbj_lsp::sync_files(&server, &record, &files) {
+                    Ok(0) => {}
+                    Ok(sent) => tracing::debug!(sent, "told the language server about changed files"),
+                    Err(error) => tracing::debug!(%error, "could not tell the language server about changed files"),
+                }
+            })
+            .detach();
+        }
+    }
+
     /// Gives each open working file the diagnostics its server last published, and asks
     /// for the semantic tokens of files whose text the server has not coloured yet.
     fn refresh_from_servers(&mut self, cx: &mut Context<Self>) {
+        self.sync_watched_files(cx);
         let mut wanted = Vec::new();
         for tab in self.tabs.iter().filter(|tab| tab.shows_working_file()) {
             let session = self

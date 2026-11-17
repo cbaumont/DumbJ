@@ -12,6 +12,7 @@ mod server;
 mod session;
 mod tokens;
 mod uri;
+mod watch;
 
 pub use backoff::Backoff;
 pub use error::LspError;
@@ -26,6 +27,7 @@ pub use server::{Pending, Server, ServerCommand, ServerEvent};
 pub use session::{Session, SessionState};
 pub use tokens::{Inlay, SemanticToken, inlay_hints, semantic_tokens};
 pub use uri::{path_to_uri, uri_to_path};
+pub use watch::{Stamp, is_watched, stamp, sync_files};
 
 #[cfg(test)]
 mod tests;

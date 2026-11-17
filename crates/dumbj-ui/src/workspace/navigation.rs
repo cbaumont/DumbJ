@@ -205,6 +205,7 @@ impl Workspace {
                         "project indexed"
                     );
                     this.index = Some(Arc::new(index));
+                    this.sync_watched_files(cx);
                     let open: Vec<_> = this
                         .tabs
                         .iter()
