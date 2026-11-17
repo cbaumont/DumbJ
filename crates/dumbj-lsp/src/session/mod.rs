@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, RecvTimeoutError};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
@@ -131,7 +131,6 @@ struct Shared {
     server: Mutex<Option<Server>>,
     documents: Mutex<HashMap<PathBuf, (i32, String)>>,
     diagnostics: Mutex<HashMap<PathBuf, Arc<Vec<Diagnostic>>>>,
-    diagnostics_version: AtomicU64,
     legend: Mutex<Option<lsp_types::SemanticTokensLegend>>,
     stopped: AtomicBool,
 }
@@ -185,14 +184,12 @@ impl Shared {
                 diagnostics.insert(path, Arc::new(params.diagnostics));
             }
         }
-        self.diagnostics_version.fetch_add(1, Ordering::SeqCst);
         (self.on_change)();
     }
 
     fn clear_diagnostics(&self) {
         let had = !std::mem::take(&mut *lock(&self.diagnostics)).is_empty();
         if had {
-            self.diagnostics_version.fetch_add(1, Ordering::SeqCst);
             (self.on_change)();
         }
     }
@@ -422,7 +419,6 @@ impl Session {
             server: Mutex::new(None),
             documents: Mutex::new(HashMap::new()),
             diagnostics: Mutex::new(HashMap::new()),
-            diagnostics_version: AtomicU64::new(0),
             legend: Mutex::new(None),
             stopped: AtomicBool::new(false),
         });
@@ -468,12 +464,6 @@ impl Session {
     #[must_use]
     pub fn semantic_legend(&self) -> Option<lsp_types::SemanticTokensLegend> {
         lock(&self.shared.legend).clone()
-    }
-
-    /// Changes whenever any file's diagnostics change.
-    #[must_use]
-    pub fn diagnostics_version(&self) -> u64 {
-        self.shared.diagnostics_version.load(Ordering::SeqCst)
     }
 
     pub fn open_document(&self, path: &Path, text: String) {

@@ -352,12 +352,10 @@ fn diagnostics_are_kept_per_file_and_dropped_with_the_server() {
         harness.session.diagnostics(path)[0].message,
         "Unresolved reference"
     );
-    let version = harness.session.diagnostics_version();
     drop(mock);
     let deadline = Instant::now() + WAIT;
     while !harness.session.diagnostics(path).is_empty() && Instant::now() < deadline {
         std::thread::sleep(Duration::from_millis(5));
     }
     assert!(harness.session.diagnostics(path).is_empty());
-    assert!(harness.session.diagnostics_version() > version);
 }
