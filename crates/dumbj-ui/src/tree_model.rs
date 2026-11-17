@@ -1,4 +1,3 @@
-use std::cmp::Ordering;
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -118,7 +117,7 @@ impl TreeModel {
         (0..index).rev().find(|candidate| {
             self.rows
                 .get(*candidate)
-                .is_some_and(|row| row.depth.cmp(&depth) == Ordering::Less)
+                .is_some_and(|row| row.depth < depth)
         })
     }
 }
