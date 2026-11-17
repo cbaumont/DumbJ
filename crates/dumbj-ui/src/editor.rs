@@ -1363,28 +1363,14 @@ impl EditorView {
                 )
             };
 
-            let mut runs = Vec::new();
-            let mut position = 0;
-            while let Some(span) = spans
-                .get(span_index)
-                .filter(|span| span.range.start < line_end)
-            {
-                let (start, end) = (column(span.range.start), column(span.range.end));
-                if start > position {
-                    runs.push(run(start - position, text_color));
-                }
-                if end > start.max(position) {
-                    runs.push(run(end - start.max(position), theme::syntax(cx, span.kind)));
-                    position = end;
-                }
-                if span.range.end > line_end {
-                    break; // The span continues on the next line.
-                }
-                span_index += 1;
-            }
-            if display.text.len() > position {
-                runs.push(run(display.text.len() - position, text_color));
-            }
+            let (runs, consumed) = highlight_runs(
+                &spans[span_index..],
+                line_end,
+                display.text.len(),
+                column,
+                |len, kind| run(len, kind.map_or(text_color, |kind| theme::syntax(cx, kind))),
+            );
+            span_index += consumed;
             let inlay_ranges: Vec<_> = display.inlay_ranges().collect();
             let runs = semantic::mark_inlays(runs, &inlay_ranges, fold_color, block_background);
             let shaped = shape(window, display.text.clone(), &runs);
@@ -1600,24 +1586,17 @@ impl EditorView {
                 .as_ref()
                 .and_then(|tree| tree.highlights(buffer, line_start..line_end).ok())
                 .unwrap_or_default();
-            let mut runs = Vec::new();
-            let mut position = 0;
-            for span in &spans {
-                let start = display
-                    .to_display(span.range.start.get().max(line_start.get()) - line_start.get());
-                let end =
-                    display.to_display(span.range.end.get().min(line_end.get()) - line_start.get());
-                if start > position {
-                    runs.push(run(start - position, text_color));
-                }
-                if end > start.max(position) {
-                    runs.push(run(end - start.max(position), theme::syntax(cx, span.kind)));
-                    position = end;
-                }
-            }
-            if display.text.len() > position {
-                runs.push(run(display.text.len() - position, text_color));
-            }
+            let (runs, _) = highlight_runs(
+                &spans,
+                line_end,
+                display.text.len(),
+                |offset| {
+                    display.to_display(
+                        offset.get().clamp(line_start.get(), line_end.get()) - line_start.get(),
+                    )
+                },
+                |len, kind| run(len, kind.map_or(text_color, |kind| theme::syntax(cx, kind))),
+            );
             let text = shape(window, display.text.clone(), &runs);
             let number = line_index.display_number().to_string();
             let number = shape(window, number.clone(), &[run(number.len(), number_color)]);
@@ -1922,6 +1901,36 @@ impl Element for EditorElement {
             }
         });
     }
+}
+
+fn highlight_runs(
+    spans: &[HighlightSpan],
+    line_end: ByteOffset,
+    text_len: usize,
+    column: impl Fn(ByteOffset) -> usize,
+    run: impl Fn(usize, Option<dumbj_syntax::HighlightKind>) -> TextRun,
+) -> (Vec<TextRun>, usize) {
+    let mut runs = Vec::new();
+    let mut position = 0;
+    let mut consumed = 0;
+    for span in spans.iter().take_while(|span| span.range.start < line_end) {
+        let (start, end) = (column(span.range.start), column(span.range.end));
+        if start > position {
+            runs.push(run(start - position, None));
+        }
+        if end > start.max(position) {
+            runs.push(run(end - start.max(position), Some(span.kind)));
+            position = end;
+        }
+        if span.range.end > line_end {
+            break; // The span continues on the next line.
+        }
+        consumed += 1;
+    }
+    if text_len > position {
+        runs.push(run(text_len - position, None));
+    }
+    (runs, consumed)
 }
 
 fn paint_line(line: &ShapedLine, origin: Point<Pixels>, window: &mut Window, cx: &mut App) {
