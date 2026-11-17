@@ -890,9 +890,8 @@ impl EditorView {
     pub(crate) fn caret_popup_position(&self) -> Option<Point<Pixels>> {
         let painted = self.painted.as_ref()?;
         let caret = self.model.caret_point();
-        let row = (0..painted.rows.len()).find(|row| {
-            painted.rows.get(*row) == Some(&caret.line.get())
-                && painted.blocks.get(*row).is_some_and(Option::is_none)
+        let row = painted.rows.iter().enumerate().position(|(row, &line)| {
+            line == caret.line.get() && painted.blocks.get(row).is_some_and(Option::is_none)
         })?;
         let (display, shaped) = painted.lines.get(row)?;
         let x = painted.text_left - painted.scroll_x
