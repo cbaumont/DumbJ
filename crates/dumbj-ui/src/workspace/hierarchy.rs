@@ -5,7 +5,7 @@ use std::sync::atomic::AtomicBool;
 use dumbj_actions::Action;
 use dumbj_index::{
     Caller, Certainty, Index, SymbolId, UsageTarget, callers, direct_subtypes, direct_supertypes,
-    gutter_marks, implementations, super_members,
+    gutter_marks, implementations, super_members, superclass,
 };
 use dumbj_settings::UiRole;
 use gpui::{
@@ -150,13 +150,10 @@ fn subtype_rows(
     }
 }
 
-/// The supertype chain down to `id`, then every subtype below it.
+/// The superclass chain down to `id`, then every subtype below it.
 fn type_rows(index: &Index, id: SymbolId) -> Vec<Row> {
     let mut chain = vec![id];
-    while let Some(parent) = chain
-        .last()
-        .and_then(|last| direct_supertypes(index, *last).into_iter().next())
-    {
+    while let Some(parent) = chain.last().and_then(|last| superclass(index, *last)) {
         if chain.contains(&parent) || chain.len() > 32 {
             break;
         }

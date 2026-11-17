@@ -10,7 +10,7 @@ use std::sync::atomic::AtomicBool;
 use common::freight_index;
 use dumbj_index::{
     Index, SymbolId, callers, direct_subtypes, direct_supertypes, gutter_marks, implementations,
-    overriders, super_members,
+    overriders, super_members, superclass,
 };
 
 fn named(index: &Index, qualified: &str) -> SymbolId {
@@ -41,6 +41,21 @@ fn types_and_their_subtypes() {
         names(&index, &implementations(&index, carrier)),
         ["NamedCarrier"]
     );
+}
+
+#[test]
+fn the_superclass_is_the_supertype_that_is_not_an_interface() {
+    let index = freight_index();
+    let pallet = named(&index, "Pallet");
+    assert_eq!(
+        names(&index, &direct_supertypes(&index, pallet)),
+        ["Stackable", "Parcel"]
+    );
+    assert_eq!(
+        superclass(&index, pallet).map(|id| index.qualified_name(id)),
+        Some("Parcel".to_owned())
+    );
+    assert_eq!(superclass(&index, named(&index, "NamedCarrier")), None);
 }
 
 #[test]

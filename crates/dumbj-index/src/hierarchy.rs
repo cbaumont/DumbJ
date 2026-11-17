@@ -45,6 +45,16 @@ pub fn direct_supertypes(index: &Index, id: SymbolId) -> Vec<SymbolId> {
     resolve_supertypes(index, id)
 }
 
+/// The supertype that is not an interface, the parent in IntelliJ's class hierarchy.
+#[must_use]
+pub fn superclass(index: &Index, id: SymbolId) -> Option<SymbolId> {
+    direct_supertypes(index, id).into_iter().find(|supertype| {
+        index
+            .symbol(*supertype)
+            .is_some_and(|s| s.kind != SymbolKind::Interface)
+    })
+}
+
 fn all_subtypes(index: &Index, id: SymbolId) -> Vec<SymbolId> {
     let mut seen = HashSet::from([id]);
     let mut found = Vec::new();

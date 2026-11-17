@@ -15,7 +15,7 @@ mod usages;
 pub use fuzzy::{FuzzyMatch, fuzzy_match};
 pub use hierarchy::{
     Caller, GutterMark, callers, direct_subtypes, direct_supertypes, gutter_marks, implementations,
-    overriders, super_members, warm_hierarchy,
+    overriders, super_members, superclass, warm_hierarchy,
 };
 pub use index::{FileId, FileReader, Index, IndexedFile, SymbolId};
 pub use indexer::{absolute, cache_path, index_file, index_project, index_project_cached};
