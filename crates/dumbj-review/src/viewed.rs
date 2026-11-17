@@ -45,9 +45,6 @@ struct File {
     viewer_viewed_state: String,
 }
 
-#[derive(Deserialize)]
-struct Ignored {}
-
 impl Client {
     /// Paths the viewer marked as viewed, following pagination of the pull request's files.
     pub fn viewed_files(&self, repo: &RepoId, number: u64) -> Result<Vec<String>, ReviewError> {
@@ -77,18 +74,16 @@ impl Client {
     }
 
     pub fn mark_file_viewed(&self, pull_id: &str, path: &str) -> Result<(), ReviewError> {
-        let _: Ignored = self.graphql(
+        self.mutate(
             MARK_MUTATION,
             json!({ "input": { "pullRequestId": pull_id, "path": path } }),
-        )?;
-        Ok(())
+        )
     }
 
     pub fn unmark_file_viewed(&self, pull_id: &str, path: &str) -> Result<(), ReviewError> {
-        let _: Ignored = self.graphql(
+        self.mutate(
             UNMARK_MUTATION,
             json!({ "input": { "pullRequestId": pull_id, "path": path } }),
-        )?;
-        Ok(())
+        )
     }
 }

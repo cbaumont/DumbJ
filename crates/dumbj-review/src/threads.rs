@@ -237,9 +237,6 @@ struct ReplyPayload {
     comment: Option<RawComment>,
 }
 
-#[derive(Deserialize)]
-struct Ignored {}
-
 impl Client {
     /// All review threads, following pagination (100 per page; the first 100 comments of each thread).
     pub fn review_threads(
@@ -312,18 +309,16 @@ impl Client {
     }
 
     pub fn resolve_thread(&self, thread_id: &str) -> Result<(), ReviewError> {
-        let _: Ignored = self.graphql(
+        self.mutate(
             RESOLVE_MUTATION,
             json!({ "input": { "threadId": thread_id } }),
-        )?;
-        Ok(())
+        )
     }
 
     pub fn unresolve_thread(&self, thread_id: &str) -> Result<(), ReviewError> {
-        let _: Ignored = self.graphql(
+        self.mutate(
             UNRESOLVE_MUTATION,
             json!({ "input": { "threadId": thread_id } }),
-        )?;
-        Ok(())
+        )
     }
 }

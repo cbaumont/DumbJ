@@ -53,9 +53,6 @@ struct AddReviewData {
     add_pull_request_review: Option<ReviewPayload>,
 }
 
-#[derive(Deserialize)]
-struct Ignored {}
-
 impl Client {
     /// Creates a pending review (no event) and returns its id.
     pub fn start_review(&self, pull_id: &str) -> Result<String, ReviewError> {
@@ -75,15 +72,14 @@ impl Client {
         event: ReviewEvent,
         body: &str,
     ) -> Result<(), ReviewError> {
-        let _: Ignored = self.graphql(
+        self.mutate(
             SUBMIT_MUTATION,
             json!({ "input": {
                 "pullRequestReviewId": review_id,
                 "event": event.as_graphql(),
                 "body": body,
             } }),
-        )?;
-        Ok(())
+        )
     }
 
     /// Posts a review with an event and no pending comments.
@@ -93,22 +89,20 @@ impl Client {
         event: ReviewEvent,
         body: &str,
     ) -> Result<(), ReviewError> {
-        let _: Ignored = self.graphql(
+        self.mutate(
             ADD_REVIEW_MUTATION,
             json!({ "input": {
                 "pullRequestId": pull_id,
                 "event": event.as_graphql(),
                 "body": body,
             } }),
-        )?;
-        Ok(())
+        )
     }
 
     pub fn delete_review(&self, review_id: &str) -> Result<(), ReviewError> {
-        let _: Ignored = self.graphql(
+        self.mutate(
             DELETE_MUTATION,
             json!({ "input": { "pullRequestReviewId": review_id } }),
-        )?;
-        Ok(())
+        )
     }
 }

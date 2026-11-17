@@ -3,6 +3,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use serde::de::DeserializeOwned;
+use serde::de::IgnoredAny;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use ureq::config::Config;
@@ -70,6 +71,10 @@ impl Client {
             token,
             agent: config.into(),
         }
+    }
+
+    pub fn mutate(&self, query: &str, variables: Value) -> Result<(), ReviewError> {
+        self.graphql::<IgnoredAny>(query, variables).map(drop)
     }
 
     /// Returns the `data` member as `T`; a non-empty `errors` array is an error even with data.
