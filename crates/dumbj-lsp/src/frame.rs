@@ -18,10 +18,13 @@ pub enum FrameError {
     Io(#[from] std::io::Error),
 }
 
-/// Reads one message body. `Ok(None)` is a clean end of stream between messages.
+/// Reads one message body. `Ok(None)` is a clean end of stream between messages. Lines
+/// that are not headers before a message starts are skipped: some servers print their
+/// start-up errors to stdout.
 pub(crate) fn read_frame(reader: &mut impl BufRead) -> Result<Option<Vec<u8>>, FrameError> {
     let mut length: Option<usize> = None;
     let mut first = true;
+    let mut in_headers = false;
     loop {
         let mut line = Vec::new();
         let read = reader
@@ -44,12 +47,26 @@ pub(crate) fn read_frame(reader: &mut impl BufRead) -> Result<Option<Vec<u8>>, F
             });
         }
         let line = line.trim_ascii_end();
+        if line.is_empty() && !in_headers {
+            first = true;
+            continue;
+        }
         if line.is_empty() {
             break;
         }
-        let Some(colon) = line.iter().position(|&b| b == b':') else {
-            return Err(FrameError::BadHeader);
+        let Some(colon) = line
+            .iter()
+            .position(|&b| b == b':')
+            .filter(|_| in_headers || is_header(line))
+        else {
+            if in_headers {
+                return Err(FrameError::BadHeader);
+            }
+            tracing::debug!(line = %String::from_utf8_lossy(line), "skipping server output that is not LSP");
+            first = true;
+            continue;
         };
+        in_headers = true;
         if line[..colon].eq_ignore_ascii_case(b"content-length") {
             let value = std::str::from_utf8(&line[colon + 1..])
                 .map_err(|_| FrameError::BadLength)?
@@ -74,6 +91,12 @@ pub(crate) fn read_frame(reader: &mut impl BufRead) -> Result<Option<Vec<u8>>, F
 
 const MAX_HEADER_LINE: u64 = 8 * 1024;
 
+fn is_header(line: &[u8]) -> bool {
+    line.split(|&b| b == b':').next().is_some_and(|name| {
+        name.eq_ignore_ascii_case(b"content-length") || name.eq_ignore_ascii_case(b"content-type")
+    })
+}
+
 pub(crate) fn write_frame(writer: &mut impl Write, body: &[u8]) -> std::io::Result<()> {
     let mut message = format!("Content-Length: {}\r\n\r\n", body.len()).into_bytes();
     message.extend_from_slice(body);
@@ -97,13 +120,24 @@ mod tests {
     }
 
     #[test]
+    fn output_that_is_not_lsp_is_skipped_between_messages() {
+        let input =
+            b"An error has occurred. See the log file\n/x/1.log.\n\nContent-Length: 2\r\n\r\n{}";
+        assert_eq!(read(input).unwrap(), Some(b"{}".to_vec()));
+        assert_eq!(read(b"garbage\r\n\r\n").unwrap(), None);
+    }
+
+    #[test]
     fn clean_end_is_none() {
         assert_eq!(read(b"").unwrap(), None);
     }
 
     #[test]
     fn rejects_bad_frames() {
-        assert!(matches!(read(b"\r\n{}"), Err(FrameError::MissingLength)));
+        assert!(matches!(
+            read(b"Content-Type: a\r\n\r\n{}"),
+            Err(FrameError::MissingLength)
+        ));
         assert!(matches!(
             read(b"Content-Length: x\r\n\r\n"),
             Err(FrameError::BadLength)
@@ -121,7 +155,7 @@ mod tests {
             Err(FrameError::Truncated)
         ));
         assert!(matches!(
-            read(b"garbage\r\n\r\n"),
+            read(b"Content-Length: 2\r\ngarbage\r\n\r\n{}"),
             Err(FrameError::BadHeader)
         ));
         assert!(matches!(
