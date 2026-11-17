@@ -313,13 +313,6 @@ impl IndexStore {
         transaction.commit()?;
         Ok(())
     }
-
-    pub fn file_count(&self) -> Result<usize, StoreError> {
-        let count: i64 = self
-            .connection
-            .query_row("SELECT count(*) FROM files", [], |row| row.get(0))?;
-        Ok(usize::try_from(count).unwrap_or(0))
-    }
 }
 
 /// `None` for a kind this version does not know, which makes the file parse again.

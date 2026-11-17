@@ -159,11 +159,11 @@ fn a_corrupt_database_is_replaced() {
     let expected = summary(&index_project(&root, &AtomicBool::new(false), |_| {}).unwrap());
     assert_eq!(summary(&run_cached(&root, &scratch.db())), expected);
     assert!(
-        IndexStore::open(&scratch.db())
+        !IndexStore::open(&scratch.db())
             .unwrap()
-            .file_count()
+            .load()
             .unwrap()
-            > 0
+            .is_empty()
     );
 }
 
@@ -174,7 +174,7 @@ fn a_database_with_another_schema_version_is_rebuilt() {
     run_cached(&root, &scratch.db());
     sql(&scratch.db(), "PRAGMA user_version = 9999");
     let store = IndexStore::open(&scratch.db()).unwrap();
-    assert_eq!(store.file_count().unwrap(), 0);
+    assert_eq!(store.load().unwrap().len(), 0);
     drop(store);
     let expected = summary(&index_project(&root, &AtomicBool::new(false), |_| {}).unwrap());
     assert_eq!(summary(&run_cached(&root, &scratch.db())), expected);
@@ -201,7 +201,7 @@ fn cancelling_returns_nothing_and_saves_nothing() {
     let mut store = IndexStore::open(&scratch.db()).unwrap();
     let cancelled = AtomicBool::new(true);
     assert!(index_project_cached(&shop_root(), &mut store, &cancelled, |_| {}).is_none());
-    assert_eq!(store.file_count().unwrap(), 0);
+    assert_eq!(store.load().unwrap().len(), 0);
 }
 
 #[test]
