@@ -10,7 +10,7 @@ mod common;
 use std::path::Path;
 use std::sync::atomic::AtomicBool;
 
-use common::{CART, CHECKOUT, MONEY, PRICED, PRODUCT, caret_in, shop_index, shop_root};
+use common::{CART, CHECKOUT, MONEY, PRICED, PRODUCT, Project, caret_in, shop_index, shop_root};
 use dumbj_index::{Certainty, Index, Site, find_usages, usage_target_at};
 use dumbj_syntax::{Language, parse};
 use dumbj_text::{Buffer, ByteOffset};
@@ -228,5 +228,94 @@ fn usages_in_one_file_for_highlighting() {
         found,
         [(11, true), (16, true), (16, false), (21, false)],
         "the declaration and `total = …` write; `total.add` and `return total` read"
+    );
+}
+
+const PARCELS: &[(&str, &str)] = &[
+    (
+        "src/main/java/p/Box.java",
+        "package p;\npublic class Box {\n    Box(int size) {}\n    void open(String key) {}\n    void open(Integer code) {}\n    void check() {\n        open(\"k\");\n        open(mystery());\n    }\n}\n",
+    ),
+    (
+        "src/main/java/p/Crate.java",
+        "package p;\npublic class Crate {\n    void open(String key) {}\n    void use() {\n        open(\"k\");\n        new Box(1).open(\"k\");\n    }\n}\n",
+    ),
+    (
+        "src/main/kotlin/p/Gift.kt",
+        "package p\n\nclass Gift {\n    constructor(size: Int)\n}\n\nfun wrap() {\n    val count = 1\n    Gift(count)\n}\n\nfun unwrap() {\n    val count = 2\n    Gift(count)\n}\n",
+    ),
+];
+
+#[test]
+fn constructor_calls_use_the_class_and_namesakes_do_not_count() {
+    let project = Project::new(PARCELS);
+    let found = |snippet: &str| {
+        usages_in(
+            &project.root,
+            &project.index,
+            "src/main/java/p/Box.java",
+            snippet,
+        )
+    };
+    assert_eq!(
+        found("public class §Box"),
+        ["Crate.java:6 new Box(1).open(\"k\");"]
+    );
+    assert_eq!(
+        found("void §open(String"),
+        [
+            "Box.java:7 open(\"k\");",
+            "Box.java:8 open(mystery()); ?",
+            "Crate.java:6 new Box(1).open(\"k\");",
+        ]
+    );
+}
+
+#[test]
+fn kotlin_calls_of_a_secondary_constructor_use_the_class() {
+    let project = Project::new(PARCELS);
+    assert_eq!(
+        usages_in(
+            &project.root,
+            &project.index,
+            "src/main/kotlin/p/Gift.kt",
+            "class §Gift"
+        ),
+        ["Gift.kt:9 Gift(count)", "Gift.kt:14 Gift(count)"]
+    );
+}
+
+#[test]
+fn a_local_does_not_reach_its_namesake_in_another_function() {
+    let project = Project::new(PARCELS);
+    assert_eq!(
+        usages_in(
+            &project.root,
+            &project.index,
+            "src/main/kotlin/p/Gift.kt",
+            "val §count = 1"
+        ),
+        ["Gift.kt:9 Gift(count)"]
+    );
+}
+
+#[test]
+fn highlighting_leaves_out_calls_that_may_be_another_overload() {
+    use dumbj_index::usage_highlights;
+    let project = Project::new(PARCELS);
+    let caret = caret_in(
+        &project.root,
+        "src/main/java/p/Box.java",
+        "void §open(String",
+    );
+    let found = usage_highlights(
+        caret.site(&project.index),
+        caret.offset,
+        &AtomicBool::new(false),
+    );
+    assert_eq!(
+        found.len(),
+        2,
+        "the declaration and `open(\"k\")`, not `open(mystery())`"
     );
 }
