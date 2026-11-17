@@ -63,7 +63,6 @@ pub struct Index {
     reader: FileReader,
     by_path: HashMap<PathBuf, FileId>,
     by_name: HashMap<String, Vec<SymbolId>>,
-    by_package: HashMap<String, Vec<FileId>>,
     project: ProjectModel,
     modules: Vec<Option<ModuleId>>,
     /// Each type's direct subtypes, worked out on first use (see `hierarchy`).
@@ -105,13 +104,6 @@ impl Index {
         for (position, file) in index.files.iter().enumerate() {
             let id = FileId(to_u32(position));
             index.by_path.insert(file.path.clone(), id);
-            if let Some(package) = &file.facts.package {
-                index
-                    .by_package
-                    .entry(package.clone())
-                    .or_default()
-                    .push(id);
-            }
             for (symbol_index, symbol) in file.facts.symbols.iter().enumerate() {
                 let symbol_id = SymbolId {
                     file: id,
@@ -127,31 +119,6 @@ impl Index {
         index
     }
 
-    #[must_use]
-    pub fn with_file(&self, file: IndexedFile) -> Self {
-        let mut files: Vec<IndexedFile> = self
-            .files
-            .iter()
-            .filter(|existing| existing.path != file.path)
-            .cloned()
-            .collect();
-        files.push(file);
-        Self::with_reader(files, self.reader.clone())
-    }
-
-    #[must_use]
-    pub fn without_file(&self, path: &Path) -> Self {
-        Self::with_reader(
-            self.files
-                .iter()
-                .filter(|file| file.path != path)
-                .cloned()
-                .collect(),
-            self.reader.clone(),
-        )
-    }
-
-    /// The text of one of this index's files.
     #[must_use]
     pub fn read(&self, path: &Path) -> Option<String> {
         self.reader.read(path)
@@ -222,11 +189,6 @@ impl Index {
                     )
                 })
         })
-    }
-
-    #[must_use]
-    pub fn files_in_package(&self, package: &str) -> &[FileId] {
-        self.by_package.get(package).map_or(&[], Vec::as_slice)
     }
 
     /// The package of the file that declares `id`; empty for the default package.

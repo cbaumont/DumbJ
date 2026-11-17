@@ -5,7 +5,7 @@ mod common;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 use common::{shop_index, shop_root};
-use dumbj_index::{index_file, index_project};
+use dumbj_index::index_project;
 use dumbj_syntax::SymbolKind;
 
 #[test]
@@ -56,9 +56,6 @@ fn looks_symbols_up_by_name_package_and_fqn() {
     assert_eq!(fqns("label"), ["com.shop.core.label"]);
     assert_eq!(fqns("nope"), [] as [String; 0]);
 
-    assert_eq!(index.files_in_package("com.shop.core").len(), 4);
-    assert_eq!(index.files_in_package("com.shop.nope").len(), 0);
-
     let money = index.symbols_by_fqn("com.shop.core.Money");
     assert_eq!(money.len(), 1);
     assert_eq!(index.symbol(money[0]).unwrap().kind, SymbolKind::Class);
@@ -74,33 +71,6 @@ fn looks_symbols_up_by_name_package_and_fqn() {
     assert_eq!(index.parent(currency), Some(money[0]));
     assert_eq!(index.parent(money[0]), None);
     assert_eq!(index.package_of(currency), "com.shop.core");
-}
-
-#[test]
-fn updating_one_file_replaces_its_symbols() {
-    let index = shop_index();
-    let root = shop_root();
-    let path = root.join("core/src/main/java/com/shop/core/Priced.java");
-    let mut file = index_file(&root, &path, &AtomicBool::new(false));
-    assert_eq!(
-        file.relative,
-        "core/src/main/java/com/shop/core/Priced.java"
-    );
-    file.facts.symbols.retain(|symbol| symbol.name != "isFree");
-    let updated = index.with_file(file);
-    assert_eq!(updated.file_count(), index.file_count());
-    assert_eq!(updated.symbols_named("isFree").len(), 0);
-    assert_eq!(
-        index.symbols_named("isFree").len(),
-        1,
-        "the old snapshot is untouched"
-    );
-    assert_eq!(updated.symbol_count(), index.symbol_count() - 1);
-
-    let removed = index.without_file(&path);
-    assert_eq!(removed.file_count(), index.file_count() - 1);
-    assert_eq!(removed.symbols_named("Priced").len(), 0);
-    assert_eq!(removed.file_by_path(&path), None);
 }
 
 #[test]
