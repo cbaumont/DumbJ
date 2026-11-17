@@ -42,7 +42,6 @@ pub(crate) fn run_raw(
     run_raw_env(workdir, args, &[], cancelled)
 }
 
-/// `run_raw` with extra environment variables for the child.
 pub(crate) fn run_raw_env(
     workdir: &Path,
     args: &[&str],
@@ -52,7 +51,6 @@ pub(crate) fn run_raw_env(
     run_child(workdir, args, env, None, cancelled)
 }
 
-/// `run`, with `input` written to the child's stdin.
 pub(crate) fn run_input(
     workdir: &Path,
     args: &[&str],
@@ -109,7 +107,6 @@ fn run_child(
     }))
 }
 
-/// Like `run_raw`, but a failing exit status is an error and only stdout is returned.
 pub(crate) fn run(
     workdir: &Path,
     args: &[&str],

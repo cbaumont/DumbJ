@@ -54,7 +54,6 @@ struct AddReviewData {
 }
 
 impl Client {
-    /// Creates a pending review (no event) and returns its id.
     pub fn start_review(&self, pull_id: &str) -> Result<String, ReviewError> {
         let data: AddReviewData = self.graphql(
             ADD_REVIEW_MUTATION,
@@ -82,7 +81,6 @@ impl Client {
         )
     }
 
-    /// Posts a review with an event and no pending comments.
     pub fn add_review(
         &self,
         pull_id: &str,

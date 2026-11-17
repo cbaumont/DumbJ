@@ -1,6 +1,3 @@
-//! Prints a pull request's details and review threads with the `gh` token, as a read-only check
-//! against the real API: `cargo run -p dumbj-review --example threads -- <remote-url> <number>`.
-
 #![expect(clippy::print_stdout, reason = "a command-line check")]
 
 use dumbj_review::{Client, RepoId, ReviewError, token};

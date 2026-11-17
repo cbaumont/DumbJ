@@ -5,7 +5,7 @@ use crate::revision::check_revision;
 use crate::{Branch, Repository, VcsError};
 
 impl Repository {
-    /// Switches the working tree to `branch`. A remote-tracking branch (`origin/topic`) checks
+    /// A remote-tracking branch (`origin/topic`) checks
     /// out the local branch of the same name, creating it to track the remote one when it
     /// does not exist. Fails, leaving everything as it was, when local changes would be
     /// overwritten; the error carries git's message.
@@ -35,8 +35,7 @@ impl Repository {
         }
     }
 
-    /// Fetches from all remotes and prunes deleted remote branches. Never prompts for
-    /// credentials. Polls `cancelled`; `Ok(None)` when cancelled.
+    /// Never prompts for credentials. Polls `cancelled`; `Ok(None)` when cancelled.
     pub fn fetch(&self, cancelled: &AtomicBool) -> Result<Option<()>, VcsError> {
         let args = ["fetch", "--all", "--prune"];
         let env = [("GIT_TERMINAL_PROMPT", "0")];

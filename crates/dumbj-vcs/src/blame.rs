@@ -8,7 +8,6 @@ use crate::{Repository, VcsError};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BlameLine {
-    /// Full hex id of the commit that last changed the line.
     pub commit: String,
     pub author: String,
     /// Author time, seconds since the Unix epoch.
@@ -17,9 +16,8 @@ pub struct BlameLine {
 }
 
 impl Repository {
-    /// Who last changed each line of `path` (absolute or relative to the workdir) as it is in
-    /// `revision`: one entry per line, in order. Empty when the revision or the file does not
-    /// exist there. Polls `cancelled`; `Ok(None)` when cancelled.
+    /// Empty when the revision or the file does not exist there. Polls `cancelled`; `Ok(None)` when
+    /// cancelled.
     pub fn blame(
         &self,
         revision: &str,

@@ -1,5 +1,3 @@
-//! DumbJ application entry point.
-//!
 //! Usage: `dumbj [PATH]...`. A folder is opened as the project and files are opened in
 //! tabs; with only files, the first file's folder becomes the project.
 //! Set `DUMBJ_LOG` to a `tracing` filter (for example `debug` or `dumbj_ui=trace`) for

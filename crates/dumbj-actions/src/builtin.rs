@@ -11,9 +11,7 @@ const DUMBJ_LINUX_XML: &str = include_str!("../../../keymaps/dumbj-linux.xml");
 const DUMBJ_MACOS_XML: &str = include_str!("../../../keymaps/dumbj-macos.xml");
 const ACTION_ID_MAP_TOML: &str = include_str!("../../../keymaps/action-id-map.toml");
 
-/// The default keymap on Linux: "macOS For All" plus the shortcuts of DumbJ's own actions.
 pub const DUMBJ_LINUX: &str = "DumbJ";
-/// The default keymap on macOS: IntelliJ's "macOS" keymap plus DumbJ's own actions.
 pub const DUMBJ_MACOS: &str = "DumbJ macOS";
 
 #[derive(Debug, Error)]
@@ -31,7 +29,7 @@ pub enum Platform {
 }
 
 impl Platform {
-    /// The platform this binary was compiled for. Anything that is not macOS counts as Linux.
+    /// Anything that is not macOS counts as Linux.
     #[must_use]
     pub fn current() -> Self {
         if cfg!(target_os = "macos") {

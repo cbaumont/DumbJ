@@ -46,7 +46,6 @@ impl ActionIdMap {
         self.by_intellij_id.get(intellij_id).copied()
     }
 
-    /// The IntelliJ action IDs that map to `action`, sorted.
     pub fn intellij_ids(&self, action: Action) -> impl Iterator<Item = &str> {
         self.by_intellij_id
             .iter()
@@ -92,7 +91,6 @@ impl Bindings {
         &self.keymap_name
     }
 
-    /// The shortcuts bound to `action`; empty if it is unbound.
     #[must_use]
     pub fn shortcuts(&self, action: Action) -> &[Shortcut] {
         self.by_action.get(&action).map_or(&[], Vec::as_slice)
@@ -104,7 +102,6 @@ impl Bindings {
             .map(|(action, shortcuts)| (*action, shortcuts.as_slice()))
     }
 
-    /// Debug report: IntelliJ actions the keymap binds that DumbJ has no action for, sorted.
     #[must_use]
     pub fn unmapped_intellij_actions(&self) -> &[String] {
         &self.unmapped

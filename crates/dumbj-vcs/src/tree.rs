@@ -9,9 +9,7 @@ use crate::{Repository, VcsError};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TreeFile {
-    /// Relative to the workdir.
     pub path: PathBuf,
-    /// The blob id.
     pub id: String,
 }
 
@@ -27,7 +25,6 @@ pub fn revision_path(workdir: &Path, commit: &str, relative: &Path) -> PathBuf {
     PathBuf::from(root).join(relative)
 }
 
-/// The workdir, commit and relative path of a path made by [`revision_path`].
 #[must_use]
 pub fn split_revision_path(path: &Path) -> Option<(PathBuf, String, PathBuf)> {
     let text = path.to_str()?;
@@ -45,8 +42,7 @@ pub fn split_revision_path(path: &Path) -> Option<(PathBuf, String, PathBuf)> {
 }
 
 impl Repository {
-    /// Every regular file of `revision`, in tree order. Symbolic links and submodules are
-    /// left out. Polls `cancelled`; `Ok(None)` when cancelled.
+    /// Symbolic links and submodules are left out. Polls `cancelled`; `Ok(None)` when cancelled.
     pub fn files_at(
         &self,
         revision: &str,

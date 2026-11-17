@@ -4,7 +4,6 @@ use std::fmt;
 pub enum Scope {
     Window,
     Editor,
-    /// Caret movement and editing in whatever has focus: an editor, a text field or a list.
     Text,
 }
 
@@ -952,12 +951,10 @@ const REGISTRY: &[ActionInfo] = &[
 ];
 
 impl Action {
-    /// Every action, in the order menus and documentation list them.
     pub fn all() -> impl Iterator<Item = Self> {
         REGISTRY.iter().map(|info| info.action)
     }
 
-    /// Whether the action belongs to pull request review.
     #[must_use]
     pub fn is_pull_request_action(self) -> bool {
         self.is_thread_action()
@@ -978,7 +975,6 @@ impl Action {
             )
     }
 
-    /// Whether the action works on the review thread at the caret.
     #[must_use]
     pub fn is_thread_action(self) -> bool {
         matches!(
@@ -1012,13 +1008,11 @@ impl Action {
         self.info().scope
     }
 
-    /// The digit of `ToggleBookmark0` to `ToggleBookmark9`.
     #[must_use]
     pub fn toggle_bookmark_digit(self) -> Option<char> {
         digit_of(self, Self::ToggleBookmark0)
     }
 
-    /// The digit of `GotoBookmark0` to `GotoBookmark9`.
     #[must_use]
     pub fn goto_bookmark_digit(self) -> Option<char> {
         digit_of(self, Self::GotoBookmark0)

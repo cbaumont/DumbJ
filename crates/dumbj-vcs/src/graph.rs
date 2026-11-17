@@ -1,6 +1,5 @@
 use crate::Commit;
 
-/// One row of the commit graph, for the commit at the same index.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GraphRow {
     /// The lane (column, from 0 on the left) the commit's node is in.
@@ -88,7 +87,6 @@ pub fn layout(commits: &[Commit]) -> Vec<GraphRow> {
     rows
 }
 
-/// The number of lanes the widest row uses; 0 for no rows.
 pub fn width(rows: &[GraphRow]) -> usize {
     rows.iter()
         .flat_map(|row| {

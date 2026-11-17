@@ -53,8 +53,7 @@ pub struct Repository {
 }
 
 impl Repository {
-    /// The repository whose working tree contains `path`; `Ok(None)` when there is none (or
-    /// it is bare).
+    /// `Ok(None)` when there is none (or it is bare).
     pub fn discover(path: &Path) -> Result<Option<Self>, VcsError> {
         let repo = match gix::discover(path) {
             Ok(repo) => repo,
@@ -74,7 +73,6 @@ impl Repository {
         gix::open(&self.workdir).map_err(git_err)
     }
 
-    /// The current branch name, or `None` for a detached HEAD.
     pub fn branch(&self) -> Result<Option<String>, VcsError> {
         let repo = self.open()?;
         let name = repo.head_name().map_err(git_err)?;
@@ -88,7 +86,6 @@ impl Repository {
         Ok(id)
     }
 
-    /// The content of `path` (absolute, or relative to the workdir) in the HEAD commit.
     /// `Ok(None)` when the file is not in HEAD or is not valid UTF-8.
     pub fn head_text(&self, path: &Path) -> Result<Option<String>, VcsError> {
         self.text_at("HEAD", path)

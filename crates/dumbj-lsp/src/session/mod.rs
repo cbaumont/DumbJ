@@ -372,8 +372,7 @@ impl Drop for StopOnDrop {
     }
 }
 
-/// A supervised language server with document synchronisation. Clones share it; dropping the
-/// last clone stops the server.
+/// Dropping the last clone stops the server.
 #[derive(Clone)]
 pub struct Session {
     shared: Arc<Shared>,
@@ -451,7 +450,6 @@ impl Session {
         lock(&self.shared.server).clone()
     }
 
-    /// What the server last reported for `path`; empty while no server runs.
     #[must_use]
     pub fn diagnostics(&self, path: &Path) -> Arc<Vec<Diagnostic>> {
         lock(&self.shared.diagnostics)
@@ -460,7 +458,6 @@ impl Session {
             .unwrap_or_default()
     }
 
-    /// How the server names its semantic tokens; `None` when it has none to give.
     #[must_use]
     pub fn semantic_legend(&self) -> Option<lsp_types::SemanticTokensLegend> {
         lock(&self.shared.legend).clone()

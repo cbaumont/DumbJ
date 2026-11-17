@@ -189,8 +189,6 @@ fn default_linux_bindings_dispatch() {
     assert_eq!(fired, [None, None, None, Some(Action::SearchEverywhere)]);
 }
 
-/// `docs/KEYMAP.md` is generated. Regenerate it with
-/// `DUMBJ_REGENERATE_KEYMAP=1 cargo nextest run -p dumbj-actions keymap_md_is_up_to_date`.
 #[test]
 fn keymap_md_is_up_to_date() {
     let linux = builtin::default_bindings(Platform::Linux).unwrap();

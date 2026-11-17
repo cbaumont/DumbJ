@@ -1,6 +1,3 @@
-//! Lists the open pull requests of a repository with the `gh` token, as a check against
-//! the real API: `cargo run -p dumbj-review --example pulls -- <remote-url>`.
-
 #![expect(clippy::print_stdout, reason = "a command-line check")]
 
 use dumbj_review::{Client, PrFilter, RepoId, ReviewError, token};

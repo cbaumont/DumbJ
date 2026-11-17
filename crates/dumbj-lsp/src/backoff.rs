@@ -15,7 +15,6 @@ impl Backoff {
         Self::default()
     }
 
-    /// Records a failure and returns how long to wait before restarting, or `None` to give up.
     pub(crate) fn next_delay(&mut self) -> Option<Duration> {
         if self.failures >= MAX_FAILURES {
             return None;
@@ -25,7 +24,6 @@ impl Backoff {
         Some(delay)
     }
 
-    /// Call once a server has stayed up long enough to count as healthy.
     pub(crate) fn reset(&mut self) {
         self.failures = 0;
     }

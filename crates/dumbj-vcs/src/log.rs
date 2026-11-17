@@ -137,7 +137,6 @@ impl Repository {
         Ok(git::run(&self.workdir, &args, cancelled)?.map(|out| parse_log(&out)))
     }
 
-    /// One commit; `Ok(None)` when `revision` names nothing.
     pub fn commit(&self, revision: &str) -> Result<Option<Commit>, VcsError> {
         let Some(id) = self.resolve(revision)? else {
             return Ok(None);

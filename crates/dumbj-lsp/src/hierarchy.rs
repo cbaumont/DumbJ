@@ -63,7 +63,6 @@ impl Request for Subtypes {
     const METHOD: &'static str = "typeHierarchy/subtypes";
 }
 
-/// The type at `position` of `path`, as the root of a type hierarchy.
 pub fn type_hierarchy_prepare(
     server: &Server,
     path: &Path,
@@ -98,7 +97,6 @@ pub fn subtypes(
     Ok(items.unwrap_or_default())
 }
 
-/// The callable at `position` of `path`, as the root of a call hierarchy.
 pub fn call_hierarchy_prepare(
     server: &Server,
     path: &Path,
@@ -115,7 +113,6 @@ pub fn call_hierarchy_prepare(
     Ok(items.unwrap_or_default())
 }
 
-/// The callers of `item`; the call-site ranges are dropped.
 pub fn incoming_calls(
     server: &Server,
     item: CallHierarchyItem,
@@ -136,7 +133,6 @@ pub fn incoming_calls(
         .collect())
 }
 
-/// The callees of `item`; the call-site ranges are dropped.
 pub fn outgoing_calls(
     server: &Server,
     item: CallHierarchyItem,

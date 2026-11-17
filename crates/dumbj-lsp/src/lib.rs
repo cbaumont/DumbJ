@@ -1,5 +1,4 @@
 //! DumbJ's Language Server Protocol client: blocking and thread-based, no async runtime.
-//! A [`Server`] talks to one language server over any pair of byte streams.
 
 mod backoff;
 mod error;

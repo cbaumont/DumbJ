@@ -33,7 +33,6 @@ pub struct RecentLocation {
     pub column: usize,
     /// Byte offset in the file, so the place reopens exactly while the file is unchanged.
     pub offset: usize,
-    /// The line of code at the location, as it was when the caret left it.
     pub text: String,
 }
 
@@ -42,10 +41,8 @@ pub struct Bookmark {
     pub path: PathBuf,
     /// One-based.
     pub line: usize,
-    /// The line of code when the bookmark was set, to list it without reading the file.
     #[serde(default)]
     pub text: String,
-    /// A digit or letter that jumps to the bookmark; anonymous bookmarks have none.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub mnemonic: Option<char>,
 }
@@ -61,10 +58,8 @@ pub struct ProjectState {
     /// In creation order.
     #[serde(default)]
     pub bookmarks: Vec<Bookmark>,
-    /// The local review in progress.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub review: Option<Review>,
-    /// Language servers are not started for this project.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub smart_off: bool,
 }
@@ -155,7 +150,6 @@ impl ProjectState {
             .find(|bookmark| bookmark.mnemonic == Some(mnemonic))
     }
 
-    /// Adds an anonymous bookmark, or removes whatever bookmark the line has.
     /// Returns whether the line is bookmarked afterwards.
     pub fn toggle_bookmark(&mut self, path: &Path, line: usize, text: &str) -> bool {
         let before = self.bookmarks.len();

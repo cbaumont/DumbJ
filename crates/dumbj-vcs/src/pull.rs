@@ -11,12 +11,10 @@ pub struct Remote {
     pub url: String,
 }
 
-/// The commits a fetched pull request is reviewed between.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PullRefs {
     /// `refs/dumbj/pr/<n>/base`: the tip of the branch the pull request targets.
     pub base: String,
-    /// `refs/dumbj/pr/<n>/head`.
     pub head: String,
 }
 
@@ -41,7 +39,6 @@ fn check_name(name: &str) -> Result<(), VcsError> {
 }
 
 impl Repository {
-    /// The configured remotes with their fetch URLs, sorted by name.
     pub fn remotes(&self) -> Result<Vec<Remote>, VcsError> {
         let args = ["config", "--get-regexp", r"^remote\..*\.url$"];
         let Some(out) = git::run_raw(&self.workdir, &args, &git::never())? else {
@@ -63,9 +60,8 @@ impl Repository {
         Ok(remotes)
     }
 
-    /// Fetches pull request `number` of `remote` into `refs/dumbj/pr/<number>/head` and the
-    /// tip of `base_branch` into `refs/dumbj/pr/<number>/base`. Only these refs and their
-    /// objects are written. Never prompts for credentials. Polls `cancelled`; `Ok(None)`
+    /// Writes only `refs/dumbj/pr/<number>/head`, `.../base` and their
+    /// objects. Never prompts for credentials. Polls `cancelled`; `Ok(None)`
     /// when cancelled.
     pub fn fetch_pull(
         &self,
@@ -102,7 +98,6 @@ impl Repository {
         }
     }
 
-    /// The commits of a pull request fetched earlier; `Ok(None)` when it was not.
     pub fn pull_refs(&self, number: u64) -> Result<Option<PullRefs>, VcsError> {
         let base = self.resolve(&pull_base_ref(number))?;
         let head = self.resolve(&pull_head_ref(number))?;

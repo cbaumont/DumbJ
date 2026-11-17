@@ -63,7 +63,6 @@ impl ServerKind {
 pub struct Environment {
     pub path: Option<OsString>,
     pub java_home: Option<PathBuf>,
-    /// Directories holding one JDK per subdirectory, such as sdkman's and `/usr/lib/jvm`.
     pub jdk_dirs: Vec<PathBuf>,
 }
 
@@ -136,7 +135,6 @@ fn jdk_major(home: &Path) -> Option<u32> {
     }
 }
 
-/// The JDK homes in `env.jdk_dirs`, by canonical path.
 fn installed_jdks(env: &Environment) -> Vec<PathBuf> {
     let mut homes: Vec<PathBuf> = env
         .jdk_dirs

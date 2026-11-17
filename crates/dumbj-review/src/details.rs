@@ -67,7 +67,6 @@ pub struct PullRequestDetails {
     pub head_oid: String,
     pub base_oid: String,
     pub review_decision: Option<ReviewDecision>,
-    /// Id of the viewer's pending review, if any.
     pub pending_review: Option<String>,
     /// Checks of the last commit's status rollup (first 100).
     pub checks: Vec<Check>,

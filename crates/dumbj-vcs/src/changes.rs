@@ -12,7 +12,6 @@ use crate::{FileStatus, Repository, VcsError};
 pub struct Change {
     /// Relative to the workdir; the new path for a rename.
     pub path: PathBuf,
-    /// The path before a rename.
     pub old_path: Option<PathBuf>,
     /// `Added`, `Modified`, `Deleted`, `Renamed`, or `Untracked` for working-tree files git
     /// does not know yet.
@@ -20,10 +19,8 @@ pub struct Change {
 }
 
 impl Repository {
-    /// The files that differ between `base` and `head`, sorted by path, with renames
-    /// detected. `head = None` compares `base` with the working tree (tracked changes,
-    /// staged or not, plus untracked files as `Untracked`). Polls `cancelled`; `Ok(None)`
-    /// when cancelled.
+    /// `head = None` compares `base` with the working tree, untracked files included as `Untracked`.
+    /// Polls `cancelled`; `Ok(None)` when cancelled.
     pub fn changed_files(
         &self,
         base: &str,
@@ -64,10 +61,8 @@ impl Repository {
 const PATHS_PER_CALL: usize = 500;
 
 impl Repository {
-    /// The git blob id of each of `paths` (relative to the workdir), in order: in `revision`,
-    /// or of the working-tree file when `revision` is `None`. `None` for a path that does
-    /// not exist there, is not a regular file, or is not valid UTF-8. Nothing is written to
-    /// the repository. Polls `cancelled`; `Ok(None)` when cancelled.
+    /// `None` for a path that does not exist there, is not a regular file, or is not valid UTF-8.
+    /// Polls `cancelled`; `Ok(None)` when cancelled.
     pub fn content_ids(
         &self,
         revision: Option<&str>,

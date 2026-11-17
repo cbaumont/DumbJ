@@ -12,7 +12,6 @@ use crate::{LspError, Server, path_to_uri};
 /// A file's modification time in nanoseconds and its length.
 pub(crate) type Stamp = (u128, u64);
 
-/// The files a Java or Kotlin server reads: sources and build files.
 #[must_use]
 pub fn is_watched(path: &Path) -> bool {
     let name = path
@@ -82,9 +81,7 @@ fn save(record: &Path, files: &BTreeMap<PathBuf, Stamp>) -> std::io::Result<()> 
     fs::rename(temporary, record)
 }
 
-/// Tells `server` which of `files` were created, changed or deleted since the list kept in
-/// `record`, then keeps `files` there. Without a record the server is assumed to have just
-/// read everything, and nothing is sent. Returns how many events were sent.
+/// Without a record the server is assumed to have just read everything, and nothing is sent.
 pub fn sync_files(
     server: &Server,
     record: &Path,

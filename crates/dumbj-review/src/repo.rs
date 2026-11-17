@@ -6,7 +6,6 @@ pub struct RepoId {
 }
 
 impl RepoId {
-    /// Parses a git remote URL (scp-like, ssh, https, git). `None` for local paths or anything else.
     pub fn from_remote_url(url: &str) -> Option<Self> {
         let url = url.trim();
         let (host, path) = if let Some((_, rest)) = url.split_once("://") {

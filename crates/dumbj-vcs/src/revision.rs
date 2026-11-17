@@ -8,9 +8,7 @@ pub struct Branch {
     /// `main`, or `origin/main` for a remote-tracking branch.
     pub name: String,
     pub remote: bool,
-    /// Whether HEAD is on this branch.
     pub current: bool,
-    /// Full hex id of the tip commit.
     pub tip: String,
 }
 
@@ -23,8 +21,6 @@ pub(crate) fn check_revision(revision: &str) -> Result<(), VcsError> {
 }
 
 impl Repository {
-    /// The full hex id of the commit `revision` names (a branch, tag, hex prefix, `HEAD~2`,
-    /// ...); `Ok(None)` when it names nothing.
     pub fn resolve(&self, revision: &str) -> Result<Option<String>, VcsError> {
         if check_revision(revision).is_err() {
             return Ok(None);
@@ -40,8 +36,7 @@ impl Repository {
         Ok(parse_id(&out.stdout))
     }
 
-    /// The content of `path` (absolute or relative to the workdir) in `revision`. `Ok(None)`
-    /// when the revision or the file does not exist there, or the file is not valid UTF-8.
+    /// `Ok(None)` also when the file is not valid UTF-8.
     pub fn text_at(&self, revision: &str, path: &Path) -> Result<Option<String>, VcsError> {
         let Some(relative) = self.relative(path) else {
             return Ok(None);
@@ -63,8 +58,6 @@ impl Repository {
         }
     }
 
-    /// The best common ancestor of two revisions, as a full hex id; `Ok(None)` when there is
-    /// none.
     pub fn merge_base(&self, a: &str, b: &str) -> Result<Option<String>, VcsError> {
         let (Some(a), Some(b)) = (self.resolve(a)?, self.resolve(b)?) else {
             return Ok(None);
@@ -76,8 +69,7 @@ impl Repository {
         }
     }
 
-    /// Local and remote-tracking branches, local first, each group sorted by name. `HEAD`
-    /// pseudo-refs of remotes (`origin/HEAD`) are left out.
+    /// Local first, each group sorted by name; remote `HEAD` pseudo-refs (`origin/HEAD`) are left out.
     pub fn branches(&self) -> Result<Vec<Branch>, VcsError> {
         let args = [
             "for-each-ref",

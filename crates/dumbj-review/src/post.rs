@@ -1,6 +1,5 @@
 use crate::{Client, NewThread, ReviewError, ReviewEvent};
 
-/// A comment to post: a new thread or a reply to one.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Outgoing {
     Thread(NewThread),
@@ -110,8 +109,6 @@ mod tests {
         }
     }
 
-    /// Posts `comments` against canned responses and returns the outcomes and, for each
-    /// request, its mutation name and the review id it carried.
     fn run(
         pending: Option<&str>,
         comments: &[OutgoingComment],

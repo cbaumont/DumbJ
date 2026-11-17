@@ -1,5 +1,3 @@
-//! The local review in progress: which files were viewed and the notes written on them.
-
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
@@ -28,7 +26,6 @@ pub struct ReviewNote {
     /// One-based, inclusive, not before `first_line`.
     pub last_line: usize,
     pub text: String,
-    /// The source lines the note is about.
     #[serde(default)]
     pub excerpt: String,
 }
@@ -39,7 +36,6 @@ impl ReviewNote {
     }
 }
 
-/// A comment written for a pull request that GitHub has not confirmed yet.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DraftComment {
     pub id: u64,
@@ -59,7 +55,6 @@ pub struct DraftComment {
     pub single: bool,
 }
 
-/// The pull request a review is of.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PullRequestRef {
     pub host: String,
@@ -108,7 +103,6 @@ impl Review {
             .any(|file| file.path == path && file.fingerprint == fingerprint)
     }
 
-    /// Marks or unmarks; marking replaces any older fingerprint for the path.
     pub fn set_viewed(&mut self, path: &Path, fingerprint: &str, viewed: bool) {
         self.viewed.retain(|file| file.path != path);
         if viewed {
@@ -160,7 +154,6 @@ impl Review {
         &self.drafts
     }
 
-    /// Keeps `draft` under a new id, which is returned.
     pub fn add_draft(&mut self, mut draft: DraftComment) -> u64 {
         draft.id = self.drafts.iter().map(|draft| draft.id).max().unwrap_or(0) + 1;
         draft.last_line = draft.last_line.max(draft.first_line);

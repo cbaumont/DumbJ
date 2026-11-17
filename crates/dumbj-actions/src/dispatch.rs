@@ -11,7 +11,6 @@ const DOUBLE_TAP_STEP: Duration = Duration::from_millis(400);
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Dispatch {
     Action(Action),
-    /// The stroke starts a two-stroke chord; waiting for the second stroke. Consumed.
     Pending,
     /// The stroke did not complete the pending chord. Consumed, nothing runs.
     ChordCancelled,
@@ -131,8 +130,8 @@ impl KeyDispatcher {
             .find(|action| enabled(*action))
     }
 
-    /// Feeds a change in the held modifiers. Returns an action when a modifier has been
-    /// tapped twice (press, release, press, release) with nothing else in between.
+    /// Returns an action when a modifier has been tapped twice (press, release, press, release)
+    /// with nothing else in between.
     pub fn modifiers_changed(
         &mut self,
         modifiers: Modifiers,

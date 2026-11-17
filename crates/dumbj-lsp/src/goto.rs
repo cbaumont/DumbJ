@@ -16,7 +16,7 @@ pub enum GotoKind {
     Implementation,
 }
 
-/// Where a server says a symbol is; the range is in UTF-16 units of that document.
+/// The range is in UTF-16 units of that document.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Place {
     pub uri: Uri,
@@ -41,8 +41,6 @@ pub(crate) fn position_params(path: &Path, position: Position) -> TextDocumentPo
     }
 }
 
-/// Asks where the symbol at `position` of `path` is declared, typed or implemented.
-/// Blocks for up to `timeout`.
 pub fn goto(
     server: &Server,
     kind: GotoKind,
@@ -76,7 +74,6 @@ pub fn goto(
     })
 }
 
-/// Every reference to the symbol at `position`, without its declaration.
 pub fn references(
     server: &Server,
     path: &Path,
@@ -110,8 +107,6 @@ fn marked(text: lsp_types::MarkedString) -> String {
     }
 }
 
-/// The documentation of the symbol at `position` as Markdown; `None` when the server has
-/// nothing to say.
 pub fn hover(
     server: &Server,
     path: &Path,

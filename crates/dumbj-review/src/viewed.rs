@@ -46,7 +46,6 @@ struct File {
 }
 
 impl Client {
-    /// Paths the viewer marked as viewed, following pagination of the pull request's files.
     pub fn viewed_files(&self, repo: &RepoId, number: u64) -> Result<Vec<String>, ReviewError> {
         let mut viewed = Vec::new();
         let mut after: Option<String> = None;

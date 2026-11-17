@@ -25,8 +25,6 @@ pub(crate) fn run(
     Ok(git::run(workdir, &args, cancelled)?.map(|out| parse_porcelain_v2(&out)))
 }
 
-/// Parses `git status --porcelain=v2 -z` output. Ignored entries, headers and unknown
-/// records are skipped.
 pub(crate) fn parse_porcelain_v2(raw: &[u8]) -> Vec<(PathBuf, FileStatus)> {
     let mut out = Vec::new();
     let mut records = raw.split(|&b| b == 0).filter(|r| !r.is_empty());

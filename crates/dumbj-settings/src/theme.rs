@@ -39,7 +39,6 @@ impl Rgba {
         u32::from_be_bytes([self.r, self.g, self.b, self.a])
     }
 
-    /// WCAG relative luminance, ignoring alpha.
     #[must_use]
     pub fn luminance(self) -> f64 {
         let linear = |channel: u8| {
@@ -53,7 +52,6 @@ impl Rgba {
         0.2126 * linear(self.r) + 0.7152 * linear(self.g) + 0.0722 * linear(self.b)
     }
 
-    /// WCAG contrast ratio between two opaque colours, from 1 to 21.
     #[must_use]
     pub fn contrast(self, other: Self) -> f64 {
         let (a, b) = (self.luminance(), other.luminance());
@@ -239,7 +237,6 @@ pub struct Theme {
     syntax: HashMap<HighlightKind, Rgba>,
 }
 
-/// Resolves the roles in one table. `keys` lists every role the table must define.
 fn resolve<R: Copy + Eq + std::hash::Hash>(
     table: &BTreeMap<String, RoleValue>,
     palette: &HashMap<&str, Rgba>,

@@ -171,7 +171,6 @@ impl ResolvedKeymap {
         &self.name
     }
 
-    /// The shortcuts bound to an IntelliJ action ID; empty if it has none.
     #[must_use]
     pub fn shortcuts(&self, intellij_action_id: &str) -> &[Shortcut] {
         self.actions
@@ -179,7 +178,6 @@ impl ResolvedKeymap {
             .map_or(&[], Vec::as_slice)
     }
 
-    /// All bound IntelliJ action IDs with their shortcuts, sorted by ID.
     pub fn iter(&self) -> impl Iterator<Item = (&str, &[Shortcut])> {
         self.actions
             .iter()
@@ -214,7 +212,6 @@ impl KeymapLibrary {
         self.files.get(name)
     }
 
-    /// Applies the parent chain of the keymap called `name`, root first.
     pub fn resolve(&self, name: &str) -> Result<ResolvedKeymap, KeymapError> {
         let mut chain = Vec::new();
         let mut current = self

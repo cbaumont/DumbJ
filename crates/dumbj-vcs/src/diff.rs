@@ -9,7 +9,7 @@ pub enum HunkKind {
     Deleted,
 }
 
-/// A run of changed lines. Line numbers are zero-based.
+/// Line numbers are zero-based.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Hunk {
     pub kind: HunkKind,
@@ -20,8 +20,6 @@ pub struct Hunk {
     pub new: Range<usize>,
 }
 
-/// The hunks that turn `base` into `current`, in order.
-///
 /// Lines are split on `\n` and keep their terminator, so a trailing `\r` is part of the line
 /// (a CRLF/LF change shows as modified) and `"a\nb"` against `"a\nb\n"` is one `Modified`
 /// hunk covering the last line.
@@ -36,8 +34,7 @@ pub struct DiffOptions {
     pub ignore_whitespace: bool,
 }
 
-/// Like `line_hunks`, honouring `options`. With `ignore_whitespace` a missing final newline
-/// does not count as a change either.
+/// With `ignore_whitespace` a missing final newline does not count as a change either.
 pub fn line_hunks_with(base: &str, current: &str, options: DiffOptions) -> Vec<Hunk> {
     if base == current {
         return Vec::new();
@@ -82,8 +79,6 @@ fn compute_hunks(base: &str, current: &str) -> Vec<Hunk> {
         .collect()
 }
 
-/// The text of `base`'s lines `hunk.old`, each with its line terminator, for putting them
-/// back. Empty for `Added`.
 pub fn old_text(base: &str, hunk: &Hunk) -> String {
     base.split_inclusive('\n')
         .skip(hunk.old.start)

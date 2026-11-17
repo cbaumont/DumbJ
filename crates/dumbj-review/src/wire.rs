@@ -38,7 +38,6 @@ pub(crate) struct PageInfo {
 }
 
 impl PageInfo {
-    /// The cursor of the next page, or `None` on the last one.
     pub(crate) fn next(&self) -> Result<Option<String>, ReviewError> {
         if !self.has_next_page {
             return Ok(None);

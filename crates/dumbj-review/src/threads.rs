@@ -84,7 +84,6 @@ pub struct ReviewComment {
     pub body: String,
     pub created_at: String,
     pub url: String,
-    /// The comment belongs to a review that is not submitted yet.
     pub pending: bool,
 }
 

@@ -9,7 +9,7 @@ use lsp_types::{
 
 use crate::{LspError, Server, path_to_uri};
 
-/// One token with absolute UTF-16 coordinates and its type and modifiers named.
+/// Absolute UTF-16 coordinates.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SemanticToken {
     pub line: u32,
@@ -56,7 +56,6 @@ pub(crate) fn decode(
     tokens
 }
 
-/// The semantic tokens of the whole of `path`, named after the server's `legend`.
 pub fn semantic_tokens(
     server: &Server,
     path: &Path,
@@ -151,7 +150,6 @@ pub struct Inlay {
     pub label: String,
 }
 
-/// The inlay hints of the lines of `path` before `end`.
 pub fn inlay_hints(
     server: &Server,
     path: &Path,

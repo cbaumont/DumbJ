@@ -56,7 +56,6 @@ impl Modifiers {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Key {
-    /// A letter (lower case), digit or punctuation key on the main block.
     Char(char),
     Enter,
     Tab,
@@ -74,9 +73,7 @@ pub enum Key {
     Left,
     Right,
     ContextMenu,
-    /// F1 to F24.
     F(u8),
-    /// Numeric keypad digit 0 to 9.
     Numpad(u8),
     NumpadAdd,
     NumpadSubtract,
@@ -85,7 +82,6 @@ pub enum Key {
 }
 
 impl Key {
-    /// Parses an AWT virtual-key name without the `VK_` prefix, e.g. `OPEN_BRACKET`.
     fn from_awt(name: &str) -> Option<Self> {
         let upper = name.to_ascii_uppercase();
         let key = match upper.as_str() {
@@ -372,7 +368,6 @@ impl Shortcut {
         }
     }
 
-    /// Formats the shortcut for display, or `None` if it is an unsupported kind.
     #[must_use]
     pub fn display(&self, style: ShortcutStyle) -> Option<String> {
         match self {
