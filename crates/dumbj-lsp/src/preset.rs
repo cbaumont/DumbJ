@@ -160,7 +160,11 @@ pub fn detect(kind: ServerKind, root: &Path, data_dir: &Path, env: &Environment)
             "-data".to_owned(),
             data_dir.join("jdtls").to_string_lossy().into_owned(),
         ],
-        ServerKind::KotlinLsp => vec!["--stdio".to_owned()],
+        ServerKind::KotlinLsp => vec![
+            "--stdio".to_owned(),
+            "--system-path".to_owned(),
+            data_dir.join("kotlin-lsp").to_string_lossy().into_owned(),
+        ],
     };
     let env = home.map_or_else(Vec::new, |home| {
         vec![("JAVA_HOME".to_owned(), home.to_string_lossy().into_owned())]
@@ -498,7 +502,14 @@ mod tests {
         else {
             panic!("not ready");
         };
-        assert_eq!(kotlin.args, ["--stdio".to_owned()]);
+        assert_eq!(
+            kotlin.args,
+            [
+                "--stdio".to_owned(),
+                "--system-path".to_owned(),
+                format!("{}/kotlin-lsp", s.data.display())
+            ]
+        );
         assert_eq!(kotlin.env, [java_home]);
     }
 
