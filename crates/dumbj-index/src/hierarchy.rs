@@ -243,14 +243,6 @@ pub fn callers(index: &Index, id: SymbolId, cancelled: &AtomicBool) -> Option<Ve
             continue;
         };
         let symbol = enclosing_declaration(index, file, &usage.range);
-        if symbol == Some(id) {
-            let is_name = index
-                .symbol(id)
-                .is_some_and(|declared| declared.name_range == usage.range);
-            if is_name {
-                continue;
-            }
-        }
         let position = *slot.entry((file, symbol)).or_insert_with(|| {
             grouped.push(Caller {
                 symbol,
