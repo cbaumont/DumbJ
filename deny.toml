@@ -1,4 +1,3 @@
-# cargo-deny configuration (BRIEF §7 and §8.1).
 
 [graph]
 # DumbJ targets Linux now and macOS later; Windows-only crates are not shipped.

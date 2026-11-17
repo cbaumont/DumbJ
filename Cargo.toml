@@ -28,7 +28,6 @@ anyhow = "1"
 gix = { version = "0.90", default-features = false, features = ["sha1"] }
 imara-diff = "0.2"
 
-# The LSP protocol types (requests, notifications, capabilities) so we do not hand-write them. MIT.
 lsp-types = "0.97"
 globset = "0.4"
 ignore = "0.4"
@@ -94,7 +93,6 @@ must_use_candidate = "allow"
 module_name_repetitions = "allow"
 
 [profile.dev.package."*"]
-# Fast dev builds: optimise dependencies, keep our own crates at opt-level 0.
 opt-level = 1
 
 [profile.release]

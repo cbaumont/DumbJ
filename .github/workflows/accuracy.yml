@@ -44,7 +44,6 @@ jobs:
       - name: Fetch the corpus
         run: scripts/fetch-corpus.sh
 
-      # Fails when a case file is malformed or a repository is missing.
       - name: Run the benchmark
         run: |
           set -o pipefail

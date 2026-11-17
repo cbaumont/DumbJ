@@ -97,8 +97,6 @@
 (import_header
 	"import" @include)
 
-; TODO: Seperate labeled returns/breaks/continue/super/this
-;       Must be implemented in the parser first
 (label) @label
 
 (function_declaration
@@ -259,7 +257,6 @@
 	"class"
 	"object"
 	"interface"
-;	"typeof" ; NOTE: It is reserved for future use
 ] @keyword
 
 ("fun") @keyword.function
@@ -356,7 +353,6 @@
 	"::"
 ] @punctuation.delimiter
 
-; NOTE: `interpolated_identifier`s can be highlighted in any way
 (string_literal
 	(interpolation_identifier_start) @punctuation.special
 	(interpolated_identifier) @none)
