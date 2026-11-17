@@ -45,10 +45,6 @@ fn macos_for_all_known_bindings() {
     // lists FindNext twice (F3, then Ctrl+G) and IntelliJ keeps the later entry.
     assert_eq!(linux("FindNext"), ["Ctrl+G"]);
     assert_eq!(linux("FindPrevious"), ["Alt+Shift+G"]);
-}
-
-#[test]
-fn macos_for_all_m0_actions() {
     assert_eq!(linux("CloseContent"), ["Ctrl+W"]);
     assert_eq!(linux("NextTab"), ["Ctrl+Shift+]"]);
     assert_eq!(linux("PreviousTab"), ["Ctrl+Shift+["]);
