@@ -1,6 +1,6 @@
 # DumbJ architecture
 
-Status: M0 to M3 complete (2026-11-16).
+Status: M0 to M4 complete (2026-11-17).
 
 ## Crate map
 
@@ -246,4 +246,12 @@ The comment field is an `EditorView` over a buffer that belongs to no file (`Edi
 - **A server starts only when its binary is on `PATH`, a JDK is found and the project has its markers** (`jdtls`: Maven or Gradle build files; `kotlin-lsp`: Gradle build files), and can be switched off per project in the project state. Its workspace data goes under `$XDG_CACHE_HOME/dumbj/lsp/<project-id>/`; jdtls is told not to generate metadata files at the project root, so nothing is written inside the repository.
 - **Dumb stays the engine of record.** Every navigation action computes the dumb result as before; with a ready server it also asks for the exact one off the UI thread. An answer within 300 ms is used alone; after 300 ms the dumb result is shown and replaced when the exact one arrives (BRIEF §4.3.1). Revision paths, library files and scratch buffers never go to a server. A crashed or hung server is restarted with backoff (1 s doubling to 60 s, five tries) and the project is `dumb` meanwhile.
 - **Documents are synchronised in full.** `didOpen` for each open working-tree editor, `didChange` with the whole text 300 ms after typing stops, `didClose` with the tab. Why: both servers accept full sync, the files are source files of ordinary size, and incremental sync buys nothing a reader notices.
+
+### 2026-11-17: What the live servers taught (M4)
+- **jdtls gets the newest JDK found** in `JAVA_HOME`, `PATH`, sdkman's candidates and `/usr/lib/jvm`. Why: a snapshot required JDK 25 while documenting 21 as its minimum; the newest JDK satisfies both. kotlin-lsp keeps the user's `JAVA_HOME`, since it bundles its own runtime and the JDK is for the project.
+- **jdtls's metadata redirection is a JVM argument.** `-Djava.import.generatesMetadataFilesAtProjectRoot=false` goes through `--jvm-arg`; as an initialization option alone, jdtls still wrote `.project`, `.classpath` and `.settings` into the project.
+- **Build-tool imports still write their own caches into the project:** `target/classes` (m2e, for Maven projects) and `.gradle/` (Gradle's project cache, when kotlin-lsp imports). These are what the user's own builds create and are normally ignored by git, but they break BRIEF §2.5's "never write inside the repo" for smart mode. Smart mode can be switched off per project (Ctrl+Alt+Shift+P, M). Open question for the owner: accept this, or start servers only on request.
+- **Servers are told about files changed on disk** (`workspace/didChangeWatchedFiles`): whenever the index is rebuilt or a server process connects, the stamps (modification time, length) of source and build files are compared with the list last sent to that server, kept in `<lsp data>/<server>.files`. Why: without it jdtls never saw files created by a branch switch, even after a restart. A missing list means the server has just imported everything, so nothing is sent.
+- **Types the protocol crate gets wrong are our own.** lsp-types 0.97 declares `TypeHierarchyItem.tags` as one tag; `dumbj_lsp::TypeItem` and its three requests replace it. Other servers' answers are decoded with lsp-types until a live check shows otherwise.
+- **Non-LSP output on stdout is skipped** between messages, since jdtls prints start-up errors there.
 

@@ -74,7 +74,7 @@
 - [x] Dumb Find Usages
 - [x] Dumb implementations / hierarchy
 - [~] Exact / best-guess labelling — chooser headed "best guess", usages marked "maybe"; direct jumps say exact / best guess in the status bar while a server is used; status bar shows dumb / smart (indexing…) / smart
-- [~] Language-server lifecycle — start on first file of the language, restart with backoff, per-project off switch; real servers not exercised yet
+- [x] Language-server lifecycle — start on first file of the language, restart with backoff, per-project off switch, files changed on disk reported; checked with jdtls and kotlin-lsp
 - [x] Accuracy benchmark — 287 cases, nightly in CI
 
 ## 4.4 Version control and local review
